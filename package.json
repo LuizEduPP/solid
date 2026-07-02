@@ -14,7 +14,10 @@
     "@phukon/duckduckgo-search": "^1.2.0",
     "dotenv": "^17.2.3",
     "hono": "^4.11.4",
+    "jsonrepair": "^3.14.1",
     "openai": "^6.16.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {

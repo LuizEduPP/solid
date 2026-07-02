@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import {
   DEFAULT_WEB_SETTINGS,
@@ -7,18 +9,6 @@ import {
   type WebSettings,
 } from "./settings";
 import "./App.css";
-
-function renderMarkdownLite(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(
-      /(https?:\/\/[^\s<]+)/g,
-      '<a href="$1" target="_blank" rel="noreferrer">$1</a>',
-    );
-}
 
 async function streamResearch(
   settings: WebSettings,
@@ -102,8 +92,6 @@ export default function App() {
   useEffect(() => {
     saveWebSettings(settings);
   }, [settings]);
-
-  const rendered = useMemo(() => renderMarkdownLite(output), [output]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -285,14 +273,27 @@ export default function App() {
 
         <section className="panel">
           <h2>Resultado</h2>
-          <div
-            className={`output ${output ? "" : "empty"}`}
-            dangerouslySetInnerHTML={{
-              __html: output
-                ? rendered
-                : "O relatório aparece aqui conforme o agente pesquisa, pontua e sintetiza as evidências.",
-            }}
-          />
+          <div className={`output ${output ? "" : "empty"}`}>
+            {output ? (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  a: ({ href, children }) => (
+                    <a href={href} target="_blank" rel="noreferrer">
+                      {children}
+                    </a>
+                  ),
+                }}
+              >
+                {output}
+              </ReactMarkdown>
+            ) : (
+              <p>
+                O relatório aparece aqui conforme o agente pesquisa, pontua e sintetiza
+                as evidências.
+              </p>
+            )}
+          </div>
         </section>
       </div>
     </div>

@@ -131,17 +131,65 @@ button.ghost {
   min-height: 520px;
   max-height: 72vh;
   overflow: auto;
-  white-space: pre-wrap;
   word-break: break-word;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.92rem;
-  line-height: 1.6;
+  font-size: 0.95rem;
+  line-height: 1.65;
   color: #dbe4f8;
 }
 
-.output.empty {
-  color: #7f8dab;
-  font-family: "IBM Plex Sans", system-ui, sans-serif;
+.output p,
+.output ul,
+.output ol {
+  margin: 0 0 0.85rem;
+}
+
+.output h1,
+.output h2,
+.output h3 {
+  margin: 1.2rem 0 0.6rem;
+  line-height: 1.25;
+  color: #f4f7ff;
+}
+
+.output h1 {
+  font-size: 1.35rem;
+}
+
+.output h2 {
+  font-size: 1.15rem;
+}
+
+.output h3 {
+  font-size: 1rem;
+}
+
+.output ul,
+.output ol {
+  padding-left: 1.25rem;
+}
+
+.output li {
+  margin-bottom: 0.35rem;
+}
+
+.output code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  background: rgba(126, 182, 255, 0.1);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+}
+
+.output pre {
+  overflow-x: auto;
+  padding: 0.85rem;
+  border-radius: 0.75rem;
+  background: #0d1426;
+  border: 1px solid rgba(126, 182, 255, 0.14);
+}
+
+.output pre code {
+  background: transparent;
+  padding: 0;
 }
 
 .output strong {
@@ -150,6 +198,10 @@ button.ghost {
 
 .output a {
   color: #8ec1ff;
+}
+
+.output.empty {
+  color: #7f8dab;
 }
 
 .error {
