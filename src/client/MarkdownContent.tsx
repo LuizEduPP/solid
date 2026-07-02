@@ -1,4 +1,4 @@
-import { Anchor, Tooltip } from "@mantine/core";
+import { Tooltip } from "@mantine/core";
 import type { Root } from "mdast";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import ReactMarkdown from "react-markdown";
@@ -56,17 +56,17 @@ function MarkdownAnchor({
     const host = hostnameFromUrl(href);
     return (
       <Tooltip label={href} multiline maw={320} withArrow>
-        <Anchor
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          underline="never"
-          inline
-          mx={2}
-          style={{ verticalAlign: "middle" }}
-        >
-          <FaviconImg url={href} alt={host} size={16} />
-        </Anchor>
+        <span className="favicon-link-wrap">
+          <a
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={host}
+            className="favicon-link"
+          >
+            <FaviconImg url={href} alt={host} size={14} />
+          </a>
+        </span>
       </Tooltip>
     );
   }

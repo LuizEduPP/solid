@@ -14,3 +14,33 @@ body {
   background: transparent !important;
   font-size: 0.9375rem;
 }
+
+.markdown-body .favicon-link-wrap {
+  display: inline-flex !important;
+  vertical-align: -0.2em;
+  line-height: 0;
+}
+
+.markdown-body .favicon-link {
+  display: inline !important;
+  vertical-align: -0.2em;
+  margin: 0 1px;
+  line-height: 0;
+  text-decoration: none;
+}
+
+.markdown-body .favicon-inline {
+  display: inline-flex !important;
+  vertical-align: middle;
+}
+
+.markdown-body .favicon-inline-img {
+  display: block;
+  max-width: none;
+  vertical-align: middle;
+}
+
+.markdown-body p .favicon-link,
+.markdown-body li .favicon-link {
+  white-space: normal;
+}

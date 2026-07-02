@@ -103,8 +103,36 @@ const analysisSchema = z
     };
   });
 
+function normalizeLlmKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeLlmKeys);
+  }
+
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, val]) => [
+        key.replace(/\s+/g, ""),
+        normalizeLlmKeys(val),
+      ]),
+    );
+  }
+
+  return value;
+}
+
+function isValidCitationUrl(url: string): boolean {
+  if (!url.trim() || url.includes("...")) return false;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function parseLlmJson(raw: string): unknown {
-  return loads(raw);
+  return normalizeLlmKeys(loads(raw));
 }
 
 export function parsePlanPayload(raw: string): PlanPayload {
@@ -115,9 +143,9 @@ export function parseAnalysisPayload(raw: string, knownUrls: string[]): Analysis
   const parsed = analysisSchema.parse(parseLlmJson(raw));
   const cited_urls = [
     ...new Set([
-      ...parsed.cited_urls,
-      ...extractCitedUrls(parsed.iteration_findings, knownUrls),
-      ...extractCitedUrls(parsed.cumulative_synthesis, knownUrls),
+      ...parsed.cited_urls.filter(isValidCitationUrl),
+      ...extractCitedUrls(parsed.iteration_findings, knownUrls).filter(isValidCitationUrl),
+      ...extractCitedUrls(parsed.cumulative_synthesis, knownUrls).filter(isValidCitationUrl),
     ]),
   ];
 

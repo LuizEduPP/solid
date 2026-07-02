@@ -117,3 +117,7 @@ export function faviconUrl(url: string): string {
 }
 
 export const DEFAULT_FAVICON_URL = "/favicons/default";
+
+export function isDefaultFaviconSrc(src: string): boolean {
+  return src.includes(DEFAULT_FAVICON_URL);
+}

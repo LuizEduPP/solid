@@ -1,54 +1,53 @@
-import { useState } from "react";
-import { Box, type BoxProps } from "@mantine/core";
+import { useState, type CSSProperties } from "react";
 
-import { DEFAULT_FAVICON_URL, faviconUrl } from "../shared";
+import { DEFAULT_FAVICON_URL, faviconUrl, isDefaultFaviconSrc } from "../shared";
 
-interface FaviconImgProps extends Omit<BoxProps, "component" | "children"> {
+interface FaviconImgProps {
   url: string;
   size?: number;
   alt?: string;
-}
-
-function isDefaultFaviconSrc(src: string): boolean {
-  return src.includes("/favicons/default");
+  className?: string;
+  style?: CSSProperties;
 }
 
 export default function FaviconImg({
   url,
   size = 16,
   alt = "",
+  className,
   style,
-  ...props
 }: FaviconImgProps) {
   const [useDefaultIcon, setUseDefaultIcon] = useState(false);
 
   const shellSize = size + 4;
 
   return (
-    <Box
-      w={shellSize}
-      h={shellSize}
+    <span
+      className={["favicon-inline", className].filter(Boolean).join(" ")}
       style={{
         backgroundColor: "rgba(255, 255, 255, 0.94)",
         borderRadius: 3,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
+        width: shellSize,
+        height: shellSize,
         flexShrink: 0,
         lineHeight: 0,
         verticalAlign: "middle",
         ...style,
       }}
-      {...props}
     >
-      <Box
-        component="img"
+      <img
+        className="favicon-inline-img"
         src={faviconUrl(url)}
         alt={alt}
-        w={size}
-        h={size}
+        width={size}
+        height={size}
         style={{
           display: "block",
+          width: size,
+          height: size,
           objectFit: "contain",
           filter: useDefaultIcon ? undefined : "invert(1) hue-rotate(180deg)",
         }}
@@ -62,6 +61,6 @@ export default function FaviconImg({
           setUseDefaultIcon(true);
         }}
       />
-    </Box>
+    </span>
   );
 }

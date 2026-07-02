@@ -83,6 +83,33 @@ describe("agent", () => {
 
       assert.deepEqual(parsed.cited_urls, ["https://example.com/report"]);
     });
+
+    it("normalizes granite keys with stray spaces", () => {
+      const parsed = parseAnalysisPayload(
+        `{
+          "iteration_findings": "Gemini edge benchmarks",
+          "cumulative_synthesis": "Running synthesis",
+          "resolved_ gaps": ["Operational efficiency"],
+          "open_gaps": ["Latency under edge constraints"],
+          "cited_urls": ["https://mljourney.com/...", "https://cloud.google.com/blog/post"],
+          "score_ rubric": {
+            "direct_evidence": 15,
+            "source_diversity": 10,
+            "gap_coverage": 5,
+            "risk_contradiction": 0
+          },
+          "score": 57.5,
+          "should_continue": true
+        }`,
+        [],
+      );
+
+      assert.deepEqual(parsed.resolved_gaps, ["Operational efficiency"]);
+      assert.deepEqual(parsed.open_gaps, ["Latency under edge constraints"]);
+      assert.equal(parsed.score_rubric.direct_evidence, 15);
+      assert.equal(parsed.score, 57.5);
+      assert.deepEqual(parsed.cited_urls, ["https://cloud.google.com/blog/post"]);
+    });
   });
 
   describe("scoring", () => {
