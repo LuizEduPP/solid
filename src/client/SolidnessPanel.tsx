@@ -23,7 +23,7 @@ import {
 } from "../shared";
 
 const DIMENSION_COLORS: Record<keyof ScoreRubric, string> = {
-  direct_evidence: "blue",
+  direct_evidence: "indigo",
   source_diversity: "teal",
   gap_coverage: "violet",
   risk_contradiction: "orange",
@@ -168,6 +168,7 @@ export default function SolidnessPanel({
       roundCaps
       sections={[{ value: Math.min(100, confidence), color }]}
       label={ringLabel(size, showTarget)}
+      transitionDuration={0}
       styles={{
         label: {
           display: "flex",
@@ -259,7 +260,13 @@ export default function SolidnessPanel({
 
   if (compact && !expanded) {
     return (
-      <Paper p="xs" radius="md" withBorder={false} className="glass-panel" w="100%">
+      <Paper
+        p="xs"
+        radius="md"
+        withBorder={false}
+        w="100%"
+        style={{ background: "transparent", border: "none", boxShadow: "none" }}
+      >
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Group gap="sm" wrap="nowrap" flex={1} miw={0}>
             <Box style={{ flexShrink: 0, lineHeight: 0 }}>{ring(52, 5, false)}</Box>
@@ -285,13 +292,16 @@ export default function SolidnessPanel({
       p={compact ? "sm" : "md"}
       radius="md"
       withBorder={false}
-      className="glass-panel"
+      bg={compact ? undefined : "dark.7"}
       w="100%"
-      style={
-        compact && expanded
+      style={{
+        ...(compact
+          ? { background: "transparent", border: "none", boxShadow: "none" }
+          : undefined),
+        ...(compact && expanded
           ? { maxHeight: "min(70vh, 520px)", overflow: "auto" }
-          : undefined
-      }
+          : undefined),
+      }}
     >
       {compact ? (
         <Group justify="space-between" mb="xs" wrap="nowrap">

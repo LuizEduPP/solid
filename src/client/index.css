@@ -1,5 +1,20 @@
 @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
 
+:root {
+  /* Neutral surfaces + blue reserved for accents (WCAG-friendly dark ladder) */
+  --solid-bg: #111113;
+  --solid-surface: #1a1b1e;
+  --solid-elevated: #25262b;
+  --solid-border: #2c2e33;
+  --solid-text: #e4e4e7;
+  --solid-text-muted: #a1a1aa;
+  --solid-accent: #5c7cfa;
+}
+
+html {
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
@@ -8,53 +23,22 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(ellipse 90% 60% at 10% -20%, rgba(34, 211, 238, 0.14), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 100% 0%, rgba(167, 139, 250, 0.12), transparent 50%),
-    radial-gradient(ellipse 60% 40% at 50% 110%, rgba(59, 130, 246, 0.08), transparent 45%),
-    #0a0e1a;
+  background: var(--solid-bg);
+  color: var(--solid-text);
 }
 
-/* ── Liquid glass surfaces ── */
-.glass-panel {
-  background: rgba(255, 255, 255, 0.045) !important;
-  backdrop-filter: blur(20px) saturate(1.5);
-  -webkit-backdrop-filter: blur(20px) saturate(1.5);
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+.solidness-sticky {
+  background: var(--mantine-color-body);
+  border-bottom: 1px solid var(--solid-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  min-height: 3.25rem;
 }
 
-.glass-panel-subtle {
-  background: rgba(255, 255, 255, 0.03) !important;
-  backdrop-filter: blur(14px) saturate(1.35);
-  -webkit-backdrop-filter: blur(14px) saturate(1.35);
-  border: 1px solid rgba(255, 255, 255, 0.07) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.glass-sticky {
-  background: rgba(10, 14, 26, 0.72) !important;
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-}
-
-.glass-navbar {
-  background: rgba(10, 14, 26, 0.65) !important;
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-}
-
-/* ── Chat input + RGB loading border ── */
+/* RGB border ring on input while research is running */
 .chat-input-rgb-wrap {
-  position: relative;
   border-radius: 9999px;
-  padding: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  transition: background 0.25s ease;
+  padding: 0;
+  background: transparent;
 }
 
 .chat-input-rgb-wrap--active {
@@ -71,14 +55,12 @@ body {
   );
   background-size: 400% 100%;
   animation: rgb-border-flow 3s linear infinite;
-  box-shadow:
-    0 0 20px rgba(51, 204, 255, 0.15),
-    0 0 40px rgba(167, 139, 250, 0.08);
 }
 
 .chat-input-form {
+  border-radius: 9999px !important;
   border: none !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  background: var(--mantine-color-body) !important;
 }
 
 @keyframes rgb-border-flow {
@@ -90,11 +72,11 @@ body {
   }
 }
 
-.glass-scroll-btn {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+@media (prefers-reduced-motion: reduce) {
+  .chat-input-rgb-wrap--active {
+    animation: none;
+    background: linear-gradient(90deg, #33ccff, #9966ff);
+  }
 }
 
 .markdown-body {

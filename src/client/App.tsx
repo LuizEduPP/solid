@@ -61,7 +61,8 @@ export function chatPath(sessionId: string): string {
 }
 
 const CHAT_MAX_WIDTH = 720;
-const SCROLL_PIN_THRESHOLD = 72;
+const SCROLL_PIN_ENTER = 96;
+const SCROLL_PIN_EXIT = 48;
 const SCROLL_BOTTOM_TOLERANCE = 64;
 
 function ChatColumn({ children, ...props }: BoxProps & { children: ReactNode }) {
@@ -96,6 +97,7 @@ export default function App() {
   const threadRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
+  const ignoreScrollPauseRef = useRef(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [scrollPinned, setScrollPinned] = useState(false);
   const [solidnessExpanded, setSolidnessExpanded] = useState(false);
@@ -204,9 +206,13 @@ export default function App() {
   }, [stepsActivity.length, running, stepsOpened]);
 
   function handleThreadScroll({ y }: { x: number; y: number }) {
-    setScrollPinned(y > SCROLL_PIN_THRESHOLD);
+    setScrollPinned((pinned) => {
+      if (!pinned && y > SCROLL_PIN_ENTER) return true;
+      if (pinned && y < SCROLL_PIN_EXIT) return false;
+      return pinned;
+    });
 
-    if (y <= SCROLL_PIN_THRESHOLD) {
+    if (y < SCROLL_PIN_EXIT) {
       setSolidnessExpanded(false);
     }
 
@@ -217,7 +223,16 @@ export default function App() {
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <=
       SCROLL_BOTTOM_TOLERANCE;
 
-    if (!atBottom && autoScrollRef.current) {
+    if (atBottom) {
+      ignoreScrollPauseRef.current = false;
+      if (!autoScrollRef.current) {
+        autoScrollRef.current = true;
+        setAutoScroll(true);
+      }
+      return;
+    }
+
+    if (!ignoreScrollPauseRef.current && autoScrollRef.current) {
       autoScrollRef.current = false;
       setAutoScroll(false);
     }
@@ -226,10 +241,29 @@ export default function App() {
   function resumeAutoScroll() {
     autoScrollRef.current = true;
     setAutoScroll(true);
+    ignoreScrollPauseRef.current = true;
+
     const viewport = threadRef.current;
-    if (viewport) {
-      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
-    }
+    if (!viewport) return;
+
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+
+    window.setTimeout(() => {
+      const node = threadRef.current;
+      if (!node) {
+        ignoreScrollPauseRef.current = false;
+        return;
+      }
+
+      const atBottom =
+        node.scrollHeight - node.scrollTop - node.clientHeight <= SCROLL_BOTTOM_TOLERANCE;
+
+      ignoreScrollPauseRef.current = false;
+      if (atBottom) {
+        autoScrollRef.current = true;
+        setAutoScroll(true);
+      }
+    }, 400);
   }
 
   function syncSession(nextSession: ResearchSession) {
@@ -348,7 +382,12 @@ export default function App() {
       padding={0}
       styles={{ main: { display: "flex", flexDirection: "column", height: "100dvh" } }}
     >
-      <AppShell.Navbar p="sm" withBorder className="glass-navbar" style={{ display: "flex", flexDirection: "column" }}>
+      <AppShell.Navbar
+        p="sm"
+        withBorder={false}
+        styles={{ navbar: { borderRight: "none" } }}
+        style={{ display: "flex", flexDirection: "column" }}
+      >
         <Title order={4} px="xs" mb="sm">
           solid
         </Title>
@@ -381,7 +420,7 @@ export default function App() {
                         <Button
                           flex={1}
                           variant={session.id === sessionId ? "light" : "subtle"}
-                          color={session.id === sessionId ? "cyan" : "gray"}
+                          color={session.id === sessionId ? "indigo" : "gray"}
                           justify="flex-start"
                           size="compact-sm"
                           onClick={() => handleSelectSession(session.id)}
@@ -482,7 +521,7 @@ export default function App() {
                 <Stack gap="lg">
                   {showSolidness ? (
                     <Box
-                      className={scrollPinned ? "glass-sticky" : undefined}
+                      className={scrollPinned ? "solidness-sticky" : undefined}
                       style={{
                         position: "sticky",
                         top: 0,
@@ -508,7 +547,7 @@ export default function App() {
                   ) : null}
 
                   {activeSession?.objective ? (
-                    <Paper p="md" radius="md" className="glass-panel-subtle">
+                    <Paper p="md" radius="md" withBorder={false} bg="dark.6">
                       <Text>{activeSession.objective}</Text>
                     </Paper>
                   ) : null}
@@ -527,7 +566,7 @@ export default function App() {
                   ) : null}
 
                   {parsed.report ? (
-                    <Paper p="md" radius="md" className="glass-panel">
+                    <Paper p="md" radius="md" withBorder={false} bg="dark.6">
                       <Text size="sm" fw={600} mb="sm">
                         {t("answer")}
                       </Text>
@@ -562,7 +601,6 @@ export default function App() {
                   color="dark.5"
                   radius="xl"
                   size="lg"
-                  className="glass-scroll-btn"
                   aria-label={t("scrollToBottom")}
                   title={t("scrollToBottom")}
                   onClick={resumeAutoScroll}
@@ -612,7 +650,7 @@ export default function App() {
                 radius="xl"
                 p="xs"
                 withBorder={false}
-                className="glass-panel chat-input-form"
+                className="chat-input-form"
                 style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem" }}
               >
               <ActionIcon

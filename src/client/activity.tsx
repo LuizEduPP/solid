@@ -104,7 +104,7 @@ export default function ActivityLine({ line, active = false }: ActivityLineProps
   if (!text) return null;
 
   return (
-    <Text component="li" size="xs" c={active ? "cyan.4" : "dimmed"}>
+    <Text component="li" size="xs" c={active ? "indigo.3" : "dimmed"}>
       {text}
     </Text>
   );
