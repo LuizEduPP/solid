@@ -1,3 +1,5 @@
+import { isAfter, isToday, isYesterday, subDays } from "date-fns";
+
 import type { ParsedStream } from "./stream";
 
 export interface ResearchSession {
@@ -104,31 +106,27 @@ export function sessionPreview(session: ResearchSession, untitled: string): stri
   return text.length > 56 ? `${text.slice(0, 56)}…` : text;
 }
 
+export type HistoryGroupKey = "today" | "yesterday" | "last7" | "earlier";
+
 export interface HistoryGroup {
   key: HistoryGroupKey;
   sessions: ResearchSession[];
 }
 
-export type HistoryGroupKey = "today" | "yesterday" | "last7" | "earlier";
+function historyBucket(date: Date): HistoryGroupKey {
+  if (isToday(date)) return "today";
+  if (isYesterday(date)) return "yesterday";
+  if (isAfter(date, subDays(new Date(), 7))) return "last7";
+  return "earlier";
+}
 
 export function groupSessionsByDate(
   sessions: ResearchSession[],
 ): HistoryGroup[] {
   const groups = new Map<HistoryGroupKey, ResearchSession[]>();
-  const now = new Date();
-  const today = startOfDay(now);
-  const yesterday = today - 86_400_000;
-  const weekAgo = today - 7 * 86_400_000;
 
   for (const session of sessions) {
-    const day = startOfDay(new Date(session.updatedAt));
-    let key: HistoryGroupKey;
-
-    if (day >= today) key = "today";
-    else if (day >= yesterday) key = "yesterday";
-    else if (day >= weekAgo) key = "last7";
-    else key = "earlier";
-
+    const key = historyBucket(new Date(session.updatedAt));
     const bucket = groups.get(key) ?? [];
     bucket.push(session);
     groups.set(key, bucket);
@@ -138,8 +136,4 @@ export function groupSessionsByDate(
   return order
     .filter((key) => groups.has(key))
     .map((key) => ({ key, sessions: groups.get(key)! }));
-}
-
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }

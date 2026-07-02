@@ -1,5 +1,29 @@
+import {
+  Accordion,
+  ActionIcon,
+  AppShell,
+  Badge,
+  Box,
+  Button,
+  Group,
+  Loader,
+  Modal,
+  Paper,
+  PasswordInput,
+  ScrollArea,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+  Textarea,
+  Title,
+} from "@mantine/core";
+import { ArrowUp, Settings, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate, useParams } from "react-router-dom";
 
+import { translateActivityLine } from "./activity";
 import {
   applyParsedStream,
   createSession,
@@ -10,26 +34,24 @@ import {
   upsertSession,
   type ResearchSession,
 } from "./history";
+import i18n, {
+  HISTORY_GROUP_KEYS,
+  LOCALE_LABEL_KEYS,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from "./i18n";
 import MarkdownContent from "./MarkdownContent";
 import { downloadSession } from "./export";
-import {
-  createTranslator,
-  LOCALES,
-  LOCALE_LABEL_KEYS,
-  localeToHtmlLang,
-  translateActivityLine,
-  type Locale,
-} from "./i18n/index.js";
+import { fetchLlmModels, pickDefaultModel } from "./models";
+import RubricBars from "./RubricBars";
+import { HOME_PATH, chatPath } from "./routes";
 import {
   loadWebSettings,
   MODE_TARGETS,
   saveWebSettings,
   type WebSettings,
 } from "./settings";
-import { fetchLlmModels, pickDefaultModel } from "./models";
-import RubricBars from "./RubricBars";
 import { parseStream, uniqueSourceCount } from "./stream";
-import "./App.css";
 
 const WEAK_EVIDENCE_BELOW: Record<WebSettings["mode"], number> = {
   rigorous: 60,
@@ -41,7 +63,6 @@ async function streamResearch(
   objective: string,
   onChunk: (chunk: string) => void,
   signal: AbortSignal,
-  t: ReturnType<typeof createTranslator>["t"],
 ): Promise<void> {
   const response = await fetch("/v1/chat/completions", {
     method: "POST",
@@ -64,12 +85,12 @@ async function streamResearch(
     const message =
       payload?.error?.fieldErrors?.llm_api_key?.[0] ??
       (typeof payload?.error === "string" ? payload.error : null) ??
-      `Request failed (${response.status})`;
+      i18n.t("errorRequestFailed", { status: response.status });
     throw new Error(message);
   }
 
   if (!response.body) {
-    throw new Error(t("errorStreaming"));
+    throw new Error(i18n.t("errorStreaming"));
   }
 
   const reader = response.body.getReader();
@@ -110,12 +131,84 @@ function isLocalLlmBaseUrl(baseUrl: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
 }
 
+function ConfigPanel({
+  settings,
+  running,
+  models,
+  modelsLoading,
+  modelsError,
+  onChange,
+}: {
+  settings: WebSettings;
+  running: boolean;
+  models: string[];
+  modelsLoading: boolean;
+  modelsError: string | null;
+  onChange: (next: WebSettings) => void;
+}) {
+  const { t } = useTranslation();
+
+  const localeOptions = SUPPORTED_LOCALES.map((locale) => ({
+    value: locale,
+    label: t(LOCALE_LABEL_KEYS[locale]),
+  }));
+
+  const modelOptions =
+    models.length > 0
+      ? models.map((modelId) => ({ value: modelId, label: modelId }))
+      : [{ value: "", label: modelsError ?? t("noModelsAvailable") }];
+
+  return (
+    <Stack gap="md">
+      <Select
+        label={t("language")}
+        value={settings.locale}
+        data={localeOptions}
+        disabled={running}
+        onChange={(value) =>
+          value && onChange(updateSettings(settings, "locale", value as Locale))
+        }
+      />
+      <PasswordInput
+        label={t("apiKey")}
+        placeholder={t("apiKeyPlaceholder")}
+        value={settings.apiKey}
+        disabled={running}
+        autoComplete="off"
+        onChange={(event) =>
+          onChange(updateSettings(settings, "apiKey", event.currentTarget.value))
+        }
+      />
+      <TextInput
+        label={t("baseUrl")}
+        value={settings.baseUrl}
+        disabled={running}
+        onChange={(event) =>
+          onChange(updateSettings(settings, "baseUrl", event.currentTarget.value))
+        }
+      />
+      <Select
+        label={t("model")}
+        value={settings.model}
+        data={modelOptions}
+        disabled={running || modelsLoading}
+        placeholder={modelsLoading ? t("loadingModels") : undefined}
+        error={modelsError ?? undefined}
+        searchable
+        onChange={(value) =>
+          onChange(updateSettings(settings, "model", value ?? ""))
+        }
+      />
+    </Stack>
+  );
+}
+
 export default function App() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId?: string }>();
   const [settings, setSettings] = useState<WebSettings>(loadWebSettings);
   const [sessions, setSessions] = useState<ResearchSession[]>(() => loadHistory());
-  const [activeId, setActiveId] = useState<string | null>(
-    () => loadHistory()[0]?.id ?? null,
-  );
   const [objective, setObjective] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,15 +220,12 @@ export default function App() {
   const threadRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
-  const tr = useMemo(
-    () => createTranslator(settings.locale),
-    [settings.locale],
-  );
-  const { t, historyGroupLabel } = tr;
-
   const activeSession = useMemo(
-    () => sessions.find((session) => session.id === activeId) ?? null,
-    [sessions, activeId],
+    () =>
+      sessionId
+        ? (sessions.find((session) => session.id === sessionId) ?? null)
+        : null,
+    [sessions, sessionId],
   );
 
   const parsed = useMemo(
@@ -153,8 +243,26 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
-    document.documentElement.lang = localeToHtmlLang(settings.locale);
+    void i18n.changeLanguage(settings.locale);
+    document.documentElement.lang = settings.locale;
   }, [settings.locale]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      if (!running) setObjective("");
+      return;
+    }
+
+    const exists = sessions.some((session) => session.id === sessionId);
+    if (!exists && !running) {
+      navigate(HOME_PATH, { replace: true });
+      return;
+    }
+
+    if (activeSession && activeSession.status !== "running") {
+      setObjective(activeSession.objective);
+    }
+  }, [sessionId, sessions, activeSession, running, navigate]);
 
   useEffect(() => {
     if (!showConfig || !settings.baseUrl.trim()) return;
@@ -207,27 +315,20 @@ export default function App() {
   }
 
   function handleSelectSession(id: string) {
-    setActiveId(id);
+    navigate(chatPath(id));
     setError(null);
-    const session = sessions.find((item) => item.id === id);
-    if (session && session.status !== "running") {
-      setObjective(session.objective);
+  }
+
+  function handleDeleteSession(id: string) {
+    const deletingCurrent = sessionId === id;
+    setSessions((current) => deleteSession(current, id));
+    if (deletingCurrent) {
+      navigate(HOME_PATH);
     }
   }
 
-  function handleDeleteSession(id: string, event: React.MouseEvent) {
-    event.stopPropagation();
-    setSessions((current) => {
-      const next = deleteSession(current, id);
-      if (activeId === id) {
-        setActiveId(next[0]?.id ?? null);
-      }
-      return next;
-    });
-  }
-
   function handleNewResearch() {
-    setActiveId(null);
+    navigate(HOME_PATH);
     setObjective("");
     setError(null);
   }
@@ -255,8 +356,8 @@ export default function App() {
     setError(null);
 
     const session = createSession(objective.trim());
-    setActiveId(session.id);
     syncSession(session);
+    navigate(chatPath(session.id), { replace: true });
 
     let rawStream = "";
 
@@ -275,7 +376,6 @@ export default function App() {
           );
         },
         nextController.signal,
-        t,
       );
 
       syncSession({
@@ -335,394 +435,331 @@ export default function App() {
   const showLogSidebar = parsed.activity.length > 0;
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">solid</div>
+    <AppShell
+      navbar={{ width: 260, breakpoint: "sm" }}
+      padding={0}
+      styles={{ main: { display: "flex", flexDirection: "column", height: "100dvh" } }}
+    >
+      <AppShell.Navbar p="sm" withBorder style={{ display: "flex", flexDirection: "column" }}>
+        <Title order={4} px="xs" mb="sm">
+          solid
+        </Title>
 
-        <button
-          className="new-thread-btn"
-          type="button"
-          onClick={handleNewResearch}
+        <Button
+          fullWidth
+          variant="default"
+          mb="sm"
           disabled={running}
+          onClick={handleNewResearch}
         >
           {t("newResearch")}
-        </button>
+        </Button>
 
-        <div className="history-scroll">
+        <ScrollArea flex={1} type="auto" offsetScrollbars>
           {historyGroups.length === 0 ? (
-            <p className="muted-copy">{t("noResearchYet")}</p>
+            <Text size="sm" c="dimmed" px="xs">
+              {t("noResearchYet")}
+            </Text>
           ) : (
-            historyGroups.map((group) => (
-              <section key={group.key} className="history-group">
-                <h2>{historyGroupLabel(group.key)}</h2>
-                <ul>
-                  {group.sessions.map((session) => (
-                    <li key={session.id}>
-                      <button
-                        type="button"
-                        className={`thread-row ${session.id === activeId ? "active" : ""}`}
-                        onClick={() => handleSelectSession(session.id)}
-                      >
-                        <span className="thread-title">
+            <Stack gap="md" pr="xs">
+              {historyGroups.map((group) => (
+                <Stack key={group.key} gap={4}>
+                  <Text size="xs" tt="uppercase" c="dimmed" fw={600} px="xs">
+                    {t(HISTORY_GROUP_KEYS[group.key])}
+                  </Text>
+                  <Stack gap={2}>
+                    {group.sessions.map((session) => (
+                      <Group key={session.id} gap={4} wrap="nowrap">
+                        <Button
+                          flex={1}
+                          variant={session.id === sessionId ? "light" : "subtle"}
+                          color={session.id === sessionId ? "cyan" : "gray"}
+                          justify="flex-start"
+                          size="compact-sm"
+                          onClick={() => handleSelectSession(session.id)}
+                          styles={{ label: { overflow: "hidden", textOverflow: "ellipsis" } }}
+                        >
                           {sessionPreview(session, t("untitledResearch"))}
-                        </span>
-                        {session.status === "running" ? (
-                          <span className="thread-dot running" />
-                        ) : null}
-                      </button>
-                      <button
-                        type="button"
-                        className="thread-delete"
-                        onClick={(event) =>
-                          handleDeleteSession(session.id, event)
-                        }
-                        aria-label={t("delete")}
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))
+                          {session.status === "running" ? " ·" : ""}
+                        </Button>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          size="sm"
+                          aria-label={t("delete")}
+                          onClick={() => handleDeleteSession(session.id)}
+                        >
+                          <X size={14} />
+                        </ActionIcon>
+                      </Group>
+                    ))}
+                  </Stack>
+                </Stack>
+              ))}
+            </Stack>
           )}
-        </div>
+        </ScrollArea>
 
-        <div className="sidebar-footer">
-          {showConfig ? (
-            <section className="config-sheet sidebar-config">
-              <label className="field">
-                <span>{t("language")}</span>
-                <select
-                  value={settings.locale}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      updateSettings(
-                        current,
-                        "locale",
-                        event.target.value as Locale,
-                      ),
-                    )
-                  }
-                  disabled={running}
-                >
-                  {LOCALES.map((locale) => (
-                    <option key={locale} value={locale}>
-                      {t(LOCALE_LABEL_KEYS[locale])}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>{t("apiKey")}</span>
-                <input
-                  type="password"
-                  value={settings.apiKey}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      updateSettings(current, "apiKey", event.target.value),
-                    )
-                  }
-                  placeholder={t("apiKeyPlaceholder")}
-                  disabled={running}
-                  autoComplete="off"
-                />
-              </label>
-              <label className="field">
-                <span>{t("baseUrl")}</span>
-                <input
-                  type="url"
-                  value={settings.baseUrl}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      updateSettings(current, "baseUrl", event.target.value),
-                    )
-                  }
-                  disabled={running}
-                />
-              </label>
-              <label className="field">
-                <span>{t("model")}</span>
-                <select
-                  value={settings.model}
-                  onChange={(event) =>
-                    setSettings((current) =>
-                      updateSettings(current, "model", event.target.value),
-                    )
-                  }
-                  disabled={running || modelsLoading}
-                >
-                  {modelsLoading ? (
-                    <option value="">{t("loadingModels")}</option>
-                  ) : models.length === 0 ? (
-                    <option value="">
-                      {modelsError ?? t("noModelsAvailable")}
-                    </option>
-                  ) : (
-                    models.map((modelId) => (
-                      <option key={modelId} value={modelId}>
-                        {modelId}
-                      </option>
-                    ))
-                  )}
-                  {!modelsLoading &&
-                  settings.model &&
-                  !models.includes(settings.model) ? (
-                    <option value={settings.model}>{settings.model}</option>
-                  ) : null}
-                </select>
-                {modelsError ? (
-                  <span className="field-hint">{modelsError}</span>
-                ) : null}
-              </label>
-            </section>
-          ) : null}
+        <Button
+          fullWidth
+          mt="sm"
+          variant="default"
+          leftSection={<Settings size={16} />}
+          onClick={() => setShowConfig(true)}
+        >
+          {t("settings")}
+        </Button>
+      </AppShell.Navbar>
 
-          <button
-            className={`sidebar-config-btn ${showConfig ? "active" : ""}`}
-            type="button"
-            onClick={() => setShowConfig((value) => !value)}
-            aria-label={t("settings")}
-            aria-expanded={showConfig}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span>{t("settings")}</span>
-          </button>
-        </div>
-      </aside>
+      <Modal
+        opened={showConfig}
+        onClose={() => setShowConfig(false)}
+        title={t("settings")}
+        centered
+        size="md"
+      >
+        <ConfigPanel
+          settings={settings}
+          running={running}
+          models={models}
+          modelsLoading={modelsLoading}
+          modelsError={modelsError}
+          onChange={setSettings}
+        />
+      </Modal>
 
-      <div className="main-shell">
+      <AppShell.Main>
         {hasContent ? (
-          <header className="thread-header">
-            <div className="thread-header-actions">
-              {weakEvidence ? (
-                <span className="weak-badge">{t("weakEvidence")}</span>
-              ) : null}
-              {(isActiveRunning || confidence > 0) && (
-                <span className="confidence-badge">
-                  {t("solidness")} {confidence.toFixed(0)}%
-                  {parsed.iteration ? ` · ${parsed.iteration}` : ""}
-                  {` / ${targetScore}%`}
-                </span>
-              )}
-              {activeSession && !running ? (
-                <button
-                  className="text-btn"
-                  type="button"
-                  onClick={() => downloadSession(activeSession, tr)}
-                >
-                  {t("export")}
-                </button>
-              ) : null}
-              {isActiveRunning ? (
-                <button className="text-btn danger" type="button" onClick={handleStop}>
-                  {t("stop")}
-                </button>
-              ) : null}
-            </div>
-          </header>
+          <Group justify="flex-end" gap="xs" px="lg" py="sm">
+            {weakEvidence ? (
+              <Badge color="red" variant="light">
+                {t("weakEvidence")}
+              </Badge>
+            ) : null}
+            {(isActiveRunning || confidence > 0) && (
+              <Badge variant="outline" color="cyan">
+                {t("solidness")} {confidence.toFixed(0)}%
+                {parsed.iteration ? ` · ${parsed.iteration}` : ""}
+                {` / ${targetScore}%`}
+              </Badge>
+            )}
+            {activeSession && !running ? (
+              <Button variant="subtle" size="compact-sm" onClick={() => downloadSession(activeSession)}>
+                {t("export")}
+              </Button>
+            ) : null}
+            {isActiveRunning ? (
+              <Button variant="subtle" color="red" size="compact-sm" onClick={handleStop}>
+                {t("stop")}
+              </Button>
+            ) : null}
+          </Group>
         ) : null}
 
-        {parsed.rubric ? (
-          <div className="rubric-panel">
-            <RubricBars rubric={parsed.rubric} tr={tr} />
-          </div>
-        ) : null}
+        {parsed.rubric ? <RubricBars rubric={parsed.rubric} /> : null}
 
-        <div className={`chat-body ${showLogSidebar ? "has-log" : ""}`}>
-          <div ref={threadRef} className="thread-scroll">
-            <div className="thread-column">
+        <Box
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            overflow: "hidden",
+          }}
+        >
+          <ScrollArea flex={1} viewportRef={threadRef} type="auto">
+            <Box maw={720} mx="auto" px="lg" pb="xl">
               {!hasContent ? (
-                <div className="home-hero">
-                  <h1 className="wordmark">solid</h1>
-                </div>
+                <Stack align="center" justify="center" mih="50vh">
+                  <Title order={1}>solid</Title>
+                </Stack>
               ) : (
-                <>
+                <Stack gap="lg">
                   {activeSession?.objective ? (
-                    <div className="user-message">
-                      <p>{activeSession.objective}</p>
-                    </div>
+                    <Paper p="md" radius="md" bg="dark.6">
+                      <Text>{activeSession.objective}</Text>
+                    </Paper>
                   ) : null}
 
                   {parsed.iterations.map((iteration) => (
-                    <article key={iteration.number} className="answer-block">
-                      <header className="step-header">
-                        <span className="step-label">
+                    <Paper key={iteration.number} p="md" radius="md" withBorder>
+                      <Group justify="space-between" mb="sm">
+                        <Text size="sm" fw={600}>
                           {t("step")} {iteration.number}
                           {iteration.angle ? ` · ${iteration.angle}` : ""}
-                        </span>
-                        <span className="step-score">
-                          {iteration.score.toFixed(0)}%
-                        </span>
-                      </header>
+                        </Text>
+                        <Badge variant="light">{iteration.score.toFixed(0)}%</Badge>
+                      </Group>
 
                       {iteration.findings ? (
-                        <MarkdownContent
-                          content={iteration.findings}
-                          className="prose"
-                        />
+                        <MarkdownContent content={iteration.findings} className="prose" />
                       ) : null}
 
                       {iteration.scoreReasoning ? (
-                        <p className="step-note">{iteration.scoreReasoning}</p>
+                        <Text size="sm" c="dimmed" mt="sm">
+                          {iteration.scoreReasoning}
+                        </Text>
                       ) : null}
 
                       {iteration.synthesis ? (
-                        <details className="step-details">
-                          <summary>{t("cumulativeSynthesis")}</summary>
-                          <MarkdownContent
-                            content={iteration.synthesis}
-                            className="prose"
-                          />
-                        </details>
+                        <Accordion variant="contained" mt="sm">
+                          <Accordion.Item value="synthesis">
+                            <Accordion.Control>{t("cumulativeSynthesis")}</Accordion.Control>
+                            <Accordion.Panel>
+                              <MarkdownContent content={iteration.synthesis} className="prose" />
+                            </Accordion.Panel>
+                          </Accordion.Item>
+                        </Accordion>
                       ) : null}
 
                       {iteration.sources && iteration.sources.length > 0 ? (
-                        <div className="sources-block">
-                          <h4>{t("sources")}</h4>
-                          <ul>
-                            {iteration.sources.map((source) => (
-                              <li key={source.url}>
-                                <a href={source.url} target="_blank" rel="noreferrer">
-                                  {source.title || source.url}
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        <Stack gap={4} mt="md" pt="sm" style={{ borderTop: "1px solid var(--mantine-color-dark-4)" }}>
+                          <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
+                            {t("sources")}
+                          </Text>
+                          {iteration.sources.map((source) => (
+                            <Text
+                              key={source.url}
+                              component="a"
+                              href={source.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              size="sm"
+                              c="cyan.4"
+                            >
+                              {source.title || source.url}
+                            </Text>
+                          ))}
+                        </Stack>
                       ) : null}
-                    </article>
+                    </Paper>
                   ))}
 
                   {isActiveRunning && !parsed.report ? (
-                    <div className="thinking">
-                      <span className="thinking-dot" />
-                      {t("analyzing")}
-                    </div>
+                    <Group gap="xs">
+                      <Loader size="xs" type="dots" />
+                      <Text size="sm" c="dimmed">
+                        {t("analyzing")}
+                      </Text>
+                    </Group>
                   ) : null}
 
                   {parsed.report ? (
-                    <article className="answer-block final-answer">
-                      <header className="step-header">
-                        <span className="step-label">{t("answer")}</span>
-                      </header>
+                    <Paper p="md" radius="md" withBorder>
+                      <Text size="sm" fw={600} mb="sm">
+                        {t("answer")}
+                      </Text>
                       <MarkdownContent content={parsed.report} className="prose" />
-                    </article>
+                    </Paper>
                   ) : null}
 
                   {activeSession?.error ? (
-                    <p className="inline-error">{activeSession.error}</p>
+                    <Text c="red" size="sm">
+                      {activeSession.error}
+                    </Text>
                   ) : null}
-                </>
+                </Stack>
               )}
-            </div>
-          </div>
+            </Box>
+          </ScrollArea>
 
           {showLogSidebar ? (
-            <aside className="log-sidebar">
-              <div className="log-sidebar-head">
-                <h2>{t("steps")}</h2>
-                <span className="log-count">{parsed.activity.length}</span>
-              </div>
-              <div ref={logRef} className="log-sidebar-scroll">
-                <ol className="log-list">
+            <Paper
+              w={280}
+              withBorder
+              radius={0}
+              style={{ borderTop: 0, borderBottom: 0, display: "flex", flexDirection: "column" }}
+            >
+              <Group justify="space-between" px="md" py="sm">
+                <Text size="sm" fw={600}>
+                  {t("steps")}
+                </Text>
+                <Badge size="sm" variant="light">
+                  {parsed.activity.length}
+                </Badge>
+              </Group>
+              <ScrollArea flex={1} px="md" pb="md" viewportRef={logRef}>
+                <Stack component="ol" gap={6} style={{ listStyle: "decimal", paddingLeft: "1.1rem" }}>
                   {parsed.activity.map((line, index) => (
-                    <li
+                    <Text
                       key={`${index}-${line.slice(0, 24)}`}
-                      className={
+                      component="li"
+                      size="xs"
+                      c={
                         isActiveRunning && index === parsed.activity.length - 1
-                          ? "active"
-                          : undefined
+                          ? "cyan.4"
+                          : "dimmed"
                       }
                     >
-                      {translateActivityLine(line, tr)}
-                    </li>
+                      {translateActivityLine(line)}
+                    </Text>
                   ))}
-                </ol>
-              </div>
-            </aside>
+                </Stack>
+              </ScrollArea>
+            </Paper>
           ) : null}
-        </div>
+        </Box>
 
-        <footer className="ask-dock">
-          <div className="ask-dock-inner">
-            {error ? <p className="inline-error">{error}</p> : null}
-
-            <form className="ask-bar" onSubmit={handleSubmit}>
-              <button
-                className={`ask-action mode-toggle ${settings.mode === "fast" ? "active" : ""}`}
-                type="button"
+        <Box px="md" pb="lg" pt="xs">
+          <Box maw={720} mx="auto">
+            {error ? (
+              <Text c="red" size="sm" mb="xs">
+                {error}
+              </Text>
+            ) : null}
+            <Paper
+              component="form"
+              onSubmit={handleSubmit}
+              radius="xl"
+              p="xs"
+              withBorder
+              style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem" }}
+            >
+              <ActionIcon
+                variant={settings.mode === "fast" ? "light" : "subtle"}
+                color={settings.mode === "fast" ? "yellow" : "gray"}
+                size="lg"
+                radius="xl"
+                disabled={running}
+                aria-label={settings.mode === "fast" ? t("modeFast") : t("modeRigorous")}
+                title={settings.mode === "fast" ? t("modeFast") : t("modeRigorous")}
                 onClick={handleToggleMode}
-                disabled={running}
-                aria-label={
-                  settings.mode === "fast" ? t("modeFast") : t("modeRigorous")
-                }
-                title={
-                  settings.mode === "fast" ? t("modeFast") : t("modeRigorous")
-                }
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinejoin="round"
-                    fill={settings.mode === "fast" ? "currentColor" : "none"}
-                  />
-                </svg>
-              </button>
-
-              <textarea
-                value={objective}
-                onChange={(event) => setObjective(event.target.value)}
+                <Zap size={18} fill={settings.mode === "fast" ? "currentColor" : "none"} />
+              </ActionIcon>
+              <Textarea
+                flex={1}
+                variant="unstyled"
                 placeholder={t("askPlaceholder")}
-                rows={1}
+                value={objective}
                 disabled={running}
+                autosize
+                minRows={1}
+                maxRows={6}
+                styles={{ input: { paddingTop: 8, paddingBottom: 8 } }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
+                onChange={(event) => setObjective(event.currentTarget.value)}
               />
-
-              <button
-                className="ask-submit"
+              <ActionIcon
                 type="submit"
+                size="lg"
+                radius="xl"
+                variant="filled"
+                color="gray.0"
+                c="dark.9"
                 disabled={running || !objective.trim()}
                 aria-label={running ? t("researching") : t("research")}
               >
-                {running ? (
-                  <span className="spinner" />
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path
-                      d="M12 19V5M5 12l7-7 7 7"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </button>
-            </form>
-          </div>
-        </footer>
-      </div>
-    </div>
+                {running ? <Loader size={18} color="dark.9" /> : <ArrowUp size={18} />}
+              </ActionIcon>
+            </Paper>
+          </Box>
+        </Box>
+      </AppShell.Main>
+    </AppShell>
   );
 }

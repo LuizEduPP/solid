@@ -1,11 +1,8 @@
-import type { Translator } from "./i18n/index.js";
+import i18n from "./i18n.js";
 import type { ResearchSession } from "./history";
 
-export function exportSessionMarkdown(
-  session: ResearchSession,
-  tr: Translator,
-): string {
-  const { t } = tr;
+export function exportSessionMarkdown(session: ResearchSession): string {
+  const t = i18n.t.bind(i18n);
   const lines: string[] = [
     `# ${session.objective}`,
     "",
@@ -40,8 +37,8 @@ export function exportSessionMarkdown(
   return lines.filter(Boolean).join("\n");
 }
 
-export function downloadSession(session: ResearchSession, tr: Translator): void {
-  const markdown = exportSessionMarkdown(session, tr);
+export function downloadSession(session: ResearchSession): void {
+  const markdown = exportSessionMarkdown(session);
   const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

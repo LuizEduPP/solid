@@ -1,4 +1,4 @@
-import { normalizeLocale, type Locale } from "./i18n/index.js";
+import { normalizeLocale, type Locale } from "./i18n.js";
 
 const SETTINGS_KEY = "solid-settings";
 const LEGACY_SETTINGS_KEYS = ["rigor-settings", "deepsearch-settings"] as const;

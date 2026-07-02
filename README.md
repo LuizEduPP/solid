@@ -12,8 +12,11 @@ English (default), Español, Português (Brasil), Português (Portugal), França
 
 - TypeScript + Node.js
 - Hono (API) + React (UI)
-- OpenAI-compatible LLM (OpenAI, LM Studio, Ollama, vLLM)
-- DuckDuckGo + page fetch for primary evidence
+- **Mantine** — UI components
+- **react-i18next** — interface i18n (7 languages, default English)
+- **lucide-react** — icons
+- **date-fns** — history date grouping
+- **react-markdown** — report rendering
 
 ## Setup
 
