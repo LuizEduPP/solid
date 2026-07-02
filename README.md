@@ -14,19 +14,9 @@ Agente de pesquisa iterativa com interface web. Recebe um objetivo, busca na web
 ```bash
 cd projects/027-deep-search
 yarn install
-cp .env.example .env
-# edite .env com suas credenciais de LLM
 ```
 
-### Exemplo com Ollama
-
-```env
-OPENAI_API_KEY=ollama
-OPENAI_BASE_URL=http://localhost:11434/v1
-DEEPSEARCH_MODEL=llama3.2
-DEEPSEARCH_TARGET_SCORE=85
-DEEPSEARCH_MAX_ITERATIONS=8
-```
+Opcional: copie `.env.example` para `.env` se quiser mudar a porta do servidor.
 
 ## Rodar
 
@@ -50,9 +40,19 @@ Abra [http://localhost:8787](http://localhost:8787) — interface e API no mesmo
 
 ## Interface web
 
-1. Descreva o objetivo da pesquisa.
-2. Ajuste a meta de confiança e o número máximo de iterações.
-3. Clique em **Iniciar pesquisa** e acompanhe o streaming em tempo real.
+Todas as configurações ficam na própria interface (salvas no navegador):
+
+1. **API key**, **base URL** e **modelo** do LLM
+2. **Meta de confiança** e **máximo de iterações**
+3. **Objetivo** da pesquisa
+
+### Exemplo com Ollama
+
+| Campo | Valor |
+|---|---|
+| API key | `ollama` |
+| Base URL | `http://localhost:11434/v1` |
+| Modelo | `llama3.2` |
 
 ## API (OpenAI-compatible)
 
@@ -64,11 +64,13 @@ Abra [http://localhost:8787](http://localhost:8787) — interface e API no mesmo
 
 ### Campos extras no request
 
-| Campo | Padrão | Descrição |
+| Campo | Obrigatório | Descrição |
 |---|---|---|
-| `target_score` | `90` | Para quando a confiança atingir este valor (0,01–100) |
-| `max_iterations` | `10` | Máximo de loops de pesquisa |
-| `min_score` | `0.01` | Piso para scores do LLM |
+| `llm_api_key` | sim | Chave do provedor LLM |
+| `llm_base_url` | não | Padrão: `https://api.openai.com/v1` |
+| `llm_model` | não | Padrão: `gpt-4o-mini` |
+| `target_score` | não | Padrão: `85` |
+| `max_iterations` | não | Padrão: `6` |
 
 ### Exemplo curl (streaming)
 
@@ -78,6 +80,9 @@ curl -N http://localhost:8787/v1/chat/completions \
   -d '{
     "model": "deepsearch",
     "stream": true,
+    "llm_api_key": "ollama",
+    "llm_base_url": "http://localhost:11434/v1",
+    "llm_model": "llama3.2",
     "messages": [
       {"role": "user", "content": "Avaliar viabilidade de app de delivery só de marmitas fitness em Campinas"}
     ],

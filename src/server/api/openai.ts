@@ -3,7 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
 import { DeepSearchAgent, extractObjective } from "../agent/loop.js";
-import type { Settings } from "../config.js";
+import { AGENT_DEFAULTS, type AgentConfig } from "../config.js";
 
 const messageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),
@@ -18,12 +18,13 @@ const requestSchema = z.object({
   target_score: z.number().min(0.01).max(100).optional(),
   max_iterations: z.number().int().min(1).max(50).optional(),
   min_score: z.number().min(0.01).max(100).optional(),
+  llm_api_key: z.string().min(1),
+  llm_base_url: z.string().min(1).optional(),
+  llm_model: z.string().min(1).optional(),
 });
 
 type AppEnv = {
-  Variables: {
-    settings: Settings;
-  };
+  Variables: Record<string, never>;
 };
 
 function messageContent(
@@ -39,14 +40,13 @@ function messageContent(
   return "";
 }
 
-function resolveParams(
-  body: z.infer<typeof requestSchema>,
-  settings: Settings,
-): { targetScore: number; maxIterations: number; minScore: number } {
+function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
   return {
-    targetScore: body.target_score ?? settings.targetScore,
-    maxIterations: body.max_iterations ?? settings.maxIterations,
-    minScore: body.min_score ?? settings.minScore,
+    openaiApiKey: body.llm_api_key,
+    openaiBaseUrl: body.llm_base_url ?? AGENT_DEFAULTS.openaiBaseUrl,
+    model: body.llm_model ?? AGENT_DEFAULTS.model,
+    minScore: body.min_score ?? AGENT_DEFAULTS.minScore,
+    resultsPerQuery: AGENT_DEFAULTS.resultsPerQuery,
   };
 }
 
@@ -71,18 +71,15 @@ export function createOpenAiRouter(): Hono<AppEnv> {
   );
 
   router.post("/chat/completions", async (c) => {
-    const settings = c.get("settings");
     const parsed = requestSchema.safeParse(await c.req.json());
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
 
     const body = parsed.data;
-    const { targetScore, maxIterations, minScore } = resolveParams(body, settings);
-    const effectiveSettings =
-      body.min_score !== undefined
-        ? { ...settings, minScore }
-        : settings;
+    const targetScore = body.target_score ?? AGENT_DEFAULTS.targetScore;
+    const maxIterations = body.max_iterations ?? AGENT_DEFAULTS.maxIterations;
+    const agentConfig = buildAgentConfig(body);
 
     const messages = body.messages.map((message) => ({
       role: message.role,
@@ -99,7 +96,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       );
     }
 
-    const agent = new DeepSearchAgent(effectiveSettings);
+    const agent = new DeepSearchAgent(agentConfig);
     const id = completionId();
     const created = Math.floor(Date.now() / 1000);
     const model = body.model || "deepsearch";
@@ -121,12 +118,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
               object: "chat.completion.chunk",
               created,
               model,
-              choices: [
-                {
-                  index: 0,
-                  delta,
-                },
-              ],
+              choices: [{ index: 0, delta }],
             }),
           });
         }
@@ -137,13 +129,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
             object: "chat.completion.chunk",
             created,
             model,
-            choices: [
-              {
-                index: 0,
-                delta: {},
-                finish_reason: "stop",
-              },
-            ],
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
           }),
         });
         await stream.writeSSE({ data: "[DONE]" });
@@ -163,18 +149,11 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       choices: [
         {
           index: 0,
-          message: {
-            role: "assistant",
-            content: parts.join(""),
-          },
+          message: { role: "assistant", content: parts.join("") },
           finish_reason: "stop",
         },
       ],
-      usage: {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-      },
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     });
   });
 

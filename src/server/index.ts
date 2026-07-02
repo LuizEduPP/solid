@@ -6,24 +6,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createOpenAiRouter } from "./api/openai.js";
-import { loadSettings, type Settings } from "./config.js";
+import { loadServerConfig } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../client");
 
-type AppEnv = {
-  Variables: {
-    settings: Settings;
-  };
-};
-
-const settings = loadSettings();
-const app = new Hono<AppEnv>();
-
-app.use("*", async (c, next) => {
-  c.set("settings", settings);
-  await next();
-});
+const server = loadServerConfig();
+const app = new Hono();
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 app.route("/v1", createOpenAiRouter());
@@ -59,7 +48,7 @@ if (isProduction) {
     <main>
       <h1>DeepSearch API</h1>
       <p>Em desenvolvimento, abra a interface em <a href="http://localhost:5173">http://localhost:5173</a>.</p>
-      <p>API em <code>http://localhost:${settings.port}</code></p>
+      <p>API em <code>http://localhost:${server.port}</code></p>
     </main>
   </body>
 </html>`),
@@ -69,13 +58,13 @@ if (isProduction) {
 serve(
   {
     fetch: app.fetch,
-    hostname: settings.host,
-    port: settings.port,
+    hostname: server.host,
+    port: server.port,
   },
   (info) => {
     console.log(`DeepSearch API on http://${info.address}:${info.port}`);
     if (!isProduction) {
-      console.log(`Web UI on http://localhost:5173`);
+      console.log("Web UI on http://localhost:5173");
     }
   },
 );

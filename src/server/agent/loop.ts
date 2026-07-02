@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-import type { Settings } from "../config.js";
+import type { AgentConfig } from "../config.js";
 import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM } from "./prompts.js";
 import {
   formatHits,
@@ -97,9 +97,9 @@ function event(kind: string, content: string): string {
 
 export class DeepSearchAgent {
   private readonly client: OpenAI;
-  private readonly settings: Settings;
+  private readonly settings: AgentConfig;
 
-  constructor(settings: Settings) {
+  constructor(settings: AgentConfig) {
     this.settings = settings;
     this.client = new OpenAI({
       apiKey: settings.openaiApiKey,

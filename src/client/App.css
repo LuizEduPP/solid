@@ -50,6 +50,10 @@
   font-size: 1rem;
 }
 
+.section-gap {
+  margin-top: 0.25rem;
+}
+
 .field {
   display: grid;
   gap: 0.45rem;
