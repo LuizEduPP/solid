@@ -131,24 +131,53 @@ export default function SolidnessPanel({
   const showReasons = reasons.length > 0 && status !== "solid";
   const weakest = rubric ? weakestRubricKey(rubric) : null;
 
-  const ring = (size: number, thickness: number) => (
+  const ringLabel = (size: number, showTarget: boolean) => (
+    <Stack
+      gap={showTarget ? 2 : 0}
+      align="center"
+      justify="center"
+      style={{ textAlign: "center", maxWidth: size * 0.58 }}
+    >
+      <Text
+        fw={700}
+        lh={1}
+        ta="center"
+        style={{
+          fontVariantNumeric: "tabular-nums",
+          fontSize: size >= 92 ? 17 : size >= 72 ? 13 : 11,
+        }}
+      >
+        {confidence.toFixed(0)}%
+      </Text>
+      {showTarget ? (
+        <Text
+          c="dimmed"
+          ta="center"
+          style={{ fontVariantNumeric: "tabular-nums", fontSize: 10, lineHeight: 1 }}
+        >
+          {targetScore}
+        </Text>
+      ) : null}
+    </Stack>
+  );
+
+  const ring = (size: number, thickness: number, showTarget: boolean) => (
     <RingProgress
       size={size}
       thickness={thickness}
       roundCaps
       sections={[{ value: Math.min(100, confidence), color }]}
-      label={
-        <Stack gap={0} align="center">
-          <Text size={size > 60 ? "lg" : "sm"} fw={700} lh={1.1}>
-            {confidence.toFixed(0)}%
-          </Text>
-          {size > 60 ? (
-            <Text size="10px" c="dimmed" lh={1.2}>
-              {t("solidnessTarget", { target: targetScore })}
-            </Text>
-          ) : null}
-        </Stack>
-      }
+      label={ringLabel(size, showTarget)}
+      styles={{
+        label: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 0,
+          maxWidth: size * 0.62,
+          overflow: "hidden",
+        },
+      }}
     />
   );
 
@@ -233,12 +262,9 @@ export default function SolidnessPanel({
       <Paper p="xs" radius="md" withBorder bg="dark.7" w="100%">
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Group gap="sm" wrap="nowrap" flex={1} miw={0}>
-            {ring(48, 6)}
+            <Box style={{ flexShrink: 0, lineHeight: 0 }}>{ring(52, 5, false)}</Box>
             <Stack gap={2} miw={0}>
               {statusLine}
-              <Text size="10px" c="dimmed">
-                {t("solidnessTarget", { target: targetScore })}
-              </Text>
             </Stack>
           </Group>
           <ActionIcon
@@ -285,7 +311,9 @@ export default function SolidnessPanel({
       ) : null}
 
       <Group align="flex-start" wrap="nowrap" gap="md">
-        {ring(compact ? 72 : 92, compact ? 7 : 9)}
+        <Box style={{ flexShrink: 0, lineHeight: 0 }}>
+          {ring(compact ? 72 : 92, compact ? 7 : 9, !compact)}
+        </Box>
 
         <Stack gap="xs" flex={1} miw={0}>
           {statusLine}
