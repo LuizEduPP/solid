@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
-from deepsearch.api.openai import router as openai_router
-from deepsearch.config import load_settings
+from api.openai import router as openai_router
+from config import load_settings
 
 
 @asynccontextmanager
@@ -31,7 +31,7 @@ async def health() -> dict[str, str]:
 def cli() -> None:
     settings = load_settings()
     uvicorn.run(
-        "deepsearch.main:app",
+        "main:app",
         host=settings.host,
         port=settings.port,
         reload=False,

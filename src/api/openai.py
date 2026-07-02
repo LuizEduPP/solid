@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from deepsearch.agent.loop import DeepSearchAgent, extract_objective
-from deepsearch.api.schemas import (
+from agent.loop import DeepSearchAgent, extract_objective
+from api.schemas import (
     ChatCompletionChunk,
     ChatCompletionChunkChoice,
     ChatCompletionChunkDelta,
@@ -17,7 +17,7 @@ from deepsearch.api.schemas import (
     ChatCompletionResponse,
     ChatMessage,
 )
-from deepsearch.config import Settings
+from config import Settings
 
 router = APIRouter()
 

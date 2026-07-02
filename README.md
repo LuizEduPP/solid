@@ -35,7 +35,7 @@ DEEPSEARCH_MAX_ITERATIONS=8
 ```bash
 deepsearch
 # or
-uvicorn deepsearch.main:app --host 0.0.0.0 --port 8787
+uvicorn main:app --host 0.0.0.0 --port 8787
 ```
 
 ## Usage

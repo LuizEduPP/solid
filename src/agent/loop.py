@@ -5,9 +5,9 @@ from dataclasses import dataclass, field
 
 from openai import AsyncOpenAI
 
-from deepsearch.agent.prompts import ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM
-from deepsearch.config import Settings
-from deepsearch.search.web import SearchHit, format_hits, search_web
+from agent.prompts import ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM
+from config import Settings
+from search.web import SearchHit, format_hits, search_web
 
 
 @dataclass
