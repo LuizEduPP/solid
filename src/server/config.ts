@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import type { ResearchMode } from "./agent/scoring.js";
+import type { ResearchMode } from "../shared/types.js";
 
 export interface ServerConfig {
   host: string;
@@ -22,7 +22,6 @@ export const AGENT_DEFAULTS = {
   model: "gpt-4o-mini",
   minScore: 0.01,
   resultsPerQuery: 8,
-  targetScore: 100,
   mode: "rigorous" as ResearchMode,
   pagesPerIteration: 3,
 } as const;

@@ -11,7 +11,7 @@ import {
   MODE_THRESHOLDS,
   normalizeRubric,
   rubricTotal,
-  uniqueDomainsAcrossHits,
+  uniqueDomainsFromHits,
   type ScoreRubric,
 } from "./scoring.js";
 import { fetchPages } from "../search/fetch.js";
@@ -217,7 +217,7 @@ function finalizeScore(
     isFirstIteration,
   });
 
-  const uniqueDomains = uniqueDomainsAcrossHits(run.allHits).length;
+  const uniqueDomains = uniqueDomainsFromHits(run.allHits).length;
   const evidenceScore = computeEvidenceScore(
     uniqueDomains,
     analysis.cited_urls?.length ?? 0,
@@ -335,7 +335,7 @@ export class SolidAgent {
     const user =
       `Objective:\n${objective}\n\n` +
       `Previous cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
-      `Unique domains seen so far: ${uniqueDomainsAcrossHits(run.allHits).length}\n\n` +
+      `Unique domains seen so far: ${uniqueDomainsFromHits(run.allHits).length}\n\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(none)"}\n\n` +
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
@@ -437,7 +437,7 @@ export class SolidAgent {
         openGaps: analysis.open_gaps ?? [],
         iteration,
         thresholds,
-        uniqueDomainCount: uniqueDomainsAcrossHits(agentRun.allHits).length,
+        uniqueDomainCount: uniqueDomainsFromHits(agentRun.allHits).length,
         hadDisconfirmingSearch: agentRun.hadDisconfirmingSearch,
       });
 
@@ -505,8 +505,3 @@ export class SolidAgent {
     yield event("report", report);
   }
 }
-
-/** @deprecated Use SolidAgent */
-export const RigorAgent = SolidAgent;
-/** @deprecated Use SolidAgent */
-export const DeepSearchAgent = SolidAgent;

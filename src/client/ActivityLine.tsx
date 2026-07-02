@@ -1,8 +1,7 @@
 import { Text } from "@mantine/core";
 
-import { translateActivityLine } from "./activity.js";
+import { parsePageReadUrl, translateActivityLine } from "./activity.js";
 import SiteLink from "./SiteLink.js";
-import { parsePageReadUrl } from "./sites.js";
 
 interface ActivityLineProps {
   line: string;
@@ -15,7 +14,7 @@ export default function ActivityLine({ line, active = false }: ActivityLineProps
 
   if (pageUrl) {
     return (
-      <li style={{ listStyle: "decimal", marginLeft: "1.1rem" }}>
+      <li>
         <SiteLink url={pageUrl} size={14} textSize="xs" />
       </li>
     );

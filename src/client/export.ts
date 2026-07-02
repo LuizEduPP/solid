@@ -1,26 +1,29 @@
 import { saveAs } from "file-saver";
 
+import { translateActivityLine } from "./activity.js";
 import i18n from "./i18n.js";
-import type { ResearchSession } from "./history";
+import type { ResearchSession } from "./history.js";
+import { parseStream } from "./stream.js";
 
-export function exportSessionMarkdown(session: ResearchSession): string {
+function exportSessionMarkdown(session: ResearchSession): string {
   const t = i18n.t.bind(i18n);
+  const parsed = parseStream(session.rawStream);
   const lines: string[] = [
     `# ${session.objective}`,
     "",
     `- ${t("exportStatus")}: ${session.status}`,
-    `- ${t("exportSolidness")}: ${session.confidence.toFixed(1)}%`,
+    `- ${t("exportSolidness")}: ${parsed.confidence.toFixed(1)}%`,
     `- ${t("exportUpdated")}: ${new Date(session.updatedAt).toISOString()}`,
     "",
   ];
 
-  if (session.report) {
-    lines.push(`## ${t("exportAnswer")}`, "", session.report, "");
+  if (parsed.report) {
+    lines.push(`## ${t("exportAnswer")}`, "", parsed.report, "");
   }
 
-  if (session.iterations.length > 0) {
+  if (parsed.iterations.length > 0) {
     lines.push(`## ${t("exportSteps")}`, "");
-    for (const iteration of session.iterations) {
+    for (const iteration of parsed.iterations) {
       lines.push(
         `### ${t("exportStep")} ${iteration.number} (${iteration.score.toFixed(0)}%)`,
         "",
@@ -32,8 +35,15 @@ export function exportSessionMarkdown(session: ResearchSession): string {
     }
   }
 
-  if (session.activity.length > 0) {
-    lines.push(`## ${t("exportLog")}`, "", "```", session.activity.join("\n"), "```", "");
+  if (parsed.activity.length > 0) {
+    lines.push(
+      `## ${t("exportLog")}`,
+      "",
+      "```",
+      parsed.activity.map(translateActivityLine).join("\n"),
+      "```",
+      "",
+    );
   }
 
   return lines.filter(Boolean).join("\n");

@@ -1,44 +1,16 @@
 import type { SearchHit } from "../search/web.js";
+import { uniqueHostnamesFromHits } from "../../shared/domains.js";
+import { MODE_THRESHOLDS, type ModeThresholds } from "../../shared/thresholds.js";
+import type { ScoreRubric } from "../../shared/types.js";
 
-export type ResearchMode = "rigorous" | "fast";
+export type { ResearchMode, ScoreRubric } from "../../shared/types.js";
+export { MODE_THRESHOLDS } from "../../shared/thresholds.js";
+export type { ModeThresholds } from "../../shared/thresholds.js";
+export { tryHostname as extractDomain } from "../../shared/domains.js";
 
-export interface ScoreRubric {
-  direct_evidence: number;
-  source_diversity: number;
-  gap_coverage: number;
-  risk_contradiction: number;
+export function uniqueDomainsFromHits(hits: SearchHit[]): string[] {
+  return uniqueHostnamesFromHits(hits);
 }
-
-export interface ModeThresholds {
-  targetScore: number;
-  minIterations: number;
-  minDomainsFor100: number;
-  maxScoreDelta: number;
-  firstIterationCap: number;
-  disconfirmThreshold: number;
-  weakEvidenceBelow: number;
-}
-
-export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
-  rigorous: {
-    targetScore: 100,
-    minIterations: 6,
-    minDomainsFor100: 5,
-    maxScoreDelta: 6,
-    firstIterationCap: 40,
-    disconfirmThreshold: 70,
-    weakEvidenceBelow: 60,
-  },
-  fast: {
-    targetScore: 85,
-    minIterations: 3,
-    minDomainsFor100: 3,
-    maxScoreDelta: 12,
-    firstIterationCap: 55,
-    disconfirmThreshold: 80,
-    weakEvidenceBelow: 45,
-  },
-};
 
 export function normalizeRubric(raw: Partial<ScoreRubric> | undefined): ScoreRubric {
   const clamp = (value: unknown) =>
@@ -59,27 +31,6 @@ export function rubricTotal(rubric: ScoreRubric): number {
     rubric.gap_coverage +
     rubric.risk_contradiction
   );
-}
-
-export function extractDomain(url: string): string | null {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
-
-export function uniqueDomainsFromHits(hits: SearchHit[]): string[] {
-  const domains = new Set<string>();
-  for (const hit of hits) {
-    const domain = extractDomain(hit.url);
-    if (domain) domains.add(domain);
-  }
-  return [...domains];
-}
-
-export function uniqueDomainsAcrossHits(allHits: SearchHit[]): string[] {
-  return uniqueDomainsFromHits(allHits);
 }
 
 export function clampScore(value: number, minScore: number): number {

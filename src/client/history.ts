@@ -1,6 +1,8 @@
 import { isAfter, isToday, isYesterday, subDays } from "date-fns";
 
-import type { ParsedStream } from "./stream";
+import { parseStream } from "./stream.js";
+import { readLocalStorageJson } from "./storage.js";
+import type { HistoryGroupKey } from "./i18n.js";
 
 export interface ResearchSession {
   id: string;
@@ -8,33 +10,35 @@ export interface ResearchSession {
   createdAt: number;
   updatedAt: number;
   status: "running" | "completed" | "cancelled" | "error";
-  confidence: number;
-  iterations: ParsedStream["iterations"];
-  report: string;
-  activity: string[];
   rawStream: string;
   error?: string;
 }
 
 export const HISTORY_KEY = "solid-history";
 const LEGACY_HISTORY_KEYS = ["rigor-history", "deepsearch-history"] as const;
-export const MAX_SESSIONS = 40;
+const MAX_SESSIONS = 40;
 
 export function loadHistory(): ResearchSession[] {
-  try {
-    let raw = localStorage.getItem(HISTORY_KEY);
-    if (!raw) {
-      for (const key of LEGACY_HISTORY_KEYS) {
-        raw = localStorage.getItem(key);
-        if (raw) break;
-      }
-    }
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as ResearchSession[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = readLocalStorageJson<unknown>(
+    HISTORY_KEY,
+    LEGACY_HISTORY_KEYS,
+    [],
+  );
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(isResearchSession);
+}
+
+function isResearchSession(value: unknown): value is ResearchSession {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<ResearchSession>;
+  return (
+    typeof session.id === "string" &&
+    typeof session.objective === "string" &&
+    typeof session.createdAt === "number" &&
+    typeof session.updatedAt === "number" &&
+    typeof session.status === "string" &&
+    typeof session.rawStream === "string"
+  );
 }
 
 export function createSession(objective: string): ResearchSession {
@@ -45,27 +49,18 @@ export function createSession(objective: string): ResearchSession {
     createdAt: now,
     updatedAt: now,
     status: "running",
-    confidence: 0,
-    iterations: [],
-    report: "",
-    activity: [],
     rawStream: "",
   };
 }
 
-export function applyParsedStream(
+export function touchSession(
   session: ResearchSession,
-  parsed: ParsedStream,
-  rawStream: string,
+  patch: Partial<ResearchSession>,
 ): ResearchSession {
   return {
     ...session,
+    ...patch,
     updatedAt: Date.now(),
-    confidence: parsed.confidence,
-    iterations: parsed.iterations,
-    report: parsed.report,
-    activity: parsed.activity,
-    rawStream,
   };
 }
 
@@ -89,14 +84,13 @@ export function deleteSession(
 }
 
 export function sessionPreview(session: ResearchSession, untitled: string): string {
+  const parsed = parseStream(session.rawStream);
   const text =
     session.objective.trim() ||
-    session.iterations[0]?.findings ||
+    parsed.iterations[0]?.findings ||
     untitled;
   return text.length > 56 ? `${text.slice(0, 56)}…` : text;
 }
-
-export type HistoryGroupKey = "today" | "yesterday" | "last7" | "earlier";
 
 export interface HistoryGroup {
   key: HistoryGroupKey;

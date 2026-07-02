@@ -24,13 +24,13 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import ActivityLine from "./ActivityLine";
 import {
-  applyParsedStream,
   createSession,
   deleteSession,
   groupSessionsByDate,
   HISTORY_KEY,
   loadHistory,
   sessionPreview,
+  touchSession,
   upsertSession,
   type ResearchSession,
 } from "./history";
@@ -46,23 +46,12 @@ import {
   loadWebSettings,
   MODE_TARGETS,
   SETTINGS_KEY,
+  updateSettings,
   type WebSettings,
 } from "./settings";
 import { streamResearch } from "./stream-client";
 import { parseStream, uniqueSourceCount } from "./stream";
-
-const WEAK_EVIDENCE_BELOW: Record<WebSettings["mode"], number> = {
-  rigorous: 60,
-  fast: 45,
-};
-
-function updateSettings<K extends keyof WebSettings>(
-  current: WebSettings,
-  key: K,
-  value: WebSettings[K],
-): WebSettings {
-  return { ...current, [key]: value };
-}
+import { MODE_THRESHOLDS } from "../shared/thresholds.js";
 
 function isLocalLlmBaseUrl(baseUrl: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
@@ -238,39 +227,23 @@ export default function App() {
         (chunk) => {
           rawStream += chunk;
           syncSession(
-            applyParsedStream(
-              { ...session, status: "running" },
-              parseStream(rawStream),
-              rawStream,
-            ),
+            touchSession({ ...session, status: "running" }, { rawStream }),
           );
         },
         nextController.signal,
       );
 
-      syncSession({
-        ...applyParsedStream(session, parseStream(rawStream), rawStream),
-        status: "completed",
-        updatedAt: Date.now(),
-      });
+      syncSession(touchSession(session, { rawStream, status: "completed" }));
     } catch (err) {
-      const finalParsed = parseStream(rawStream);
       if (err instanceof DOMException && err.name === "AbortError") {
         rawStream += `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
-        syncSession({
-          ...applyParsedStream(session, parseStream(rawStream), rawStream),
-          status: "cancelled",
-          updatedAt: Date.now(),
-        });
+        syncSession(touchSession(session, { rawStream, status: "cancelled" }));
       } else {
         const message = err instanceof Error ? err.message : t("errorUnexpected");
         setError(message);
-        syncSession({
-          ...applyParsedStream(session, finalParsed, rawStream),
-          status: "error",
-          error: message,
-          updatedAt: Date.now(),
-        });
+        syncSession(
+          touchSession(session, { rawStream, status: "error", error: message }),
+        );
       }
     } finally {
       setRunning(false);
@@ -298,9 +271,11 @@ export default function App() {
   const confidence = parsed.confidence;
   const targetScore = MODE_TARGETS[settings.mode];
   const sourceCount = uniqueSourceCount(parsed.iterations);
+  const modeThresholds = MODE_THRESHOLDS[settings.mode];
   const weakEvidence =
     confidence > 0 &&
-    (confidence < WEAK_EVIDENCE_BELOW[settings.mode] || sourceCount < 3);
+    (confidence < modeThresholds.weakEvidenceBelow ||
+      sourceCount < modeThresholds.minDomainsFor100);
   const hasContent =
     parsed.iterations.length > 0 ||
     Boolean(parsed.report) ||
@@ -532,17 +507,11 @@ export default function App() {
                             {t("sources")}
                           </Text>
                           {iteration.sources.map((source) => (
-                            <Text
+                            <SiteLink
                               key={source.url}
-                              component="a"
-                              href={source.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              size="sm"
-                              c="cyan.4"
-                            >
-                              {source.title || source.url}
-                            </Text>
+                              url={source.url}
+                              label={source.title || undefined}
+                            />
                           ))}
                         </Stack>
                       ) : null}

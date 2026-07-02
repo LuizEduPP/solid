@@ -1,5 +1,10 @@
 import i18n from "./i18n.js";
 
+export function parsePageReadUrl(line: string): string | null {
+  const match = line.trim().match(/^Page read: (https?:\/\/\S+)$/i);
+  return match?.[1] ?? null;
+}
+
 function translateGateReason(reason: string): string {
   let match = reason.match(/^(\d+) open gap\(s\)$/);
   if (match) return i18n.t("gateOpenGaps", { count: match[1] });
@@ -22,7 +27,6 @@ export function translateActivityLine(line: string): string {
   if (!trimmed) return line;
 
   if (trimmed === "Research started") return i18n.t("activityResearchStarted");
-  if (trimmed === "Cancelled.") return i18n.t("cancelled");
   if (trimmed === "Generating final report...") {
     return i18n.t("activityGeneratingReport");
   }
@@ -32,9 +36,6 @@ export function translateActivityLine(line: string): string {
 
   let match = trimmed.match(/^Search failed: (.+)$/);
   if (match) return i18n.t("activitySearchFailed", { query: match[1] });
-
-  match = trimmed.match(/^(\d+) page\(s\) fetched$/);
-  if (match) return i18n.t("activityPagesFetched", { count: match[1] });
 
   match = trimmed.match(/^(\d+) results · analyzing$/);
   if (match) return i18n.t("activityResultsAnalyzing", { count: match[1] });

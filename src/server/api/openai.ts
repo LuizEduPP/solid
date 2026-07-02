@@ -41,8 +41,12 @@ function messageContent(
   return "";
 }
 
+function resolveMode(body: z.infer<typeof requestSchema>) {
+  return body.research_mode ?? AGENT_DEFAULTS.mode;
+}
+
 function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
-  const mode = body.research_mode ?? AGENT_DEFAULTS.mode;
+  const mode = resolveMode(body);
   return {
     openaiApiKey: body.llm_api_key,
     openaiBaseUrl: body.llm_base_url ?? AGENT_DEFAULTS.openaiBaseUrl,
@@ -55,7 +59,7 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
 }
 
 function resolveTargetScore(body: z.infer<typeof requestSchema>): number {
-  const mode = body.research_mode ?? AGENT_DEFAULTS.mode;
+  const mode = resolveMode(body);
   const modeDefault = MODE_THRESHOLDS[mode].targetScore;
   return body.target_score ?? modeDefault;
 }

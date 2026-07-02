@@ -12,5 +12,5 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["src/client"]
+  "include": ["src/client", "src/shared"]
 }

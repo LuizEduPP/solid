@@ -13,16 +13,9 @@ import {
 } from "./i18n.js";
 import {
   DEFAULT_WEB_SETTINGS,
+  updateSettings,
   type WebSettings,
 } from "./settings.js";
-
-function updateSettings<K extends keyof WebSettings>(
-  current: WebSettings,
-  key: K,
-  value: WebSettings[K],
-): WebSettings {
-  return { ...current, [key]: value };
-}
 
 interface SettingsFormProps {
   settings: WebSettings;

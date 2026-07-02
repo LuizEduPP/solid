@@ -1,9 +1,7 @@
-export interface ScoreRubric {
-  direct_evidence: number;
-  source_diversity: number;
-  gap_coverage: number;
-  risk_contradiction: number;
-}
+import { countUniqueHostnames } from "../shared/domains.js";
+import type { ScoreRubric } from "../shared/types.js";
+
+export type { ScoreRubric } from "../shared/types.js";
 
 export interface SourceSnapshot {
   title: string;
@@ -35,20 +33,15 @@ export interface ParsedStream {
   rubric: ScoreRubric | null;
 }
 
-const MARKER_RE =
-  /@@(?:STATUS|SYNTHESIS|SCORE|REPORT|ITER|RUBRIC)@@\n/;
+const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC)@@\n/;
 
-function extractTailSection(output: string, marker: string): string {
-  const token = `@@${marker}@@\n`;
-  const idx = output.lastIndexOf(token);
-  if (idx < 0) return "";
-
-  const tail = output.slice(idx + token.length);
+function sectionBody(output: string, start: number): string {
+  const tail = output.slice(start);
   const nextIdx = tail.search(MARKER_RE);
   return (nextIdx >= 0 ? tail.slice(0, nextIdx) : tail).trim();
 }
 
-function extractAllSections(output: string, marker: string): string[] {
+function extractSections(output: string, marker: string): string[] {
   const token = `@@${marker}@@\n`;
   const results: string[] = [];
   let start = 0;
@@ -57,25 +50,27 @@ function extractAllSections(output: string, marker: string): string[] {
     const idx = output.indexOf(token, start);
     if (idx < 0) break;
 
-    const tail = output.slice(idx + token.length);
-    const nextIdx = tail.search(MARKER_RE);
-    const body = (nextIdx >= 0 ? tail.slice(0, nextIdx) : tail).trim();
+    const body = sectionBody(output, idx + token.length);
     if (body) results.push(body);
 
-    start =
-      idx +
-      token.length +
-      (nextIdx >= 0 ? nextIdx : tail.length);
+    const tail = output.slice(idx + token.length);
+    const nextIdx = tail.search(MARKER_RE);
+    start = idx + token.length + (nextIdx >= 0 ? nextIdx : tail.length);
   }
 
   return results;
 }
 
+function extractTailSection(output: string, marker: string): string {
+  const token = `@@${marker}@@\n`;
+  const idx = output.lastIndexOf(token);
+  if (idx < 0) return "";
+  return sectionBody(output, idx + token.length);
+}
+
 function parseIterationPayload(raw: string): IterationSnapshot | null {
   try {
-    const payload = JSON.parse(raw) as Partial<IterationSnapshot> & {
-      citedUrls?: string[];
-    };
+    const payload = JSON.parse(raw) as Partial<IterationSnapshot>;
     if (typeof payload.number !== "number") return null;
 
     return {
@@ -97,24 +92,7 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
   }
 }
 
-function parseLegacySynthesis(output: string): IterationSnapshot[] {
-  const blocks = extractAllSections(output, "SYNTHESIS");
-  const scores = extractAllSections(output, "SCORE").map((value) =>
-    Number(value.split(/\s/)[0]),
-  );
-
-  return blocks.map((synthesis, index) => ({
-    number: index + 1,
-    angle: "",
-    score: scores[index] ?? scores.at(-1) ?? 0,
-    scoreDelta: "",
-    findings: "",
-    synthesis: prepareMarkdown(synthesis),
-    scoreReasoning: "",
-  }));
-}
-
-export function prepareMarkdown(text: string): string {
+function prepareMarkdown(text: string): string {
   return text
     .replace(/\$\\rightarrow\$/g, "→")
     .replace(/\$\\leftrightarrow\$/g, "↔")
@@ -122,7 +100,7 @@ export function prepareMarkdown(text: string): string {
 }
 
 function parseIterations(output: string): IterationSnapshot[] {
-  const structured = extractAllSections(output, "ITER")
+  return extractSections(output, "ITER")
     .map(parseIterationPayload)
     .filter((item): item is IterationSnapshot => item !== null)
     .map((item) => ({
@@ -131,9 +109,6 @@ function parseIterations(output: string): IterationSnapshot[] {
       synthesis: prepareMarkdown(item.synthesis),
       scoreReasoning: prepareMarkdown(item.scoreReasoning),
     }));
-
-  if (structured.length > 0) return structured;
-  return parseLegacySynthesis(output);
 }
 
 function parseLatestRubric(output: string): ScoreRubric | null {
@@ -150,7 +125,7 @@ function parseLatestRubric(output: string): ScoreRubric | null {
 export function parseStream(output: string): ParsedStream {
   const iterations = parseIterations(output);
   const report = prepareMarkdown(extractTailSection(output, "REPORT"));
-  const activity = extractAllSections(output, "STATUS");
+  const activity = extractSections(output, "STATUS");
   const scoreText = extractTailSection(output, "SCORE");
 
   let confidence = scoreText ? Number(scoreText.split(/\s/)[0]) : 0;
@@ -179,15 +154,6 @@ export function parseStream(output: string): ParsedStream {
 }
 
 export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
-  const domains = new Set<string>();
-  for (const iteration of iterations) {
-    for (const url of iteration.citedUrls ?? []) {
-      try {
-        domains.add(new URL(url).hostname.replace(/^www\./, ""));
-      } catch {
-        // ignore invalid urls
-      }
-    }
-  }
-  return domains.size;
+  const urls = iterations.flatMap((iteration) => iteration.citedUrls ?? []);
+  return countUniqueHostnames(urls);
 }
