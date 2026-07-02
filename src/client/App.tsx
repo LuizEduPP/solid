@@ -13,7 +13,6 @@ import {
   Stack,
   Text,
   Textarea,
-  Title,
   type BoxProps,
 } from "@mantine/core";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
@@ -23,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ActivityLine, { compressStepsActivity } from "./activity";
+import SolidLogo from "./SolidLogo";
 import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
 import {
   createSession,
@@ -400,9 +400,7 @@ export default function App() {
         styles={{ navbar: { borderRight: "none" } }}
         style={{ display: "flex", flexDirection: "column" }}
       >
-        <Title order={4} px="xs" mb="sm">
-          solid
-        </Title>
+        <SolidLogo px="xs" mb="sm" wordmarkSize="md" />
 
         <Button
           fullWidth
@@ -545,7 +543,7 @@ export default function App() {
             <ChatColumn pb="xl">
               {!hasContent ? (
                 <Stack align="center" justify="center" mih="50vh">
-                  <Title order={1}>solid</Title>
+                  <SolidLogo wordmarkSize="lg" gap="sm" />
                 </Stack>
               ) : (
                 <Stack gap="lg">
