@@ -1,26 +1,24 @@
 # DeepSearch
 
-OpenAI-compatible agent that takes your objective, searches the web iteratively, revalidates the idea from multiple angles, and converges on a confidence score from **0.01% to 100%**.
+Agente de pesquisa iterativa com interface web. Recebe um objetivo, busca na web em várias rodadas, revalida a ideia sob ângulos diferentes e converge para um score de confiança de **0,01% a 100%**.
 
 ## Stack
 
-- Python 3.11+
-- FastAPI + Uvicorn
-- Any OpenAI-compatible LLM (OpenAI, Ollama, vLLM, etc.)
-- DuckDuckGo for web search
+- TypeScript + Node.js
+- Hono (API) + React (UI)
+- Qualquer LLM compatível com OpenAI (OpenAI, Ollama, vLLM, etc.)
+- DuckDuckGo para busca web
 
 ## Setup
 
 ```bash
-cd projects/027-DeepSearch
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+cd projects/027-deep-search
+yarn install
 cp .env.example .env
-# edit .env with your LLM credentials
+# edite .env com suas credenciais de LLM
 ```
 
-### Ollama example
+### Exemplo com Ollama
 
 ```env
 OPENAI_API_KEY=ollama
@@ -30,32 +28,49 @@ DEEPSEARCH_TARGET_SCORE=85
 DEEPSEARCH_MAX_ITERATIONS=8
 ```
 
-## Run
+## Rodar
+
+### Desenvolvimento
 
 ```bash
-deepsearch
-# or
-uvicorn main:app --host 0.0.0.0 --port 8787
+yarn dev
 ```
 
-## Usage
+- Interface web: [http://localhost:5173](http://localhost:5173)
+- API: [http://localhost:8787](http://localhost:8787)
 
-### curl (non-streaming)
+### Produção
 
 ```bash
-curl http://localhost:8787/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepsearch",
-    "messages": [
-      {"role": "user", "content": "Validar se um SaaS de gestão de obras para construtoras pequenas no Brasil tem mercado viável em 2026"}
-    ],
-    "target_score": 90,
-    "max_iterations": 10
-  }'
+yarn build
+yarn start
 ```
 
-### curl (streaming)
+Abra [http://localhost:8787](http://localhost:8787) — interface e API no mesmo servidor.
+
+## Interface web
+
+1. Descreva o objetivo da pesquisa.
+2. Ajuste a meta de confiança e o número máximo de iterações.
+3. Clique em **Iniciar pesquisa** e acompanhe o streaming em tempo real.
+
+## API (OpenAI-compatible)
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /health` | Health check |
+| `GET /v1/models` | Lista o modelo `deepsearch` |
+| `POST /v1/chat/completions` | Executa o agente de pesquisa |
+
+### Campos extras no request
+
+| Campo | Padrão | Descrição |
+|---|---|---|
+| `target_score` | `90` | Para quando a confiança atingir este valor (0,01–100) |
+| `max_iterations` | `10` | Máximo de loops de pesquisa |
+| `min_score` | `0.01` | Piso para scores do LLM |
+
+### Exemplo curl (streaming)
 
 ```bash
 curl -N http://localhost:8787/v1/chat/completions \
@@ -71,51 +86,14 @@ curl -N http://localhost:8787/v1/chat/completions \
   }'
 ```
 
-### OpenAI Python SDK
+## Como funciona
 
-```python
-from openai import OpenAI
-
-client = OpenAI(base_url="http://localhost:8787/v1", api_key="local")
-
-stream = client.chat.completions.create(
-    model="deepsearch",
-    stream=True,
-    extra_body={"target_score": 92, "max_iterations": 12},
-    messages=[
-        {"role": "user", "content": "Quero lançar um curso online de IA para advogados"}
-    ],
-)
-
-for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")
-```
-
-## How it works
-
-1. You send your **objective** as the user message.
-2. The agent plans search queries with a varying angle each iteration.
-3. It searches the web and synthesizes findings.
-4. It assigns a **confidence score** (0.01–100%) with reasoning.
-5. If below `target_score`, it pivots/varies and repeats (up to `max_iterations`).
-6. It returns a final evidence-based report.
-
-## API
-
-| Endpoint | Description |
-|---|---|
-| `GET /health` | Health check |
-| `GET /v1/models` | Lists `deepsearch` model |
-| `POST /v1/chat/completions` | Run research agent |
-
-### Extra request fields
-
-| Field | Default | Description |
-|---|---|---|
-| `target_score` | `90` | Stop when confidence reaches this (0.01–100) |
-| `max_iterations` | `10` | Max research loops |
-| `min_score` | `0.01` | Floor for LLM scores |
+1. Você envia o **objetivo** como mensagem do usuário.
+2. O agente planeja queries de busca com um ângulo diferente a cada iteração.
+3. Busca na web e sintetiza os achados.
+4. Atribui um **score de confiança** (0,01–100%) com justificativa.
+5. Se estiver abaixo de `target_score`, pivota e repete (até `max_iterations`).
+6. Retorna um relatório final baseado em evidências.
 
 ## License
 

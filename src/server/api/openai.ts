@@ -1,0 +1,182 @@
+import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
+import { z } from "zod";
+
+import { DeepSearchAgent, extractObjective } from "../agent/loop.js";
+import type { Settings } from "../config.js";
+
+const messageSchema = z.object({
+  role: z.enum(["system", "user", "assistant", "tool"]),
+  content: z.union([z.string(), z.array(z.record(z.string(), z.unknown())), z.null()]).optional(),
+});
+
+const requestSchema = z.object({
+  model: z.string().default("deepsearch"),
+  messages: z.array(messageSchema).min(1),
+  stream: z.boolean().default(false),
+  temperature: z.number().optional(),
+  target_score: z.number().min(0.01).max(100).optional(),
+  max_iterations: z.number().int().min(1).max(50).optional(),
+  min_score: z.number().min(0.01).max(100).optional(),
+});
+
+type AppEnv = {
+  Variables: {
+    settings: Settings;
+  };
+};
+
+function messageContent(
+  content: string | Array<Record<string, unknown>> | null | undefined,
+): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((part) => part.type === "text")
+      .map((part) => String(part.text ?? ""))
+      .join("\n");
+  }
+  return "";
+}
+
+function resolveParams(
+  body: z.infer<typeof requestSchema>,
+  settings: Settings,
+): { targetScore: number; maxIterations: number; minScore: number } {
+  return {
+    targetScore: body.target_score ?? settings.targetScore,
+    maxIterations: body.max_iterations ?? settings.maxIterations,
+    minScore: body.min_score ?? settings.minScore,
+  };
+}
+
+function completionId(): string {
+  return `chatcmpl-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+}
+
+export function createOpenAiRouter(): Hono<AppEnv> {
+  const router = new Hono<AppEnv>();
+
+  router.get("/models", (c) =>
+    c.json({
+      object: "list",
+      data: [
+        {
+          id: "deepsearch",
+          object: "model",
+          owned_by: "deepsearch",
+        },
+      ],
+    }),
+  );
+
+  router.post("/chat/completions", async (c) => {
+    const settings = c.get("settings");
+    const parsed = requestSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+
+    const body = parsed.data;
+    const { targetScore, maxIterations, minScore } = resolveParams(body, settings);
+    const effectiveSettings =
+      body.min_score !== undefined
+        ? { ...settings, minScore }
+        : settings;
+
+    const messages = body.messages.map((message) => ({
+      role: message.role,
+      content: messageContent(message.content),
+    }));
+
+    let objective: string;
+    try {
+      objective = extractObjective(messages);
+    } catch (error) {
+      return c.json(
+        { error: error instanceof Error ? error.message : "Invalid messages" },
+        400,
+      );
+    }
+
+    const agent = new DeepSearchAgent(effectiveSettings);
+    const id = completionId();
+    const created = Math.floor(Date.now() / 1000);
+    const model = body.model || "deepsearch";
+
+    if (body.stream) {
+      return streamSSE(c, async (stream) => {
+        let roleSent = false;
+
+        for await (const chunk of agent.run(objective, targetScore, maxIterations)) {
+          const delta: Record<string, string> = { content: chunk };
+          if (!roleSent) {
+            delta.role = "assistant";
+            roleSent = true;
+          }
+
+          await stream.writeSSE({
+            data: JSON.stringify({
+              id,
+              object: "chat.completion.chunk",
+              created,
+              model,
+              choices: [
+                {
+                  index: 0,
+                  delta,
+                },
+              ],
+            }),
+          });
+        }
+
+        await stream.writeSSE({
+          data: JSON.stringify({
+            id,
+            object: "chat.completion.chunk",
+            created,
+            model,
+            choices: [
+              {
+                index: 0,
+                delta: {},
+                finish_reason: "stop",
+              },
+            ],
+          }),
+        });
+        await stream.writeSSE({ data: "[DONE]" });
+      });
+    }
+
+    const parts: string[] = [];
+    for await (const chunk of agent.run(objective, targetScore, maxIterations)) {
+      parts.push(chunk);
+    }
+
+    return c.json({
+      id,
+      object: "chat.completion",
+      created,
+      model,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: parts.join(""),
+          },
+          finish_reason: "stop",
+        },
+      ],
+      usage: {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+      },
+    });
+  });
+
+  return router;
+}

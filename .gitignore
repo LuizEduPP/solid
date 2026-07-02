@@ -1,7 +1,14 @@
+node_modules/
+dist/
+.env
+.DS_Store
+*.log
+package-lock.json
+npm-debug.log*
+yarn-error.log
+
+# Python (legado)
+.venv/
 __pycache__/
 *.py[cod]
-.venv/
-.env
-dist/
 *.egg-info/
-.pytest_cache/

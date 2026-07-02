@@ -1,0 +1,166 @@
+.app {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.hero {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  color: #7eb6ff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.05;
+}
+
+.hero p {
+  margin: 0;
+  max-width: 52rem;
+  color: #a8b3cc;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.panel {
+  background: rgba(12, 18, 34, 0.88);
+  border: 1px solid rgba(126, 182, 255, 0.14);
+  border-radius: 1rem;
+  padding: 1.1rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+}
+
+.panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.field label {
+  font-size: 0.9rem;
+  color: #c5d0e6;
+}
+
+.field textarea,
+.field input {
+  width: 100%;
+  border: 1px solid rgba(126, 182, 255, 0.18);
+  border-radius: 0.75rem;
+  background: #0d1426;
+  color: #edf2ff;
+  padding: 0.8rem 0.9rem;
+}
+
+.field textarea {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus {
+  outline: 2px solid rgba(126, 182, 255, 0.35);
+  border-color: transparent;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+button.primary {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.8rem 1.2rem;
+  background: linear-gradient(135deg, #4d8dff, #7a5cff);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button.ghost {
+  border: 1px solid rgba(126, 182, 255, 0.22);
+  border-radius: 999px;
+  padding: 0.8rem 1rem;
+  background: transparent;
+  color: #c5d0e6;
+  cursor: pointer;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: #8ea0c4;
+}
+
+.output {
+  min-height: 520px;
+  max-height: 72vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #dbe4f8;
+}
+
+.output.empty {
+  color: #7f8dab;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.output strong {
+  color: #ffffff;
+}
+
+.output a {
+  color: #8ec1ff;
+}
+
+.error {
+  margin-top: 0.75rem;
+  color: #ff8f8f;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .output {
+    min-height: 360px;
+    max-height: none;
+  }
+}
