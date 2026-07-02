@@ -8,8 +8,8 @@ export interface WebSettings {
 
 export const DEFAULT_WEB_SETTINGS: WebSettings = {
   apiKey: "",
-  baseUrl: "https://api.openai.com/v1",
-  model: "gpt-4o-mini",
+  baseUrl: "http://127.0.0.1:1234/v1",
+  model: "",
 };
 
 export function loadWebSettings(): WebSettings {

@@ -1,13 +1,26 @@
 :root {
   color-scheme: dark;
-  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #e8edf8;
-  background: #070b16;
+  color: #ececec;
+  background: #0a0a0a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+
+  --bg: #0a0a0a;
+  --bg-elevated: #171717;
+  --bg-hover: #1f1f1f;
+  --border: #2a2a2a;
+  --text: #ececec;
+  --text-secondary: #a1a1a1;
+  --text-muted: #6e6e6e;
+  --accent: #20b8cd;
+  --accent-dim: rgba(32, 184, 205, 0.14);
+  --danger: #f87171;
+  --column: 720px;
+  --sidebar: 260px;
 }
 
 * {
@@ -17,7 +30,7 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: #070b16;
+  background: var(--bg);
 }
 
 #root {
@@ -41,4 +54,12 @@ details > summary {
 
 details > summary::-webkit-details-marker {
   display: none;
+}
+
+@media (max-width: 900px) {
+  #root {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
 }

@@ -89,19 +89,48 @@ export function deleteSession(
   return next;
 }
 
-export function formatSessionDate(timestamp: number): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
-}
-
 export function sessionPreview(session: ResearchSession): string {
   const text =
     session.objective.trim() ||
     session.iterations[0]?.findings ||
     "Pesquisa sem título";
-  return text.length > 72 ? `${text.slice(0, 72)}…` : text;
+  return text.length > 56 ? `${text.slice(0, 56)}…` : text;
+}
+
+export interface HistoryGroup {
+  label: string;
+  sessions: ResearchSession[];
+}
+
+export function groupSessionsByDate(
+  sessions: ResearchSession[],
+): HistoryGroup[] {
+  const groups = new Map<string, ResearchSession[]>();
+  const now = new Date();
+  const today = startOfDay(now);
+  const yesterday = today - 86_400_000;
+  const weekAgo = today - 7 * 86_400_000;
+
+  for (const session of sessions) {
+    const day = startOfDay(new Date(session.updatedAt));
+    let label: string;
+
+    if (day >= today) label = "Hoje";
+    else if (day >= yesterday) label = "Ontem";
+    else if (day >= weekAgo) label = "Últimos 7 dias";
+    else label = "Anterior";
+
+    const bucket = groups.get(label) ?? [];
+    bucket.push(session);
+    groups.set(label, bucket);
+  }
+
+  const order = ["Hoje", "Ontem", "Últimos 7 dias", "Anterior"];
+  return order
+    .filter((label) => groups.has(label))
+    .map((label) => ({ label, sessions: groups.get(label)! }));
+}
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }

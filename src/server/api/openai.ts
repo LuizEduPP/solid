@@ -17,7 +17,7 @@ const requestSchema = z.object({
   temperature: z.number().optional(),
   target_score: z.number().min(0.01).max(100).optional(),
   min_score: z.number().min(0.01).max(100).optional(),
-  llm_api_key: z.string().min(1),
+  llm_api_key: z.string().optional().default(""),
   llm_base_url: z.string().min(1).optional(),
   llm_model: z.string().min(1).optional(),
 });
@@ -53,8 +53,56 @@ function completionId(): string {
   return `chatcmpl-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
 }
 
+const llmModelsSchema = z.object({
+  llm_api_key: z.string().optional().default(""),
+  llm_base_url: z.string().min(1),
+});
+
+async function fetchProviderModels(
+  apiKey: string,
+  baseUrl: string,
+): Promise<string[]> {
+  const root = baseUrl.replace(/\/+$/, "");
+  const headers: Record<string, string> = {};
+  if (apiKey.trim()) {
+    headers.Authorization = `Bearer ${apiKey.trim()}`;
+  }
+
+  const response = await fetch(`${root}/models`, { headers });
+  if (!response.ok) {
+    throw new Error(`Provider returned ${response.status}`);
+  }
+
+  const payload = (await response.json()) as {
+    data?: Array<{ id?: string }>;
+  };
+
+  return (payload.data ?? [])
+    .map((entry) => entry.id?.trim())
+    .filter((id): id is string => Boolean(id));
+}
+
 export function createOpenAiRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
+
+  router.post("/llm/models", async (c) => {
+    const parsed = llmModelsSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+
+    try {
+      const models = await fetchProviderModels(
+        parsed.data.llm_api_key,
+        parsed.data.llm_base_url,
+      );
+      return c.json({ models });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch models";
+      return c.json({ error: message }, 502);
+    }
+  });
 
   router.get("/models", (c) =>
     c.json({
