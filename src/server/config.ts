@@ -19,7 +19,6 @@ export const AGENT_DEFAULTS = {
   minScore: 0.01,
   resultsPerQuery: 5,
   targetScore: 100,
-  maxIterations: 100,
 } as const;
 
 export function loadServerConfig(): ServerConfig {

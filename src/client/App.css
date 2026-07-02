@@ -127,16 +127,22 @@
   border: 1px solid rgba(126, 182, 255, 0.12);
   border-radius: 0.85rem;
   padding: 0.9rem 1rem;
-  min-height: calc(100vh - 220px);
   display: flex;
   flex-direction: column;
+  min-height: calc(100vh - 200px);
 }
 
 .panel-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
   margin-bottom: 0.65rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(12, 18, 34, 0.95);
+  padding-bottom: 0.35rem;
 }
 
 .panel-head h2,
@@ -147,6 +153,7 @@
   color: #8ea0c4;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  flex-shrink: 0;
 }
 
 .output {

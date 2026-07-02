@@ -40,10 +40,16 @@ Produce strict JSON:
   "score_delta": "+5 or -3 with one-line justification vs previous score",
   "score_reasoning": "why the cumulative confidence is at this level now",
   "contradiction_found": false,
-  "next_variation": "what specific gap to tackle next if below target"
+  "should_continue": true,
+  "stop_reason": "",
+  "next_variation": "what specific gap to tackle next if continuing"
 }
 
-Scoring rules — CRITICAL:
+Continuation rules — YOU decide when to stop:
+- set should_continue: false when score >= 100
+- set should_continue: false when score is below 100 BUT further web research is unlikely to materially increase confidence (diminishing returns, gaps need primary data not available online) — explain in stop_reason
+- set should_continue: true when score < 100 AND specific gaps remain that web search can still address
+- never continue just to hit an iteration count — evaluate evidence quality each round
 - score is CUMULATIVE confidence (0.01–100) for the OVERALL objective, not just this batch
 - you are updating one running verdict, not producing an independent opinion each time
 - start from previous score and adjust up/down based ONLY on new evidence
@@ -58,11 +64,12 @@ export const FINAL_SYSTEM = `You are DeepSearch. Write the final research report
 
 You receive the cumulative synthesis built across all iterations — treat it as ONE investigation, not separate reports.
 
-Structure:
-1. Executive summary (single viability verdict)
-2. Consolidated key findings (merge all iterations, cite URLs when available)
-3. Risks and open questions still unresolved
-4. Recommended next steps
+Write entirely in the same language as the objective. Use plain markdown only — no LaTeX, no $ symbols for arrows.
 
-Do not present contradictory per-iteration opinions. Synthesize into one coherent narrative.
-Write in the same language as the objective.`;
+Structure:
+1. Sumário executivo (veredito de viabilidade)
+2. Principais descobertas consolidadas (cite URLs quando disponíveis)
+3. Riscos e questões em aberto
+4. Próximos passos recomendados
+
+Do not present contradictory per-iteration opinions. Synthesize into one coherent narrative.`;

@@ -45,7 +45,7 @@ Todas as configurações ficam na própria interface (salvas no navegador):
 1. **API key**, **base URL** e **modelo** do LLM (botão Config)
 2. **Objetivo** da pesquisa
 
-A meta é sempre **100%** de confiança — o agente continua até atingir ou atingir o limite interno de segurança.
+A meta é sempre **100%** de confiança. A IA decide a cada iteração se continua pesquisando ou encerra — com base no score e na qualidade das evidências, não em um limite fixo de rodadas.
 
 ### Exemplo com Ollama
 
@@ -70,8 +70,7 @@ A meta é sempre **100%** de confiança — o agente continua até atingir ou at
 | `llm_api_key` | sim | Chave do provedor LLM |
 | `llm_base_url` | não | Padrão: `https://api.openai.com/v1` |
 | `llm_model` | não | Padrão: `gpt-4o-mini` |
-| `target_score` | não | Padrão: `85` |
-| `max_iterations` | não | Padrão: `6` |
+| `target_score` | não | Padrão: `100` |
 
 ### Exemplo curl (streaming)
 
@@ -86,9 +85,7 @@ curl -N http://localhost:8787/v1/chat/completions \
     "llm_model": "llama3.2",
     "messages": [
       {"role": "user", "content": "Avaliar viabilidade de app de delivery só de marmitas fitness em Campinas"}
-    ],
-    "target_score": 80,
-    "max_iterations": 6
+    ]
   }'
 ```
 
@@ -98,7 +95,7 @@ curl -N http://localhost:8787/v1/chat/completions \
 2. O agente planeja queries de busca com um ângulo diferente a cada iteração.
 3. Busca na web e sintetiza os achados.
 4. Atribui um **score de confiança** (0,01–100%) com justificativa.
-5. Se estiver abaixo de `target_score`, pivota e repete (até `max_iterations`).
+5. A **IA decide** se continua ou encerra (`should_continue`), com base no score e nas lacunas pesquisáveis.
 6. Retorna um relatório final baseado em evidências.
 
 ## License

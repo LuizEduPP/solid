@@ -16,7 +16,6 @@ const requestSchema = z.object({
   stream: z.boolean().default(false),
   temperature: z.number().optional(),
   target_score: z.number().min(0.01).max(100).optional(),
-  max_iterations: z.number().int().min(1).max(50).optional(),
   min_score: z.number().min(0.01).max(100).optional(),
   llm_api_key: z.string().min(1),
   llm_base_url: z.string().min(1).optional(),
@@ -78,7 +77,6 @@ export function createOpenAiRouter(): Hono<AppEnv> {
 
     const body = parsed.data;
     const targetScore = body.target_score ?? AGENT_DEFAULTS.targetScore;
-    const maxIterations = body.max_iterations ?? AGENT_DEFAULTS.maxIterations;
     const agentConfig = buildAgentConfig(body);
 
     const messages = body.messages.map((message) => ({
@@ -106,7 +104,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
         let roleSent = false;
 
         try {
-          for await (const chunk of agent.run(objective, targetScore, maxIterations)) {
+          for await (const chunk of agent.run(objective, targetScore)) {
             const delta: Record<string, string> = { content: chunk };
             if (!roleSent) {
               delta.role = "assistant";
@@ -155,7 +153,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     }
 
     const parts: string[] = [];
-    for await (const chunk of agent.run(objective, targetScore, maxIterations)) {
+    for await (const chunk of agent.run(objective, targetScore)) {
       parts.push(chunk);
     }
 

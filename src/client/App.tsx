@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import {
-  DEFAULT_WEB_SETTINGS,
   loadWebSettings,
   saveWebSettings,
   type WebSettings,
@@ -12,30 +11,86 @@ import "./App.css";
 
 const TARGET_SCORE = 100;
 
-function parseConfidence(output: string): number {
-  const matches = [
-    ...output.matchAll(/confian[aç]a acumulada:\s*\*\*(\d+(?:\.\d+)?)%\*\*/gi),
-  ];
-  if (matches.length === 0) return 0;
+interface ParsedStream {
+  confidence: number;
+  main: string;
+  activity: string;
+  hasReport: boolean;
+  iteration: number | null;
+}
+
+function extractSection(output: string, marker: string): string {
+  const token = `@@${marker}@@\n`;
+  const idx = output.lastIndexOf(token);
+  if (idx < 0) return "";
+
+  const tail = output.slice(idx + token.length);
+  const nextIdx = tail.search(/\n@@(?:STATUS|SYNTHESIS|SCORE|REPORT)@@\n/);
+  const body = nextIdx >= 0 ? tail.slice(0, nextIdx) : tail;
+  return body.trim();
+}
+
+function extractAllSections(output: string, marker: string): string[] {
+  const token = `@@${marker}@@\n`;
+  const results: string[] = [];
+  let start = 0;
+
+  while (start < output.length) {
+    const idx = output.indexOf(token, start);
+    if (idx < 0) break;
+
+    const tail = output.slice(idx + token.length);
+    const nextIdx = tail.search(/\n@@(?:STATUS|SYNTHESIS|SCORE|REPORT)@@\n/);
+    const body = (nextIdx >= 0 ? tail.slice(0, nextIdx) : tail).trim();
+    if (body) results.push(body);
+
+    start =
+      idx +
+      token.length +
+      (nextIdx >= 0 ? nextIdx : tail.length);
+  }
+
+  return results;
+}
+
+function prepareMarkdown(text: string): string {
+  return text
+    .replace(/\$\\rightarrow\$/g, "→")
+    .replace(/\$\\leftrightarrow\$/g, "↔")
+    .replace(/\$\\leftarrow\$/g, "←");
+}
+
+function parseIteration(activity: string): number | null {
+  const matches = [...activity.matchAll(/Iteração\s+(\d+)/gi)];
+  if (matches.length === 0) return null;
   return Number(matches.at(-1)![1]);
 }
 
-function splitOutput(output: string): { main: string; activity: string } {
-  const blocks = output.split(/\n\n+/).filter(Boolean);
-  const mainBlocks: string[] = [];
-  const activityBlocks: string[] = [];
+function parseStream(output: string): ParsedStream {
+  const synthesis = extractSection(output, "SYNTHESIS");
+  const report = extractSection(output, "REPORT");
+  const scoreText = extractSection(output, "SCORE");
+  const activity = extractAllSections(output, "STATUS").join("\n");
 
-  for (const block of blocks) {
-    if (block.startsWith("🧠") || block.startsWith("📄")) {
-      mainBlocks.push(block.replace(/^[🧠📄]\s*/, ""));
-    } else {
-      activityBlocks.push(block);
+  let confidence = scoreText ? Number(scoreText.split(/\s/)[0]) : 0;
+
+  if (confidence === 0) {
+    const legacy = [
+      ...output.matchAll(/confian[aç]a acumulada:\s*\*\*(\d+(?:\.\d+)?)%\*\*/gi),
+    ];
+    if (legacy.length > 0) {
+      confidence = Number(legacy.at(-1)![1]);
     }
   }
 
+  const main = prepareMarkdown(report || synthesis);
+
   return {
-    main: mainBlocks.join("\n\n"),
-    activity: activityBlocks.join("\n\n"),
+    confidence,
+    main,
+    activity,
+    hasReport: Boolean(report),
+    iteration: parseIteration(activity),
   };
 }
 
@@ -116,13 +171,21 @@ export default function App() {
   const [showConfig, setShowConfig] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [controller, setController] = useState<AbortController | null>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     saveWebSettings(settings);
   }, [settings]);
 
-  const confidence = useMemo(() => parseConfidence(output), [output]);
-  const { main, activity } = useMemo(() => splitOutput(output), [output]);
+  const { confidence, main, activity, hasReport, iteration } = useMemo(
+    () => parseStream(output),
+    [output],
+  );
+
+  useEffect(() => {
+    const el = outputRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [main]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -140,6 +203,7 @@ export default function App() {
     setRunning(true);
     setError(null);
     setOutput("");
+    setShowLog(false);
 
     try {
       await streamResearch(
@@ -150,7 +214,7 @@ export default function App() {
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        setOutput((current) => `${current}\n\n⏹ Cancelado.`);
+        setOutput((current) => `${current}\n\n@@STATUS@@\nCancelado.\n\n`);
       } else {
         setError(err instanceof Error ? err.message : "Erro inesperado");
       }
@@ -171,7 +235,10 @@ export default function App() {
 
         <div className="progress-wrap">
           <div className="progress-meta">
-            <span>Confiança</span>
+            <span>
+              Confiança
+              {iteration ? ` · iteração ${iteration}` : ""}
+            </span>
             <strong>{confidence.toFixed(1)}%</strong>
           </div>
           <div className="progress-track">
@@ -262,7 +329,7 @@ export default function App() {
       <div className="workspace">
         <section className="main-panel">
           <div className="panel-head">
-            <h2>Síntese</h2>
+            <h2>{hasReport ? "Relatório" : "Síntese"}</h2>
             {activity ? (
               <button
                 className="ghost small"
@@ -273,7 +340,7 @@ export default function App() {
               </button>
             ) : null}
           </div>
-          <div className={`output ${main ? "" : "empty"}`}>
+          <div ref={outputRef} className={`output ${main ? "" : "empty"}`}>
             {main ? (
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -288,7 +355,7 @@ export default function App() {
                 {main}
               </ReactMarkdown>
             ) : (
-              <p>{running ? "Analisando..." : "A síntese aparece aqui."}</p>
+              <p>{running ? "Analisando..." : "O resultado aparece aqui."}</p>
             )}
           </div>
         </section>

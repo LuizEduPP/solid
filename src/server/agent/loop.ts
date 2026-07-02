@@ -46,6 +46,8 @@ interface AnalysisPayload {
   score_delta: string;
   score_reasoning: string;
   contradiction_found?: boolean;
+  should_continue: boolean;
+  stop_reason: string;
   next_variation?: string;
 }
 
@@ -96,6 +98,8 @@ function normalizeAnalysis(payload: Record<string, unknown>): AnalysisPayload {
       payload.score_reasoning ?? payload.scoreReasoning ?? "",
     ),
     contradiction_found: Boolean(payload.contradiction_found ?? payload.contradictionFound),
+    should_continue: payload.should_continue !== false && payload.shouldContinue !== false,
+    stop_reason: String(payload.stop_reason ?? payload.stopReason ?? ""),
     next_variation: String(
       payload.next_variation ?? payload.nextVariation ?? "",
     ),
@@ -128,18 +132,30 @@ function collectOpenGaps(run: AgentRun): string[] {
   return run.iterations.at(-1)?.gaps ?? [];
 }
 
-function event(kind: string, content: string): string {
-  const prefix: Record<string, string> = {
-    status: "⏳",
-    iteration: "🔄",
-    plan: "📋",
-    search: "🔍",
-    search_done: "✅",
-    synthesis: "🧠",
-    score: "📊",
-    report: "📄",
-  };
-  return `${prefix[kind] ?? "•"} ${content}\n\n`;
+function event(kind: "status" | "synthesis" | "score" | "report", content: string): string {
+  return `@@${kind.toUpperCase()}@@\n${content}\n\n`;
+}
+
+function extractMessageContent(
+  message: OpenAI.Chat.Completions.ChatCompletionMessage,
+): string {
+  const content = message.content?.trim();
+  if (content) return content;
+
+  const reasoning = (
+    message as OpenAI.Chat.Completions.ChatCompletionMessage & {
+      reasoning_content?: string;
+    }
+  ).reasoning_content?.trim();
+
+  if (reasoning) {
+    const jsonMatch = reasoning.match(/\{[\s\S]*\}\s*$/);
+    if (jsonMatch) return jsonMatch[0];
+  }
+
+  throw new Error(
+    "Modelo retornou resposta vazia — desative reasoning no LM Studio ou use outro modelo",
+  );
 }
 
 export class DeepSearchAgent {
@@ -164,10 +180,7 @@ export class DeepSearchAgent {
       temperature: 0.3,
     });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error("LLM returned empty content");
-    }
+    const content = extractMessageContent(response.choices[0]!.message);
     return content;
   }
 
@@ -249,7 +262,6 @@ export class DeepSearchAgent {
   async *run(
     objective: string,
     targetScore: number,
-    maxIterations: number,
   ): AsyncGenerator<string> {
     const agentRun: AgentRun = {
       objective,
@@ -261,7 +273,9 @@ export class DeepSearchAgent {
 
     yield event("status", "Pesquisa iniciada");
 
-    for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    let iteration = 0;
+    while (true) {
+      iteration += 1;
       const plan = await this.plan(objective, agentRun);
       const queries = plan.queries;
       const angle = plan.angle;
@@ -310,24 +324,20 @@ export class DeepSearchAgent {
       agentRun.currentScore = score;
 
       yield event("synthesis", analysis.cumulative_synthesis);
-
-      yield event(
-        "score",
-        `Confiança acumulada: **${score.toFixed(2)}%**`,
-      );
+      yield event("score", score.toFixed(2));
 
       if (score >= targetScore) {
-        yield event("status", `Meta de 100% atingida`);
+        yield event("status", "Meta de 100% atingida");
         break;
       }
-    }
 
-    const latestScore = agentRun.currentScore ?? 0;
-    if (agentRun.iterations.length === maxIterations && latestScore < targetScore) {
-      yield event(
-        "status",
-        `Encerrado em ${latestScore.toFixed(2)}% — limite interno de segurança`,
-      );
+      if (!analysis.should_continue) {
+        yield event(
+          "status",
+          analysis.stop_reason || "IA encerrou — retorno decrescente nas buscas",
+        );
+        break;
+      }
     }
 
     yield event("status", "Gerando relatório final...");
