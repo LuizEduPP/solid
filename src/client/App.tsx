@@ -14,43 +14,61 @@ import {
   Text,
   Textarea,
   Title,
+  type BoxProps,
 } from "@mantine/core";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
 import { ArrowUp, Settings, Square, X, Zap } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ActivityLine, { compressStepsActivity } from "./activity";
-import ChatColumn from "./ChatColumn";
+import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
 import {
   createSession,
   deleteSession,
+  downloadSession,
   groupSessionsByDate,
   HISTORY_KEY,
+  isLocalLlmBaseUrl,
   loadHistory,
+  loadWebSettings,
   sessionPreview,
+  SETTINGS_KEY,
   touchSession,
   upsertSession,
   type ResearchSession,
-} from "./history";
-import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
+  type WebSettings,
+} from "./local-store";
 import MarkdownContent from "./MarkdownContent";
-import { downloadSession } from "./export";
 import IterationCard from "./IterationCard";
-import { fetchLlmModels, pickDefaultModel } from "./models";
 import SolidnessPanel from "./SolidnessPanel";
-import { HOME_PATH, chatPath } from "./routes";
 import SettingsForm from "./SettingsForm";
 import {
-  isLocalLlmBaseUrl,
-  loadWebSettings,
-  SETTINGS_KEY,
-  type WebSettings,
-} from "./settings";
-import { streamResearch } from "./stream-client";
-import { parseStream, uniqueSourceCount } from "./stream";
+  fetchLlmModels,
+  parseStream,
+  pickDefaultModel,
+  streamResearch,
+  uniqueSourceCount,
+} from "./stream";
 import { MODE_THRESHOLDS } from "../shared/thresholds";
+
+export const HOME_PATH = "/";
+export const CHAT_SESSION_PATH = "/c/:sessionId";
+
+export function chatPath(sessionId: string): string {
+  return `/c/${sessionId}`;
+}
+
+const CHAT_MAX_WIDTH = 720;
+
+function ChatColumn({ children, ...props }: BoxProps & { children: ReactNode }) {
+  return (
+    <Box maw={CHAT_MAX_WIDTH} mx="auto" px="lg" w="100%" {...props}>
+      {children}
+    </Box>
+  );
+}
 
 export default function App() {
   const { t } = useTranslation();

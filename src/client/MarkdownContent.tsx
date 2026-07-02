@@ -1,26 +1,38 @@
 import { Anchor, Box, Tooltip } from "@mantine/core";
+import type { Root } from "mdast";
+import { findAndReplace } from "mdast-util-find-and-replace";
 import ReactMarkdown from "react-markdown";
+import rehypeExternalLinks from "rehype-external-links";
 import remarkGfm from "remark-gfm";
-import "github-markdown-css/github-markdown-dark.css";
+import type { Plugin } from "unified";
 
 import { faviconUrl, hostnameFromUrl } from "../shared/domains";
+import "github-markdown-css/github-markdown-dark.css";
+
+const BRACKET_URLS =
+  /\[(https?:\/\/[^\]\s,]+(?:,\s*https?:\/\/[^\]\s,]+)*)\]/g;
+
+const remarkSolid: Plugin<[], Root> = () => (tree) => {
+  findAndReplace(tree, [
+    [/\$\\rightarrow\$/g, "→"],
+    [/\$\\leftrightarrow\$/g, "↔"],
+    [/\$\\leftarrow\$/g, "←"],
+    [
+      BRACKET_URLS,
+      (match) =>
+        match[1]
+          .split(/,\s*/)
+          .map((raw: string) => {
+            const url = raw.trim();
+            return `[${hostnameFromUrl(url)}](${url})`;
+          })
+          .join(" "),
+    ],
+  ]);
+};
 
 interface MarkdownContentProps {
   content: string;
-}
-
-function linkifyBracketUrls(text: string): string {
-  return text.replace(
-    /\[(https?:\/\/[^\]\s,]+(?:,\s*https?:\/\/[^\]\s,]+)*)\]/g,
-    (_, urls: string) =>
-      urls
-        .split(/,\s*/)
-        .map((raw) => {
-          const url = raw.trim();
-          return `[${hostnameFromUrl(url)}](${url})`;
-        })
-        .join(" "),
-  );
 }
 
 function MarkdownAnchor({
@@ -73,19 +85,18 @@ function MarkdownAnchor({
 }
 
 export default function MarkdownContent({ content }: MarkdownContentProps) {
-  const prepared = linkifyBracketUrls(content);
-
   return (
     <div className="markdown-body" data-color-mode="dark" data-dark-theme="dark">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkSolid]}
+        rehypePlugins={[[rehypeExternalLinks, { target: "_blank", rel: ["noopener", "noreferrer"] }]]}
         components={{
           a: ({ href, children }) => (
             <MarkdownAnchor href={href}>{children}</MarkdownAnchor>
           ),
         }}
       >
-        {prepared}
+        {content}
       </ReactMarkdown>
     </div>
   );

@@ -5,9 +5,9 @@ import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-import App from "./App";
+import App, { CHAT_SESSION_PATH, HOME_PATH } from "./App";
 import i18n, { normalizeLocale } from "./i18n";
-import { loadWebSettings } from "./settings";
+import { loadWebSettings } from "./local-store";
 import "./index.css";
 
 const theme = createTheme({
@@ -25,8 +25,8 @@ createRoot(document.getElementById("root")!).render(
       <MantineProvider theme={theme} defaultColorScheme="dark">
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<App />} />
-            <Route path="/c/:sessionId" element={<App />} />
+            <Route path={HOME_PATH} element={<App />} />
+            <Route path={CHAT_SESSION_PATH} element={<App />} />
           </Routes>
         </BrowserRouter>
       </MantineProvider>

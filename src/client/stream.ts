@@ -1,4 +1,9 @@
+import { createParser } from "eventsource-parser";
+
+import i18n from "./i18n";
+import type { WebSettings } from "./types";
 import { countUniqueHostnames } from "../shared/domains";
+import { MODE_THRESHOLDS } from "../shared/thresholds";
 import type { ScoreRubric } from "../shared/types";
 
 export interface SourceSnapshot {
@@ -90,23 +95,10 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
   }
 }
 
-function prepareMarkdown(text: string): string {
-  return text
-    .replace(/\$\\rightarrow\$/g, "→")
-    .replace(/\$\\leftrightarrow\$/g, "↔")
-    .replace(/\$\\leftarrow\$/g, "←");
-}
-
 function parseIterations(output: string): IterationSnapshot[] {
   return extractSections(output, "ITER")
     .map(parseIterationPayload)
-    .filter((item): item is IterationSnapshot => item !== null)
-    .map((item) => ({
-      ...item,
-      findings: prepareMarkdown(item.findings),
-      synthesis: prepareMarkdown(item.synthesis),
-      scoreReasoning: prepareMarkdown(item.scoreReasoning),
-    }));
+    .filter((item): item is IterationSnapshot => item !== null);
 }
 
 function parseLatestRubric(output: string): ScoreRubric | null {
@@ -122,7 +114,7 @@ function parseLatestRubric(output: string): ScoreRubric | null {
 
 export function parseStream(output: string): ParsedStream {
   const iterations = parseIterations(output);
-  const report = prepareMarkdown(extractTailSection(output, "REPORT"));
+  const report = extractTailSection(output, "REPORT");
   const activity = extractSections(output, "STATUS");
   const scoreText = extractTailSection(output, "SCORE");
 
@@ -150,4 +142,98 @@ export function parseStream(output: string): ParsedStream {
 export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
   const urls = iterations.flatMap((iteration) => iteration.citedUrls ?? []);
   return countUniqueHostnames(urls);
+}
+
+export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
+  const response = await fetch("/v1/llm/models", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      llm_api_key: settings.apiKey,
+      llm_base_url: settings.baseUrl,
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as {
+    models?: string[];
+    error?: string;
+  } | null;
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload?.error === "string"
+        ? payload.error
+        : `Failed to list models (${response.status})`,
+    );
+  }
+
+  return Array.isArray(payload?.models) ? payload.models : [];
+}
+
+export function pickDefaultModel(models: string[], current: string): string {
+  if (current && models.includes(current)) return current;
+  if (models.length === 0) return current;
+
+  const preferred = models.find((id) => /gemma-4-e4b|gemma.*4b/i.test(id));
+  return preferred ?? models[0]!;
+}
+
+export async function streamResearch(
+  settings: WebSettings,
+  objective: string,
+  onChunk: (chunk: string) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal,
+    body: JSON.stringify({
+      model: "solid",
+      stream: true,
+      target_score: MODE_THRESHOLDS[settings.mode].targetScore,
+      research_mode: settings.mode,
+      llm_api_key: settings.apiKey,
+      llm_base_url: settings.baseUrl,
+      llm_model: settings.model,
+      messages: [{ role: "user", content: objective }],
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const message =
+      payload?.error?.fieldErrors?.llm_api_key?.[0] ??
+      (typeof payload?.error === "string" ? payload.error : null) ??
+      i18n.t("errorRequestFailed", { status: response.status });
+    throw new Error(message);
+  }
+
+  if (!response.body) {
+    throw new Error(i18n.t("errorStreaming"));
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parser = createParser({
+    onEvent: (event) => {
+      const data = event.data.trim();
+      if (!data || data === "[DONE]") return;
+
+      const payload = JSON.parse(data) as {
+        choices?: Array<{ delta?: { content?: string } }>;
+      };
+      const content = payload.choices?.[0]?.delta?.content;
+      if (content) onChunk(content);
+    },
+  });
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parser.feed(decoder.decode(value, { stream: true }));
+  }
+
+  const tail = decoder.decode();
+  if (tail) parser.feed(tail);
 }

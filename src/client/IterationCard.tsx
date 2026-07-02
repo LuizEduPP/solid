@@ -1,16 +1,77 @@
-import { Accordion, Badge, Group, Paper, Text } from "@mantine/core";
+import type { ReactNode } from "react";
+import { Accordion, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import IterationLinks from "./IterationLinks";
 import MarkdownContent from "./MarkdownContent";
-import type { IterationSnapshot } from "./stream";
+import type { IterationSnapshot, SourceSnapshot } from "./stream";
+import { faviconUrl, hostnameFromUrl, uniqueUrlsByHostname } from "../shared/domains";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;
 }
 
+function mergedPageUrls(readUrls: string[], sources: SourceSnapshot[]): string[] {
+  return uniqueUrlsByHostname([
+    ...readUrls,
+    ...sources.map((source) => source.url),
+  ]);
+}
+
+function SectionShell({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <Stack
+      gap={6}
+      mt="md"
+      pt="sm"
+      style={{ borderTop: "1px solid var(--mantine-color-dark-4)" }}
+    >
+      <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
+        {title}
+      </Text>
+      {children}
+    </Stack>
+  );
+}
+
+function PageReadBadge({ url }: { url: string }) {
+  const host = hostnameFromUrl(url);
+
+  return (
+    <Badge
+      component="a"
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      variant="light"
+      color="gray"
+      size="sm"
+      radius="sm"
+      style={{ cursor: "pointer", textTransform: "none" }}
+      leftSection={
+        <Box
+          component="img"
+          src={faviconUrl(url)}
+          alt=""
+          w={12}
+          h={12}
+          style={{ borderRadius: 2, display: "block" }}
+        />
+      }
+    >
+      {host}
+    </Badge>
+  );
+}
+
 export default function IterationCard({ iteration }: IterationCardProps) {
   const { t } = useTranslation();
+  const pages = mergedPageUrls(iteration.readUrls ?? [], iteration.sources ?? []);
 
   return (
     <Paper p="md" radius="md" withBorder>
@@ -41,11 +102,15 @@ export default function IterationCard({ iteration }: IterationCardProps) {
         </Accordion>
       ) : null}
 
-      <IterationLinks
-        pagesReadTitle={t("pagesRead")}
-        readUrls={iteration.readUrls}
-        sources={iteration.sources}
-      />
+      {pages.length > 0 ? (
+        <SectionShell title={t("pagesRead")}>
+          <Group gap={6}>
+            {pages.map((url) => (
+              <PageReadBadge key={url} url={url} />
+            ))}
+          </Group>
+        </SectionShell>
+      ) : null}
     </Paper>
   );
 }

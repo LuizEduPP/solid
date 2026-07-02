@@ -1,15 +1,13 @@
 import OpenAI from "openai";
 
 import type { AgentConfig } from "../config.js";
-import { parseJsonPayload } from "./json.js";
+import { parseAnalysisPayload, parsePlanPayload, type AnalysisPayload, type PlanPayload } from "./schemas.js";
 import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM } from "./prompts.js";
 import {
   applyCumulativeScore,
   canReachTargetScore,
   computeEvidenceScore,
-  extractCitedUrls,
   MODE_THRESHOLDS,
-  normalizeRubric,
   rubricTotal,
   uniqueDomainsFromHits,
   type ScoreRubric,
@@ -52,28 +50,6 @@ export interface AgentRun {
   hadDisconfirmingSearch: boolean;
 }
 
-interface PlanPayload {
-  queries: string[];
-  angle: string;
-  disconfirming: boolean;
-}
-
-interface AnalysisPayload {
-  iteration_findings: string;
-  cumulative_synthesis: string;
-  resolved_gaps?: string[];
-  open_gaps?: string[];
-  cited_urls?: string[];
-  score_rubric: ScoreRubric;
-  score: number;
-  score_delta: string;
-  score_reasoning: string;
-  contradiction_found?: boolean;
-  should_continue: boolean;
-  stop_reason: string;
-  next_variation?: string;
-}
-
 export function extractObjective(messages: Array<{ role: string; content: string }>): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
@@ -82,71 +58,6 @@ export function extractObjective(messages: Array<{ role: string; content: string
     }
   }
   throw new Error("No user message with objective found");
-}
-
-function normalizePlan(payload: Record<string, unknown>): PlanPayload {
-  const queries = Array.isArray(payload.queries)
-    ? payload.queries.map(String).filter(Boolean)
-    : [];
-  return {
-    queries: queries.slice(0, 2),
-    angle: String(payload.angle ?? ""),
-    disconfirming: Boolean(payload.disconfirming),
-  };
-}
-
-function normalizeAnalysis(
-  payload: Record<string, unknown>,
-  knownUrls: string[],
-): AnalysisPayload {
-  const resolvedGaps = Array.isArray(payload.resolved_gaps)
-    ? payload.resolved_gaps.map(String)
-    : [];
-  const openGaps = Array.isArray(payload.open_gaps)
-    ? payload.open_gaps.map(String)
-    : Array.isArray(payload.gaps)
-      ? payload.gaps.map(String)
-      : [];
-
-  const synthesis = String(
-    payload.cumulative_synthesis ?? payload.cumulativeSynthesis ?? payload.findings ?? "",
-  );
-  const findings = String(
-    payload.iteration_findings ?? payload.iterationFindings ?? synthesis,
-  );
-
-  const citedFromPayload = Array.isArray(payload.cited_urls)
-    ? payload.cited_urls.map(String)
-    : [];
-  const cited_urls = [
-    ...new Set([
-      ...citedFromPayload,
-      ...extractCitedUrls(findings, knownUrls),
-      ...extractCitedUrls(synthesis, knownUrls),
-    ]),
-  ];
-
-  return {
-    iteration_findings: findings,
-    cumulative_synthesis: synthesis,
-    resolved_gaps: resolvedGaps,
-    open_gaps: openGaps,
-    cited_urls,
-    score_rubric: normalizeRubric(
-      payload.score_rubric as Partial<ScoreRubric> | undefined,
-    ),
-    score: Number(payload.score ?? payload.confidence ?? 0),
-    score_delta: String(payload.score_delta ?? payload.scoreDelta ?? ""),
-    score_reasoning: String(
-      payload.score_reasoning ?? payload.scoreReasoning ?? "",
-    ),
-    contradiction_found: Boolean(payload.contradiction_found ?? payload.contradictionFound),
-    should_continue: payload.should_continue !== false && payload.shouldContinue !== false,
-    stop_reason: String(payload.stop_reason ?? payload.stopReason ?? ""),
-    next_variation: String(
-      payload.next_variation ?? payload.nextVariation ?? "",
-    ),
-  };
 }
 
 function collectPriorQueries(run: AgentRun): string[] {
@@ -251,35 +162,49 @@ export class SolidAgent {
     });
   }
 
-  private async chat(system: string, user: string): Promise<string> {
-    const response = await this.client.chat.completions.create({
+  private async chat(system: string, user: string, json = false): Promise<string> {
+    const request = {
       model: this.settings.model,
       messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
+        { role: "system" as const, content: system },
+        { role: "user" as const, content: user },
       ],
       temperature: 0.3,
-    });
+      ...(json ? { response_format: { type: "json_object" as const } } : {}),
+    };
 
-    return extractMessageContent(response.choices[0]!.message);
+    try {
+      const response = await this.client.chat.completions.create(request);
+      return extractMessageContent(response.choices[0]!.message);
+    } catch (error) {
+      if (!json) throw error;
+
+      const response = await this.client.chat.completions.create({
+        model: this.settings.model,
+        messages: request.messages,
+        temperature: 0.3,
+      });
+      return extractMessageContent(response.choices[0]!.message);
+    }
   }
 
-  private async chatJson(
+  private async chatJson<T>(
     system: string,
     user: string,
-  ): Promise<Record<string, unknown>> {
+    parse: (raw: string) => T,
+  ): Promise<T> {
     let lastRaw = "";
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const prompt =
         attempt === 0
           ? user
-          : `${user}\n\nYour previous reply was invalid JSON:\n${lastRaw}\n\nReply with ONLY a valid JSON object. Use \\n for line breaks inside strings.`;
+          : `${user}\n\nYour previous reply was invalid JSON:\n${lastRaw}\n\nReply with ONLY a valid JSON object. Close every array with ], never }. Use \\n for line breaks inside strings.`;
 
-      lastRaw = await this.chat(system, prompt);
+      lastRaw = await this.chat(system, prompt, true);
 
       try {
-        return parseJsonPayload(lastRaw);
+        return parse(lastRaw);
       } catch {
         // retry
       }
@@ -304,8 +229,7 @@ export class SolidAgent {
       `Open gaps:\n${openGaps.length ? openGaps.map((gap) => `- ${gap}`).join("\n") : "(none yet)"}\n\n` +
       `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
 
-    const payload = await this.chatJson(PLANNER_SYSTEM, user);
-    const plan = normalizePlan(payload);
+    const plan = await this.chatJson(PLANNER_SYSTEM, user, parsePlanPayload);
     if (requireDisconfirm) plan.disconfirming = true;
     return plan;
   }
@@ -341,8 +265,9 @@ export class SolidAgent {
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
 
-    const payload = normalizeAnalysis(await this.chatJson(ANALYST_SYSTEM, user), knownUrls);
-    return payload;
+    return this.chatJson(ANALYST_SYSTEM, user, (raw) =>
+      parseAnalysisPayload(raw, knownUrls),
+    );
   }
 
   private async finalReport(objective: string, run: AgentRun): Promise<string> {

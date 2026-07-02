@@ -11,7 +11,7 @@ import {
   SUPPORTED_LOCALES,
   type Locale,
 } from "./i18n";
-import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./settings";
+import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./local-store";
 
 interface SettingsFormProps {
   settings: WebSettings;
