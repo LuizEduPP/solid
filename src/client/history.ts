@@ -16,9 +16,9 @@ export interface ResearchSession {
   error?: string;
 }
 
-const HISTORY_KEY = "solid-history";
+export const HISTORY_KEY = "solid-history";
 const LEGACY_HISTORY_KEYS = ["rigor-history", "deepsearch-history"] as const;
-const MAX_SESSIONS = 40;
+export const MAX_SESSIONS = 40;
 
 export function loadHistory(): ResearchSession[] {
   try {
@@ -35,13 +35,6 @@ export function loadHistory(): ResearchSession[] {
   } catch {
     return [];
   }
-}
-
-export function saveHistory(sessions: ResearchSession[]): void {
-  localStorage.setItem(
-    HISTORY_KEY,
-    JSON.stringify(sessions.slice(0, MAX_SESSIONS)),
-  );
 }
 
 export function createSession(objective: string): ResearchSession {
@@ -85,17 +78,14 @@ export function upsertSession(
     index >= 0
       ? sessions.map((item, i) => (i === index ? session : item))
       : [session, ...sessions];
-  saveHistory(next);
-  return next;
+  return next.slice(0, MAX_SESSIONS);
 }
 
 export function deleteSession(
   sessions: ResearchSession[],
   id: string,
 ): ResearchSession[] {
-  const next = sessions.filter((item) => item.id !== id);
-  saveHistory(next);
-  return next;
+  return sessions.filter((item) => item.id !== id);
 }
 
 export function sessionPreview(session: ResearchSession, untitled: string): string {

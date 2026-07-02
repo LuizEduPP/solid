@@ -10,42 +10,7 @@ body {
   margin: 0;
 }
 
-.prose {
+.markdown-body {
+  background: transparent !important;
   font-size: 0.9375rem;
-  line-height: 1.65;
-  color: var(--mantine-color-text);
-}
-
-.prose p {
-  margin: 0.65rem 0;
-}
-
-.prose ul,
-.prose ol {
-  margin: 0.65rem 0;
-  padding-left: 1.25rem;
-}
-
-.prose a {
-  color: var(--mantine-color-cyan-4);
-}
-
-.prose code {
-  font-family: var(--mantine-font-family-monospace);
-  font-size: 0.85em;
-  padding: 0.1rem 0.35rem;
-  border-radius: var(--mantine-radius-sm);
-  background: var(--mantine-color-dark-6);
-}
-
-.prose pre {
-  overflow-x: auto;
-  padding: 0.75rem;
-  border-radius: var(--mantine-radius-md);
-  background: var(--mantine-color-dark-6);
-}
-
-.prose pre code {
-  padding: 0;
-  background: transparent;
 }

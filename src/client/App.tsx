@@ -5,119 +5,56 @@ import {
   Badge,
   Box,
   Button,
+  Drawer,
   Group,
   Loader,
   Modal,
   Paper,
-  PasswordInput,
   ScrollArea,
-  Select,
   Stack,
   Text,
-  TextInput,
   Textarea,
   Title,
 } from "@mantine/core";
+import { useDisclosure, useLocalStorage } from "@mantine/hooks";
 import { ArrowUp, Settings, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { translateActivityLine } from "./activity";
+import ActivityLine from "./ActivityLine";
 import {
   applyParsedStream,
   createSession,
   deleteSession,
   groupSessionsByDate,
+  HISTORY_KEY,
   loadHistory,
   sessionPreview,
   upsertSession,
   type ResearchSession,
 } from "./history";
-import i18n, {
-  HISTORY_GROUP_KEYS,
-  LOCALE_LABEL_KEYS,
-  SUPPORTED_LOCALES,
-  type Locale,
-} from "./i18n";
+import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
 import MarkdownContent from "./MarkdownContent";
 import { downloadSession } from "./export";
 import { fetchLlmModels, pickDefaultModel } from "./models";
 import RubricBars from "./RubricBars";
 import { HOME_PATH, chatPath } from "./routes";
+import SettingsForm from "./SettingsForm";
+import SiteLink from "./SiteLink";
 import {
   loadWebSettings,
   MODE_TARGETS,
-  saveWebSettings,
+  SETTINGS_KEY,
   type WebSettings,
 } from "./settings";
+import { streamResearch } from "./stream-client";
 import { parseStream, uniqueSourceCount } from "./stream";
 
 const WEAK_EVIDENCE_BELOW: Record<WebSettings["mode"], number> = {
   rigorous: 60,
   fast: 45,
 };
-
-async function streamResearch(
-  settings: WebSettings,
-  objective: string,
-  onChunk: (chunk: string) => void,
-  signal: AbortSignal,
-): Promise<void> {
-  const response = await fetch("/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    signal,
-    body: JSON.stringify({
-      model: "solid",
-      stream: true,
-      target_score: MODE_TARGETS[settings.mode],
-      research_mode: settings.mode,
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
-      llm_model: settings.model,
-      messages: [{ role: "user", content: objective }],
-    }),
-  });
-
-  if (!response.ok) {
-    const payload = await response.json().catch(() => null);
-    const message =
-      payload?.error?.fieldErrors?.llm_api_key?.[0] ??
-      (typeof payload?.error === "string" ? payload.error : null) ??
-      i18n.t("errorRequestFailed", { status: response.status });
-    throw new Error(message);
-  }
-
-  if (!response.body) {
-    throw new Error(i18n.t("errorStreaming"));
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6).trim();
-      if (!data || data === "[DONE]") continue;
-
-      const payload = JSON.parse(data) as {
-        choices?: Array<{ delta?: { content?: string } }>;
-      };
-      const content = payload.choices?.[0]?.delta?.content;
-      if (content) onChunk(content);
-    }
-  }
-}
 
 function updateSettings<K extends keyof WebSettings>(
   current: WebSettings,
@@ -131,88 +68,23 @@ function isLocalLlmBaseUrl(baseUrl: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
 }
 
-function ConfigPanel({
-  settings,
-  running,
-  models,
-  modelsLoading,
-  modelsError,
-  onChange,
-}: {
-  settings: WebSettings;
-  running: boolean;
-  models: string[];
-  modelsLoading: boolean;
-  modelsError: string | null;
-  onChange: (next: WebSettings) => void;
-}) {
-  const { t } = useTranslation();
-
-  const localeOptions = SUPPORTED_LOCALES.map((locale) => ({
-    value: locale,
-    label: t(LOCALE_LABEL_KEYS[locale]),
-  }));
-
-  const modelOptions =
-    models.length > 0
-      ? models.map((modelId) => ({ value: modelId, label: modelId }))
-      : [{ value: "", label: modelsError ?? t("noModelsAvailable") }];
-
-  return (
-    <Stack gap="md">
-      <Select
-        label={t("language")}
-        value={settings.locale}
-        data={localeOptions}
-        disabled={running}
-        onChange={(value) =>
-          value && onChange(updateSettings(settings, "locale", value as Locale))
-        }
-      />
-      <PasswordInput
-        label={t("apiKey")}
-        placeholder={t("apiKeyPlaceholder")}
-        value={settings.apiKey}
-        disabled={running}
-        autoComplete="off"
-        onChange={(event) =>
-          onChange(updateSettings(settings, "apiKey", event.currentTarget.value))
-        }
-      />
-      <TextInput
-        label={t("baseUrl")}
-        value={settings.baseUrl}
-        disabled={running}
-        onChange={(event) =>
-          onChange(updateSettings(settings, "baseUrl", event.currentTarget.value))
-        }
-      />
-      <Select
-        label={t("model")}
-        value={settings.model}
-        data={modelOptions}
-        disabled={running || modelsLoading}
-        placeholder={modelsLoading ? t("loadingModels") : undefined}
-        error={modelsError ?? undefined}
-        searchable
-        onChange={(value) =>
-          onChange(updateSettings(settings, "model", value ?? ""))
-        }
-      />
-    </Stack>
-  );
-}
-
 export default function App() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId?: string }>();
-  const [settings, setSettings] = useState<WebSettings>(loadWebSettings);
-  const [sessions, setSessions] = useState<ResearchSession[]>(() => loadHistory());
+  const [settings, setSettings] = useLocalStorage<WebSettings>({
+    key: SETTINGS_KEY,
+    defaultValue: loadWebSettings(),
+  });
+  const [sessions, setSessions] = useLocalStorage<ResearchSession[]>({
+    key: HISTORY_KEY,
+    defaultValue: loadHistory(),
+  });
   const [objective, setObjective] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
+  const [configOpened, { open: openConfig, close: closeConfig }] = useDisclosure(false);
+  const [stepsOpened, { close: closeSteps, toggle: toggleSteps }] = useDisclosure(false);
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -239,10 +111,6 @@ export default function App() {
   );
 
   useEffect(() => {
-    saveWebSettings(settings);
-  }, [settings]);
-
-  useEffect(() => {
     void i18n.changeLanguage(settings.locale);
     document.documentElement.lang = settings.locale;
   }, [settings.locale]);
@@ -265,7 +133,7 @@ export default function App() {
   }, [sessionId, sessions, activeSession, running, navigate]);
 
   useEffect(() => {
-    if (!showConfig || !settings.baseUrl.trim()) return;
+    if (!configOpened || !settings.baseUrl.trim()) return;
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
@@ -296,7 +164,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [showConfig, settings.baseUrl, settings.apiKey, t]);
+  }, [configOpened, settings.baseUrl, settings.apiKey, t]);
 
   useEffect(() => {
     if (!running) return;
@@ -308,7 +176,7 @@ export default function App() {
     if (!running) return;
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [parsed.activity.length, running]);
+  }, [parsed.activity.length, running, stepsOpened]);
 
   function syncSession(nextSession: ResearchSession) {
     setSessions((current) => upsertSession(current, nextSession));
@@ -331,6 +199,7 @@ export default function App() {
     navigate(HOME_PATH);
     setObjective("");
     setError(null);
+    closeSteps();
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -339,13 +208,13 @@ export default function App() {
 
     if (!settings.apiKey.trim() && !isLocalLlmBaseUrl(settings.baseUrl)) {
       setError(t("errorApiKey"));
-      setShowConfig(true);
+      openConfig();
       return;
     }
 
     if (!settings.model.trim()) {
       setError(t("errorSelectModel"));
-      setShowConfig(true);
+      openConfig();
       return;
     }
 
@@ -354,6 +223,7 @@ export default function App() {
     setController(nextController);
     setRunning(true);
     setError(null);
+    closeSteps();
 
     const session = createSession(objective.trim());
     syncSession(session);
@@ -423,7 +293,8 @@ export default function App() {
     controller?.abort();
   }
 
-  const isActiveRunning = running && activeSession?.status === "running";
+  const isActiveRunning =
+    running && (!activeSession || activeSession.status === "running");
   const confidence = parsed.confidence;
   const targetScore = MODE_TARGETS[settings.mode];
   const sourceCount = uniqueSourceCount(parsed.iterations);
@@ -431,8 +302,11 @@ export default function App() {
     confidence > 0 &&
     (confidence < WEAK_EVIDENCE_BELOW[settings.mode] || sourceCount < 3);
   const hasContent =
-    parsed.iterations.length > 0 || Boolean(parsed.report) || isActiveRunning;
-  const showLogSidebar = parsed.activity.length > 0;
+    parsed.iterations.length > 0 ||
+    Boolean(parsed.report) ||
+    running ||
+    Boolean(activeSession);
+  const showLogSidebar = parsed.activity.length > 0 || running;
 
   return (
     <AppShell
@@ -505,20 +379,20 @@ export default function App() {
           mt="sm"
           variant="default"
           leftSection={<Settings size={16} />}
-          onClick={() => setShowConfig(true)}
+          onClick={openConfig}
         >
           {t("settings")}
         </Button>
       </AppShell.Navbar>
 
       <Modal
-        opened={showConfig}
-        onClose={() => setShowConfig(false)}
+        opened={configOpened}
+        onClose={closeConfig}
         title={t("settings")}
         centered
         size="md"
       >
-        <ConfigPanel
+        <SettingsForm
           settings={settings}
           running={running}
           models={models}
@@ -528,6 +402,34 @@ export default function App() {
         />
       </Modal>
 
+      <Drawer
+        opened={stepsOpened}
+        onClose={closeSteps}
+        position="right"
+        size="md"
+        title={
+          <Group gap="xs">
+            <Text fw={600}>{t("steps")}</Text>
+            <Badge size="sm" variant="light">
+              {parsed.activity.length}
+            </Badge>
+          </Group>
+        }
+        overlayProps={{ backgroundOpacity: 0.35, blur: 2 }}
+      >
+        <ScrollArea h="calc(100dvh - 80px)" viewportRef={logRef}>
+          <Stack component="ol" gap={6} style={{ listStyle: "decimal", paddingLeft: "1.1rem" }}>
+            {parsed.activity.map((line, index) => (
+              <ActivityLine
+                key={`${index}-${line.slice(0, 24)}`}
+                line={line}
+                active={isActiveRunning && index === parsed.activity.length - 1}
+              />
+            ))}
+          </Stack>
+        </ScrollArea>
+      </Drawer>
+
       <AppShell.Main>
         {hasContent ? (
           <Group justify="flex-end" gap="xs" px="lg" py="sm">
@@ -536,13 +438,22 @@ export default function App() {
                 {t("weakEvidence")}
               </Badge>
             ) : null}
-            {(isActiveRunning || confidence > 0) && (
+            {(running || confidence > 0) && (
               <Badge variant="outline" color="cyan">
                 {t("solidness")} {confidence.toFixed(0)}%
                 {parsed.iteration ? ` · ${parsed.iteration}` : ""}
                 {` / ${targetScore}%`}
               </Badge>
             )}
+            {showLogSidebar ? (
+              <Button
+                variant={stepsOpened ? "light" : "subtle"}
+                size="compact-sm"
+                onClick={toggleSteps}
+              >
+                {t("steps")} ({parsed.activity.length})
+              </Button>
+            ) : null}
             {activeSession && !running ? (
               <Button variant="subtle" size="compact-sm" onClick={() => downloadSession(activeSession)}>
                 {t("export")}
@@ -558,15 +469,8 @@ export default function App() {
 
         {parsed.rubric ? <RubricBars rubric={parsed.rubric} /> : null}
 
-        <Box
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            overflow: "hidden",
-          }}
-        >
-          <ScrollArea flex={1} viewportRef={threadRef} type="auto">
+        <Box style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+          <ScrollArea flex={1} viewportRef={threadRef} type="auto" h="100%">
             <Box maw={720} mx="auto" px="lg" pb="xl">
               {!hasContent ? (
                 <Stack align="center" justify="center" mih="50vh">
@@ -591,7 +495,7 @@ export default function App() {
                       </Group>
 
                       {iteration.findings ? (
-                        <MarkdownContent content={iteration.findings} className="prose" />
+                        <MarkdownContent content={iteration.findings} />
                       ) : null}
 
                       {iteration.scoreReasoning ? (
@@ -605,10 +509,21 @@ export default function App() {
                           <Accordion.Item value="synthesis">
                             <Accordion.Control>{t("cumulativeSynthesis")}</Accordion.Control>
                             <Accordion.Panel>
-                              <MarkdownContent content={iteration.synthesis} className="prose" />
+                              <MarkdownContent content={iteration.synthesis} />
                             </Accordion.Panel>
                           </Accordion.Item>
                         </Accordion>
+                      ) : null}
+
+                      {iteration.readUrls && iteration.readUrls.length > 0 ? (
+                        <Stack gap={4} mt="md" pt="sm" style={{ borderTop: "1px solid var(--mantine-color-dark-4)" }}>
+                          <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
+                            {t("pagesRead")}
+                          </Text>
+                          {iteration.readUrls.map((url) => (
+                            <SiteLink key={url} url={url} />
+                          ))}
+                        </Stack>
                       ) : null}
 
                       {iteration.sources && iteration.sources.length > 0 ? (
@@ -648,7 +563,7 @@ export default function App() {
                       <Text size="sm" fw={600} mb="sm">
                         {t("answer")}
                       </Text>
-                      <MarkdownContent content={parsed.report} className="prose" />
+                      <MarkdownContent content={parsed.report} />
                     </Paper>
                   ) : null}
 
@@ -661,42 +576,6 @@ export default function App() {
               )}
             </Box>
           </ScrollArea>
-
-          {showLogSidebar ? (
-            <Paper
-              w={280}
-              withBorder
-              radius={0}
-              style={{ borderTop: 0, borderBottom: 0, display: "flex", flexDirection: "column" }}
-            >
-              <Group justify="space-between" px="md" py="sm">
-                <Text size="sm" fw={600}>
-                  {t("steps")}
-                </Text>
-                <Badge size="sm" variant="light">
-                  {parsed.activity.length}
-                </Badge>
-              </Group>
-              <ScrollArea flex={1} px="md" pb="md" viewportRef={logRef}>
-                <Stack component="ol" gap={6} style={{ listStyle: "decimal", paddingLeft: "1.1rem" }}>
-                  {parsed.activity.map((line, index) => (
-                    <Text
-                      key={`${index}-${line.slice(0, 24)}`}
-                      component="li"
-                      size="xs"
-                      c={
-                        isActiveRunning && index === parsed.activity.length - 1
-                          ? "cyan.4"
-                          : "dimmed"
-                      }
-                    >
-                      {translateActivityLine(line)}
-                    </Text>
-                  ))}
-                </Stack>
-              </ScrollArea>
-            </Paper>
-          ) : null}
         </Box>
 
         <Box px="md" pb="lg" pt="xs">

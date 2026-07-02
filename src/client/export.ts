@@ -1,3 +1,5 @@
+import { saveAs } from "file-saver";
+
 import i18n from "./i18n.js";
 import type { ResearchSession } from "./history";
 
@@ -40,10 +42,5 @@ export function exportSessionMarkdown(session: ResearchSession): string {
 export function downloadSession(session: ResearchSession): void {
   const markdown = exportSessionMarkdown(session);
   const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `solid-${session.id.slice(0, 8)}.md`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  saveAs(blob, `solid-${session.id.slice(0, 8)}.md`);
 }

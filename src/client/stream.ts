@@ -21,6 +21,7 @@ export interface IterationSnapshot {
   scoreReasoning: string;
   rubric?: ScoreRubric;
   citedUrls?: string[];
+  readUrls?: string[];
   sources?: SourceSnapshot[];
   disconfirming?: boolean;
 }
@@ -87,6 +88,7 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
       scoreReasoning: String(payload.scoreReasoning ?? ""),
       rubric: payload.rubric,
       citedUrls: payload.citedUrls,
+      readUrls: payload.readUrls,
       sources: payload.sources,
       disconfirming: Boolean(payload.disconfirming),
     };
@@ -174,11 +176,6 @@ export function parseStream(output: string): ParsedStream {
     iteration,
     rubric,
   };
-}
-
-export function hasStreamMarkers(output: string): boolean {
-  MARKER_RE.lastIndex = 0;
-  return MARKER_RE.test(output);
 }
 
 export function uniqueSourceCount(iterations: IterationSnapshot[]): number {

@@ -18,6 +18,9 @@ Produce strict JSON:
 
 Rules:
 - exactly 2 short, specific search queries
+- each query must be 3-8 keywords (no full sentences, no question marks, no filler words)
+- bad: "Quais são os modelos de IA mais eficientes para rodar em dispositivos com restrições?"
+- good: "efficient small LLM 4GB RAM edge inference"
 - each iteration must CLOSE a specific open gap from the list — do not change topic randomly
 - build on cumulative synthesis; never contradict or ignore prior confirmed findings
 - when disconfirming is REQUIRED, set disconfirming: true and search explicitly for counter-evidence, failures, critiques, or contradicting data

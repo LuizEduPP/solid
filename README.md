@@ -12,11 +12,14 @@ English (default), Español, Português (Brasil), Português (Portugal), França
 
 - TypeScript + Node.js
 - Hono (API) + React (UI)
-- **Mantine** — UI components
+- **Mantine** + **@mantine/hooks** — UI, modal, localStorage, disclosure
 - **react-i18next** — interface i18n (7 languages, default English)
 - **lucide-react** — icons
 - **date-fns** — history date grouping
-- **react-markdown** — report rendering
+- **react-markdown** + **remark-gfm** + **github-markdown-css** — report rendering
+- **react-router-dom** — chat URLs (`/` and `/c/:id`)
+- **eventsource-parser** — SSE streaming from API
+- **file-saver** — markdown export download
 
 ## Setup
 

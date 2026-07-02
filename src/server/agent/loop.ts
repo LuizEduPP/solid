@@ -170,6 +170,7 @@ function eventIteration(record: {
   scoreReasoning: string;
   rubric: ScoreRubric;
   citedUrls: string[];
+  readUrls?: string[];
   sources: SearchHit[];
   disconfirming: boolean;
 }): string {
@@ -408,7 +409,9 @@ export class SolidAgent {
       );
 
       if (fetchedPages.length > 0) {
-        yield event("status", `${fetchedPages.length} page(s) fetched`);
+        for (const page of fetchedPages) {
+          yield event("status", `Page read: ${page.url}`);
+        }
       }
 
       yield event("status", `${totalHits} results · analyzing`);
@@ -476,6 +479,7 @@ export class SolidAgent {
         scoreReasoning: analysis.score_reasoning,
         rubric,
         citedUrls: analysis.cited_urls ?? [],
+        readUrls: fetchedPages.map((page) => page.url),
         sources: hits.slice(0, 6),
         disconfirming: plan.disconfirming,
       });
