@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -9,6 +9,35 @@ import {
   type WebSettings,
 } from "./settings";
 import "./App.css";
+
+const TARGET_SCORE = 100;
+
+function parseConfidence(output: string): number {
+  const matches = [
+    ...output.matchAll(/confian[aç]a acumulada:\s*\*\*(\d+(?:\.\d+)?)%\*\*/gi),
+  ];
+  if (matches.length === 0) return 0;
+  return Number(matches.at(-1)![1]);
+}
+
+function splitOutput(output: string): { main: string; activity: string } {
+  const blocks = output.split(/\n\n+/).filter(Boolean);
+  const mainBlocks: string[] = [];
+  const activityBlocks: string[] = [];
+
+  for (const block of blocks) {
+    if (block.startsWith("🧠") || block.startsWith("📄")) {
+      mainBlocks.push(block.replace(/^[🧠📄]\s*/, ""));
+    } else {
+      activityBlocks.push(block);
+    }
+  }
+
+  return {
+    main: mainBlocks.join("\n\n"),
+    activity: activityBlocks.join("\n\n"),
+  };
+}
 
 async function streamResearch(
   settings: WebSettings,
@@ -23,8 +52,7 @@ async function streamResearch(
     body: JSON.stringify({
       model: "deepsearch",
       stream: true,
-      target_score: settings.targetScore,
-      max_iterations: settings.maxIterations,
+      target_score: TARGET_SCORE,
       llm_api_key: settings.apiKey,
       llm_base_url: settings.baseUrl,
       llm_model: settings.model,
@@ -81,24 +109,28 @@ function updateSettings<K extends keyof WebSettings>(
 
 export default function App() {
   const [settings, setSettings] = useState<WebSettings>(loadWebSettings);
-  const [objective, setObjective] = useState(
-    "Validar se um SaaS de gestão de obras para construtoras pequenas no Brasil tem mercado viável em 2026",
-  );
+  const [objective, setObjective] = useState("");
   const [output, setOutput] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
+  const [showLog, setShowLog] = useState(false);
   const [controller, setController] = useState<AbortController | null>(null);
 
   useEffect(() => {
     saveWebSettings(settings);
   }, [settings]);
 
+  const confidence = useMemo(() => parseConfidence(output), [output]);
+  const { main, activity } = useMemo(() => splitOutput(output), [output]);
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!objective.trim() || running) return;
 
     if (!settings.apiKey.trim()) {
-      setError("Informe a API key do LLM nas configurações.");
+      setError("Informe a API key.");
+      setShowConfig(true);
       return;
     }
 
@@ -118,9 +150,9 @@ export default function App() {
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        setOutput((current) => `${current}\n\n⏹ Pesquisa cancelada.`);
+        setOutput((current) => `${current}\n\n⏹ Cancelado.`);
       } else {
-        setError(err instanceof Error ? err.message : "Unexpected error");
+        setError(err instanceof Error ? err.message : "Erro inesperado");
       }
     } finally {
       setRunning(false);
@@ -132,29 +164,45 @@ export default function App() {
     controller?.abort();
   }
 
-  function resetSettings() {
-    setSettings(DEFAULT_WEB_SETTINGS);
-  }
-
   return (
     <div className="app">
-      <header className="hero">
-        <div className="eyebrow">DeepSearch</div>
-        <h1>Pesquisa iterativa com validação de confiança</h1>
-        <p>
-          Configure o LLM, descreva seu objetivo e acompanhe o agente pesquisando
-          na web até atingir a meta de confiança.
-        </p>
+      <header className="topbar">
+        <div className="brand">DeepSearch</div>
+
+        <div className="progress-wrap">
+          <div className="progress-meta">
+            <span>Confiança</span>
+            <strong>{confidence.toFixed(1)}%</strong>
+          </div>
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: `${Math.min(confidence, TARGET_SCORE)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="topbar-actions">
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => setShowConfig((value) => !value)}
+          >
+            Config
+          </button>
+          {running ? (
+            <button className="ghost" type="button" onClick={handleStop}>
+              Parar
+            </button>
+          ) : null}
+        </div>
       </header>
 
-      <div className="layout">
-        <form className="panel" onSubmit={handleSubmit}>
-          <h2>Configurações</h2>
-
-          <div className="field">
-            <label htmlFor="api-key">API key</label>
+      {showConfig ? (
+        <section className="config-bar">
+          <label className="config-field">
+            <span>API key</span>
             <input
-              id="api-key"
               type="password"
               value={settings.apiKey}
               onChange={(event) =>
@@ -166,12 +214,10 @@ export default function App() {
               disabled={running}
               autoComplete="off"
             />
-          </div>
-
-          <div className="field">
-            <label htmlFor="base-url">Base URL</label>
+          </label>
+          <label className="config-field">
+            <span>Base URL</span>
             <input
-              id="base-url"
               type="url"
               value={settings.baseUrl}
               onChange={(event) =>
@@ -179,15 +225,12 @@ export default function App() {
                   updateSettings(current, "baseUrl", event.target.value),
                 )
               }
-              placeholder="https://api.openai.com/v1"
               disabled={running}
             />
-          </div>
-
-          <div className="field">
-            <label htmlFor="model">Modelo</label>
+          </label>
+          <label className="config-field">
+            <span>Modelo</span>
             <input
-              id="model"
               type="text"
               value={settings.model}
               onChange={(event) =>
@@ -195,86 +238,43 @@ export default function App() {
                   updateSettings(current, "model", event.target.value),
                 )
               }
-              placeholder="gpt-4o-mini"
               disabled={running}
             />
-          </div>
+          </label>
+        </section>
+      ) : null}
 
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor="target-score">Meta de confiança (%)</label>
-              <input
-                id="target-score"
-                type="number"
-                min={1}
-                max={100}
-                step={1}
-                value={settings.targetScore}
-                onChange={(event) =>
-                  setSettings((current) =>
-                    updateSettings(current, "targetScore", Number(event.target.value)),
-                  )
-                }
-                disabled={running}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="max-iterations">Máx. iterações</label>
-              <input
-                id="max-iterations"
-                type="number"
-                min={1}
-                max={20}
-                step={1}
-                value={settings.maxIterations}
-                onChange={(event) =>
-                  setSettings((current) =>
-                    updateSettings(current, "maxIterations", Number(event.target.value)),
-                  )
-                }
-                disabled={running}
-              />
-            </div>
-          </div>
+      <form className="prompt-bar" onSubmit={handleSubmit}>
+        <textarea
+          value={objective}
+          onChange={(event) => setObjective(event.target.value)}
+          placeholder="Descreva o que você quer validar..."
+          rows={2}
+          disabled={running}
+        />
+        <button className="primary" type="submit" disabled={running || !objective.trim()}>
+          {running ? "..." : "Pesquisar"}
+        </button>
+      </form>
 
-          <div className="field section-gap">
-            <label htmlFor="objective">Objetivo da pesquisa</label>
-            <textarea
-              id="objective"
-              value={objective}
-              onChange={(event) => setObjective(event.target.value)}
-              placeholder="Ex.: Avaliar viabilidade de um app de delivery de marmitas fitness em Campinas"
-              disabled={running}
-            />
-          </div>
+      {error ? <p className="error">{error}</p> : null}
 
-          <div className="actions">
-            <button className="primary" type="submit" disabled={running || !objective.trim()}>
-              {running ? "Pesquisando..." : "Iniciar pesquisa"}
-            </button>
-            {running ? (
-              <button className="ghost" type="button" onClick={handleStop}>
-                Parar
+      <div className="workspace">
+        <section className="main-panel">
+          <div className="panel-head">
+            <h2>Síntese</h2>
+            {activity ? (
+              <button
+                className="ghost small"
+                type="button"
+                onClick={() => setShowLog((value) => !value)}
+              >
+                {showLog ? "Ocultar log" : "Ver log"}
               </button>
-            ) : (
-              <button className="ghost" type="button" onClick={resetSettings}>
-                Restaurar padrões
-              </button>
-            )}
+            ) : null}
           </div>
-
-          <p className="status">
-            {running
-              ? "Recebendo resultados em tempo real..."
-              : "Configurações salvas automaticamente neste navegador."}
-          </p>
-          {error ? <p className="error">{error}</p> : null}
-        </form>
-
-        <section className="panel">
-          <h2>Resultado</h2>
-          <div className={`output ${output ? "" : "empty"}`}>
-            {output ? (
+          <div className={`output ${main ? "" : "empty"}`}>
+            {main ? (
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -285,16 +285,20 @@ export default function App() {
                   ),
                 }}
               >
-                {output}
+                {main}
               </ReactMarkdown>
             ) : (
-              <p>
-                O relatório aparece aqui conforme o agente pesquisa, pontua e sintetiza
-                as evidências.
-              </p>
+              <p>{running ? "Analisando..." : "A síntese aparece aqui."}</p>
             )}
           </div>
         </section>
+
+        {showLog && activity ? (
+          <aside className="log-panel">
+            <h2>Log</h2>
+            <pre>{activity}</pre>
+          </aside>
+        ) : null}
       </div>
     </div>
   );

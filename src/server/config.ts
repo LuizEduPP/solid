@@ -18,8 +18,8 @@ export const AGENT_DEFAULTS = {
   model: "gpt-4o-mini",
   minScore: 0.01,
   resultsPerQuery: 5,
-  targetScore: 85,
-  maxIterations: 6,
+  targetScore: 100,
+  maxIterations: 100,
 } as const;
 
 export function loadServerConfig(): ServerConfig {

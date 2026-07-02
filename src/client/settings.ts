@@ -4,23 +4,24 @@ export interface WebSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
-  targetScore: number;
-  maxIterations: number;
 }
 
 export const DEFAULT_WEB_SETTINGS: WebSettings = {
   apiKey: "",
   baseUrl: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
-  targetScore: 85,
-  maxIterations: 6,
 };
 
 export function loadWebSettings(): WebSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_WEB_SETTINGS;
-    return { ...DEFAULT_WEB_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Partial<WebSettings>;
+    return {
+      apiKey: parsed.apiKey ?? DEFAULT_WEB_SETTINGS.apiKey,
+      baseUrl: parsed.baseUrl ?? DEFAULT_WEB_SETTINGS.baseUrl,
+      model: parsed.model ?? DEFAULT_WEB_SETTINGS.model,
+    };
   } catch {
     return DEFAULT_WEB_SETTINGS;
   }

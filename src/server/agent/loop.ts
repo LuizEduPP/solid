@@ -259,35 +259,33 @@ export class DeepSearchAgent {
       iterations: [],
     };
 
-    yield event(
-      "status",
-      `DeepSearch iniciado — meta: ${targetScore.toFixed(2)}%, máx. ${maxIterations} iterações`,
-    );
+    yield event("status", "Pesquisa iniciada");
 
     for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-      yield event("iteration", `--- Iteração ${iteration}/${maxIterations} ---`);
-
       const plan = await this.plan(objective, agentRun);
       const queries = plan.queries;
       const angle = plan.angle;
-      yield event("plan", `Foco: ${angle}\nBuscas: ${queries.join(" · ")}`);
+
+      yield event(
+        "status",
+        `Iteração ${iteration} · ${angle}`,
+      );
 
       const queryResults: Array<[string, SearchHit[]]> = [];
       let totalHits = 0;
 
       for (const query of queries) {
-        yield event("search", `Buscando: ${query}`);
         const result = await searchWeb(query, this.settings.resultsPerQuery);
 
         if (result.error) {
-          yield event("status", `Busca indisponível para "${query}": ${result.error}`);
+          yield event("status", `Busca falhou: ${query}`);
         }
 
         queryResults.push([query, result.hits]);
         totalHits += result.hits.length;
       }
 
-      yield event("search_done", `${totalHits} resultados coletados`);
+      yield event("status", `${totalHits} resultados · analisando`);
 
       const analysis = await this.analyze(objective, agentRun, angle, queryResults);
       const hits = queryResults.flatMap(([, queryHits]) => queryHits);
@@ -311,29 +309,16 @@ export class DeepSearchAgent {
       agentRun.cumulativeSynthesis = analysis.cumulative_synthesis;
       agentRun.currentScore = score;
 
-      yield event(
-        "synthesis",
-        analysis.cumulative_synthesis,
-      );
+      yield event("synthesis", analysis.cumulative_synthesis);
 
       yield event(
         "score",
-        `Confiança acumulada: **${score.toFixed(2)}%** (meta: ${targetScore.toFixed(2)}%)\n` +
-          `Variação: ${analysis.score_delta || "n/a"}\n` +
-          `Novidades desta rodada: ${analysis.iteration_findings}\n` +
-          `Lacunas em aberto: ${record.gaps.join("; ") || "nenhuma"}`,
+        `Confiança acumulada: **${score.toFixed(2)}%**`,
       );
 
       if (score >= targetScore) {
-        yield event(
-          "status",
-          `Meta atingida na iteração ${iteration} (${score.toFixed(2)}%)`,
-        );
+        yield event("status", `Meta de 100% atingida`);
         break;
-      }
-
-      if (iteration < maxIterations && record.nextVariation) {
-        yield event("status", `Próximo passo: ${record.nextVariation}`);
       }
     }
 
@@ -341,11 +326,11 @@ export class DeepSearchAgent {
     if (agentRun.iterations.length === maxIterations && latestScore < targetScore) {
       yield event(
         "status",
-        `Máximo de iterações atingido — confiança final: ${latestScore.toFixed(2)}%`,
+        `Encerrado em ${latestScore.toFixed(2)}% — limite interno de segurança`,
       );
     }
 
-    yield event("status", "Gerando relatório final unificado...");
+    yield event("status", "Gerando relatório final...");
     const report = await this.finalReport(objective, agentRun);
     yield event("report", report);
   }

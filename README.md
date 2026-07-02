@@ -42,9 +42,10 @@ Abra [http://localhost:8787](http://localhost:8787) — interface e API no mesmo
 
 Todas as configurações ficam na própria interface (salvas no navegador):
 
-1. **API key**, **base URL** e **modelo** do LLM
-2. **Meta de confiança** e **máximo de iterações**
-3. **Objetivo** da pesquisa
+1. **API key**, **base URL** e **modelo** do LLM (botão Config)
+2. **Objetivo** da pesquisa
+
+A meta é sempre **100%** de confiança — o agente continua até atingir ou atingir o limite interno de segurança.
 
 ### Exemplo com Ollama
 
