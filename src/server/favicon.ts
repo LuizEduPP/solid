@@ -5,7 +5,13 @@ import { Hono } from "hono";
 
 import { tryHostname } from "../shared.js";
 
-export const FAVICON_CACHE_DIR = path.join(process.cwd(), "cache/favicons");
+export function getFaviconCacheDir(): string {
+  const fromEnv = process.env.FAVICON_CACHE_DIR?.trim();
+  if (fromEnv) {
+    return path.isAbsolute(fromEnv) ? fromEnv : path.resolve(process.cwd(), fromEnv);
+  }
+  return path.join(process.cwd(), "cache/favicons");
+}
 
 const FETCH_TIMEOUT_MS = 6_000;
 
@@ -28,6 +34,20 @@ const TYPE_BY_EXT: Record<string, string> = {
   jpg: "image/jpeg",
 };
 
+const DEFAULT_GLOBE_ICON = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#495057" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+  "utf8",
+);
+
+const FAVICON_CACHE_HEADERS = {
+  "Cache-Control": "public, max-age=31536000, immutable",
+} as const;
+
+const DEFAULT_ICON_HEADERS = {
+  "Content-Type": "image/svg+xml",
+  "Cache-Control": "public, max-age=86400",
+} as const;
+
 function safeHostname(hostname: string): string | null {
   const normalized = hostname.trim().toLowerCase().replace(/^www\./, "");
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalized)) return null;
@@ -39,7 +59,7 @@ function cacheBasename(hostname: string): string {
 }
 
 function cacheFilePath(hostname: string, ext: string): string {
-  return path.join(FAVICON_CACHE_DIR, `${cacheBasename(hostname)}.${ext}`);
+  return path.join(getFaviconCacheDir(), `${cacheBasename(hostname)}.${ext}`);
 }
 
 async function findCachedFile(hostname: string): Promise<string | null> {
@@ -91,7 +111,7 @@ async function downloadFavicon(hostname: string): Promise<string | null> {
     const result = await fetchIconBytes(source);
     if (!result) continue;
 
-    await mkdir(FAVICON_CACHE_DIR, { recursive: true });
+    await mkdir(getFaviconCacheDir(), { recursive: true });
     const filePath = cacheFilePath(hostname, result.ext);
     await writeFile(filePath, result.bytes);
     return filePath;
@@ -128,14 +148,23 @@ export async function cacheFaviconsForUrls(urls: string[]): Promise<void> {
 export function createFaviconRouter(): Hono {
   const router = new Hono();
 
+  router.get("/default", (c) => c.body(DEFAULT_GLOBE_ICON, 200, DEFAULT_ICON_HEADERS));
+
   router.get("/:hostname", async (c) => {
-    const filePath = await resolveFaviconFile(c.req.param("hostname"));
-    if (!filePath) return c.notFound();
+    const hostname = c.req.param("hostname");
+    if (hostname === "default") {
+      return c.body(DEFAULT_GLOBE_ICON, 200, DEFAULT_ICON_HEADERS);
+    }
+
+    const filePath = await resolveFaviconFile(hostname);
+    if (!filePath) {
+      return c.body(DEFAULT_GLOBE_ICON, 200, DEFAULT_ICON_HEADERS);
+    }
 
     const bytes = await readFile(filePath);
     return c.body(bytes, 200, {
       "Content-Type": contentTypeForFaviconPath(filePath),
-      "Cache-Control": "public, max-age=31536000, immutable",
+      ...FAVICON_CACHE_HEADERS,
     });
   });
 

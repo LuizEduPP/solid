@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { Accordion, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
+import { Accordion, Badge, Group, Paper, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import MarkdownContent from "./MarkdownContent";
+import FaviconImg from "./FaviconImg";
 import type { IterationSnapshot, SourceSnapshot } from "./stream";
-import { faviconUrl, hostnameFromUrl, uniqueUrlsByHostname } from "../shared";
+import { hostnameFromUrl, uniqueUrlsByHostname } from "../shared";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;
@@ -53,16 +54,7 @@ function PageReadBadge({ url }: { url: string }) {
       size="sm"
       radius="sm"
       style={{ cursor: "pointer", textTransform: "none" }}
-      leftSection={
-        <Box
-          component="img"
-          src={faviconUrl(url)}
-          alt=""
-          w={12}
-          h={12}
-          style={{ borderRadius: 2, display: "block" }}
-        />
-      }
+      leftSection={<FaviconImg url={url} size={12} style={{ borderRadius: 2 }} />}
     >
       {host}
     </Badge>

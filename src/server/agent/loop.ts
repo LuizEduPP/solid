@@ -6,12 +6,10 @@ import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM } from "./prompts.js";
 import {
   applyCumulativeScore,
   canReachTargetScore,
+  capScoreForCitedDomains,
   computeEvidenceScore,
-  MODE_THRESHOLDS,
-  rubricTotal,
-  uniqueDomainsFromHits,
-  type ScoreRubric,
 } from "./scoring.js";
+import { rubricTotal, uniqueHostnamesFromHits, MODE_THRESHOLDS, type ScoreRubric } from "../../shared.js";
 import { cacheFaviconsForUrls } from "../favicon.js";
 import {
   fetchPages,
@@ -129,7 +127,7 @@ function finalizeScore(
     isFirstIteration,
   });
 
-  const uniqueDomains = uniqueDomainsFromHits(run.allHits).length;
+  const uniqueDomains = uniqueHostnamesFromHits(run.allHits).length;
   const evidenceScore = computeEvidenceScore(
     uniqueDomains,
     analysis.cited_urls?.length ?? 0,
@@ -143,9 +141,11 @@ function finalizeScore(
     score = Math.min(score, 94);
   }
 
-  if (score > 90 && (analysis.cited_urls?.length ?? 0) < 2) {
-    score = Math.min(score, 90);
-  }
+  const cumulativeCitedUrls = [
+    ...run.iterations.flatMap((record) => record.citedUrls),
+    ...(analysis.cited_urls ?? []),
+  ];
+  score = capScoreForCitedDomains(score, cumulativeCitedUrls);
 
   return score;
 }
@@ -169,7 +169,7 @@ export class SolidAgent {
         { role: "system" as const, content: system },
         { role: "user" as const, content: user },
       ],
-      temperature: 0.3,
+      temperature: this.settings.temperature,
       ...(json ? { response_format: { type: "json_object" as const } } : {}),
     };
 
@@ -182,7 +182,7 @@ export class SolidAgent {
       const response = await this.client.chat.completions.create({
         model: this.settings.model,
         messages: request.messages,
-        temperature: 0.3,
+        temperature: this.settings.temperature,
       });
       return extractMessageContent(response.choices[0]!.message);
     }
@@ -260,7 +260,7 @@ export class SolidAgent {
     const user =
       `Objective:\n${objective}\n\n` +
       `Previous cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
-      `Unique domains seen so far: ${uniqueDomainsFromHits(run.allHits).length}\n\n` +
+      `Unique domains seen so far: ${uniqueHostnamesFromHits(run.allHits).length}\n\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(none)"}\n\n` +
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
@@ -366,7 +366,7 @@ export class SolidAgent {
         openGaps: analysis.open_gaps ?? [],
         iteration,
         thresholds,
-        uniqueDomainCount: uniqueDomainsFromHits(agentRun.allHits).length,
+        uniqueDomainCount: uniqueHostnamesFromHits(agentRun.allHits).length,
         hadDisconfirmingSearch: agentRun.hadDisconfirmingSearch,
       });
 

@@ -1,14 +1,22 @@
-import type { SearchHit } from "../search.js";
 import {
-  MODE_THRESHOLDS,
+  countUniqueHostnames,
   rubricTotal,
   type ModeThresholds,
   type ScoreRubric,
-  uniqueHostnamesFromHits,
 } from "../../shared.js";
 
-export function uniqueDomainsFromHits(hits: SearchHit[]): string[] {
-  return uniqueHostnamesFromHits(hits);
+export const HIGH_SCORE_MIN_CITED_DOMAINS = 3;
+export const HIGH_SCORE_CAP_WITHOUT_DOMAINS = 90;
+
+export function capScoreForCitedDomains(
+  score: number,
+  citedUrls: string[],
+  minDomains = HIGH_SCORE_MIN_CITED_DOMAINS,
+  cap = HIGH_SCORE_CAP_WITHOUT_DOMAINS,
+): number {
+  if (score <= cap) return score;
+  if (countUniqueHostnames(citedUrls) >= minDomains) return score;
+  return Math.min(score, cap);
 }
 
 export function normalizeRubric(raw: Partial<ScoreRubric> | undefined): ScoreRubric {
@@ -127,5 +135,3 @@ export function extractCitedUrls(text: string, knownUrls: string[]): string[] {
   }
   return [...cited];
 }
-
-export { MODE_THRESHOLDS, rubricTotal, type ModeThresholds, type ScoreRubric };

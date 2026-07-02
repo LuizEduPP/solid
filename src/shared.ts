@@ -115,3 +115,5 @@ export function faviconUrl(url: string): string {
   const hostname = hostnameFromUrl(url);
   return `/favicons/${encodeURIComponent(hostname)}`;
 }
+
+export const DEFAULT_FAVICON_URL = "/favicons/default";

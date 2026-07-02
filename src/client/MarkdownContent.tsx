@@ -1,4 +1,4 @@
-import { Anchor, Box, Tooltip } from "@mantine/core";
+import { Anchor, Tooltip } from "@mantine/core";
 import type { Root } from "mdast";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import ReactMarkdown from "react-markdown";
@@ -6,7 +6,8 @@ import rehypeExternalLinks from "rehype-external-links";
 import remarkGfm from "remark-gfm";
 import type { Plugin } from "unified";
 
-import { faviconUrl, hostnameFromUrl } from "../shared";
+import FaviconImg from "./FaviconImg";
+import { hostnameFromUrl } from "../shared";
 import "github-markdown-css/github-markdown-dark.css";
 
 const BRACKET_URLS =
@@ -64,14 +65,7 @@ function MarkdownAnchor({
           mx={2}
           style={{ verticalAlign: "middle" }}
         >
-          <Box
-            component="img"
-            src={faviconUrl(href)}
-            alt={host}
-            w={16}
-            h={16}
-            style={{ borderRadius: 3, display: "inline-block", verticalAlign: "middle" }}
-          />
+          <FaviconImg url={href} alt={host} size={16} />
         </Anchor>
       </Tooltip>
     );

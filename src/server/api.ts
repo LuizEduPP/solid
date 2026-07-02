@@ -45,6 +45,11 @@ function resolveMode(body: z.infer<typeof requestSchema>) {
   return body.research_mode ?? AGENT_DEFAULTS.mode;
 }
 
+function resolveTemperature(value: number | undefined): number {
+  const temperature = value ?? AGENT_DEFAULTS.temperature;
+  return Math.max(0, Math.min(2, temperature));
+}
+
 function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
   const mode = resolveMode(body);
   return {
@@ -55,6 +60,7 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
     resultsPerQuery: AGENT_DEFAULTS.resultsPerQuery,
     mode,
     pagesPerIteration: AGENT_DEFAULTS.pagesPerIteration,
+    temperature: resolveTemperature(body.temperature),
   };
 }
 
@@ -216,8 +222,13 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     }
 
     const parts: string[] = [];
-    for await (const chunk of agent.run(objective, targetScore)) {
-      parts.push(chunk);
+    try {
+      for await (const chunk of agent.run(objective, targetScore)) {
+        parts.push(chunk);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Agent failed";
+      parts.push(`\n\n❌ Error: ${message}\n`);
     }
 
     return c.json({

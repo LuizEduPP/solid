@@ -15,6 +15,7 @@ export interface AgentConfig {
   resultsPerQuery: number;
   mode: ResearchMode;
   pagesPerIteration: number;
+  temperature: number;
 }
 
 export const AGENT_DEFAULTS = {
@@ -24,6 +25,7 @@ export const AGENT_DEFAULTS = {
   resultsPerQuery: 8,
   mode: "rigorous" as ResearchMode,
   pagesPerIteration: 3,
+  temperature: 0.3,
 } as const;
 
 export function loadServerConfig(): ServerConfig {
