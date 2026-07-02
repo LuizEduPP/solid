@@ -60,6 +60,7 @@
   "langIt": "Italiano",
   "activityResearchStarted": "Recherche démarrée",
   "activitySearchFailed": "Recherche échouée : {{query}}",
+  "activityPagesFetched": "{{count}} page(s) lue(s)",
   "activityResultsAnalyzing": "{{count}} résultats · analyse",
   "activityScoreCapped": "Score plafonné : {{reason}}",
   "activityTargetReached": "Objectif {{target}} % atteint",

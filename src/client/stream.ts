@@ -1,7 +1,5 @@
-import { countUniqueHostnames } from "../shared/domains.js";
-import type { ScoreRubric } from "../shared/types.js";
-
-export type { ScoreRubric } from "../shared/types.js";
+import { countUniqueHostnames } from "../shared/domains";
+import type { ScoreRubric } from "../shared/types";
 
 export interface SourceSnapshot {
   title: string;
@@ -134,11 +132,7 @@ export function parseStream(output: string): ParsedStream {
     confidence = iterations.at(-1)!.score;
   }
 
-  const iterationMatches = [...activity.join("\n").matchAll(/Iteration\s+(\d+)/gi)];
-  const iteration =
-    iterationMatches.length > 0
-      ? Number(iterationMatches.at(-1)![1])
-      : iterations.at(-1)?.number ?? null;
+  const iteration = iterations.at(-1)?.number ?? null;
 
   const rubric =
     parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;

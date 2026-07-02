@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       "/v1": "http://localhost:8787",
       "/health": "http://localhost:8787",
+      "/favicons": "http://localhost:8787",
     },
   },
   build: {

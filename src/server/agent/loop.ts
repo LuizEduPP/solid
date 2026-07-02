@@ -15,6 +15,7 @@ import {
   type ScoreRubric,
 } from "./scoring.js";
 import { fetchPages } from "../search/fetch.js";
+import { cacheFaviconsForUrls } from "../favicon/cache.js";
 import {
   formatHits,
   searchWeb,
@@ -408,10 +409,13 @@ export class SolidAgent {
         agentRun.fetchedUrlCache,
       );
 
+      void cacheFaviconsForUrls([
+        ...fetchedPages.map((page) => page.url),
+        ...hits.map((hit) => hit.url),
+      ]);
+
       if (fetchedPages.length > 0) {
-        for (const page of fetchedPages) {
-          yield event("status", `Page read: ${page.url}`);
-        }
+        yield event("status", `${fetchedPages.length} page(s) fetched`);
       }
 
       yield event("status", `${totalHits} results · analyzing`);

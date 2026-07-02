@@ -1,8 +1,8 @@
 import { isAfter, isToday, isYesterday, subDays } from "date-fns";
 
-import { parseStream } from "./stream.js";
-import { readLocalStorageJson } from "./storage.js";
-import type { HistoryGroupKey } from "./i18n.js";
+import { parseStream } from "./stream";
+import { readLocalStorageJson } from "./storage";
+import type { HistoryGroupKey } from "./i18n";
 
 export interface ResearchSession {
   id: string;

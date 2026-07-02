@@ -1,7 +1,8 @@
 import { createParser } from "eventsource-parser";
 
-import i18n from "./i18n.js";
-import { MODE_TARGETS, type WebSettings } from "./settings.js";
+import i18n from "./i18n";
+import { MODE_THRESHOLDS } from "../shared/thresholds";
+import type { WebSettings } from "./settings";
 
 export async function streamResearch(
   settings: WebSettings,
@@ -16,7 +17,7 @@ export async function streamResearch(
     body: JSON.stringify({
       model: "solid",
       stream: true,
-      target_score: MODE_TARGETS[settings.mode],
+      target_score: MODE_THRESHOLDS[settings.mode].targetScore,
       research_mode: settings.mode,
       llm_api_key: settings.apiKey,
       llm_base_url: settings.baseUrl,

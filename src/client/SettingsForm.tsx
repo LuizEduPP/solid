@@ -10,12 +10,8 @@ import {
   LOCALE_LABEL_KEYS,
   SUPPORTED_LOCALES,
   type Locale,
-} from "./i18n.js";
-import {
-  DEFAULT_WEB_SETTINGS,
-  updateSettings,
-  type WebSettings,
-} from "./settings.js";
+} from "./i18n";
+import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./settings";
 
 interface SettingsFormProps {
   settings: WebSettings;
@@ -56,7 +52,7 @@ export default function SettingsForm({
         data={localeOptions}
         disabled={running}
         onChange={(value) =>
-          value && onChange(updateSettings(current, "locale", value as Locale))
+          value && onChange({ ...current, locale: value as Locale })
         }
       />
       <PasswordInput
@@ -66,7 +62,7 @@ export default function SettingsForm({
         disabled={running}
         autoComplete="off"
         onChange={(event) =>
-          onChange(updateSettings(current, "apiKey", event.currentTarget.value))
+          onChange({ ...current, apiKey: event.currentTarget.value })
         }
       />
       <TextInput
@@ -74,7 +70,7 @@ export default function SettingsForm({
         value={current.baseUrl}
         disabled={running}
         onChange={(event) =>
-          onChange(updateSettings(current, "baseUrl", event.currentTarget.value))
+          onChange({ ...current, baseUrl: event.currentTarget.value })
         }
       />
       <Select
@@ -85,9 +81,7 @@ export default function SettingsForm({
         placeholder={modelsLoading ? t("loadingModels") : undefined}
         error={modelsError ?? undefined}
         searchable
-        onChange={(value) =>
-          onChange(updateSettings(current, "model", value ?? ""))
-        }
+        onChange={(value) => onChange({ ...current, model: value ?? "" })}
       />
     </Stack>
   );

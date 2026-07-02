@@ -30,8 +30,3 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
     weakEvidenceBelow: 45,
   },
 };
-
-export const MODE_TARGETS: Record<ResearchMode, number> = {
-  rigorous: MODE_THRESHOLDS.rigorous.targetScore,
-  fast: MODE_THRESHOLDS.fast.targetScore,
-};

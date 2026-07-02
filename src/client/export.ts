@@ -1,9 +1,9 @@
 import { saveAs } from "file-saver";
 
-import { translateActivityLine } from "./activity.js";
-import i18n from "./i18n.js";
-import type { ResearchSession } from "./history.js";
-import { parseStream } from "./stream.js";
+import { compressStepsActivity, translateActivityLine } from "./activity";
+import i18n from "./i18n";
+import type { ResearchSession } from "./history";
+import { parseStream } from "./stream";
 
 function exportSessionMarkdown(session: ResearchSession): string {
   const t = i18n.t.bind(i18n);
@@ -36,14 +36,12 @@ function exportSessionMarkdown(session: ResearchSession): string {
   }
 
   if (parsed.activity.length > 0) {
-    lines.push(
-      `## ${t("exportLog")}`,
-      "",
-      "```",
-      parsed.activity.map(translateActivityLine).join("\n"),
-      "```",
-      "",
-    );
+    const log = compressStepsActivity(parsed.activity)
+      .map(translateActivityLine)
+      .filter(Boolean);
+    if (log.length > 0) {
+      lines.push(`## ${t("exportLog")}`, "", "```", log.join("\n"), "```", "");
+    }
   }
 
   return lines.filter(Boolean).join("\n");

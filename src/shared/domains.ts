@@ -26,3 +26,8 @@ export function countUniqueHostnames(urls: string[]): number {
 export function uniqueHostnamesFromHits(hits: Array<{ url: string }>): string[] {
   return uniqueHostnamesFromUrls(hits.map((hit) => hit.url));
 }
+
+export function faviconUrl(url: string): string {
+  const hostname = hostnameFromUrl(url);
+  return `/favicons/${encodeURIComponent(hostname)}`;
+}

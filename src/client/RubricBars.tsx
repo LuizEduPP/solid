@@ -1,7 +1,7 @@
 import { Progress, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import type { ScoreRubric } from "../shared/types.js";
+import type { ScoreRubric } from "../shared/types";
 
 interface RubricBarsProps {
   rubric: ScoreRubric;

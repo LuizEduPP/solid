@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { createOpenAiRouter } from "./api/openai.js";
 import { loadServerConfig } from "./config.js";
+import { createFaviconRouter } from "./favicon/routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../client");
@@ -15,6 +16,7 @@ const server = loadServerConfig();
 const app = new Hono();
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+app.route("/favicons", createFaviconRouter());
 app.route("/v1", createOpenAiRouter());
 
 const isProduction = process.env.NODE_ENV === "production";

@@ -1,5 +1,4 @@
 import {
-  Accordion,
   ActionIcon,
   AppShell,
   Badge,
@@ -17,12 +16,12 @@ import {
   Title,
 } from "@mantine/core";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
-import { ArrowUp, Settings, X, Zap } from "lucide-react";
+import { ArrowUp, Settings, Square, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
-import ActivityLine from "./ActivityLine";
+import ActivityLine, { compressStepsActivity } from "./activity";
 import {
   createSession,
   deleteSession,
@@ -37,25 +36,20 @@ import {
 import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
 import MarkdownContent from "./MarkdownContent";
 import { downloadSession } from "./export";
+import IterationCard from "./IterationCard";
 import { fetchLlmModels, pickDefaultModel } from "./models";
 import RubricBars from "./RubricBars";
 import { HOME_PATH, chatPath } from "./routes";
 import SettingsForm from "./SettingsForm";
-import SiteLink from "./SiteLink";
 import {
+  isLocalLlmBaseUrl,
   loadWebSettings,
-  MODE_TARGETS,
   SETTINGS_KEY,
-  updateSettings,
   type WebSettings,
 } from "./settings";
 import { streamResearch } from "./stream-client";
 import { parseStream, uniqueSourceCount } from "./stream";
-import { MODE_THRESHOLDS } from "../shared/thresholds.js";
-
-function isLocalLlmBaseUrl(baseUrl: string): boolean {
-  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
-}
+import { MODE_THRESHOLDS } from "../shared/thresholds";
 
 export default function App() {
   const { t } = useTranslation();
@@ -92,6 +86,11 @@ export default function App() {
   const parsed = useMemo(
     () => parseStream(activeSession?.rawStream ?? ""),
     [activeSession?.rawStream],
+  );
+
+  const stepsActivity = useMemo(
+    () => compressStepsActivity(parsed.activity),
+    [parsed.activity],
   );
 
   const historyGroups = useMemo(
@@ -157,15 +156,11 @@ export default function App() {
 
   useEffect(() => {
     if (!running) return;
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [parsed.iterations.length, parsed.report, running]);
-
-  useEffect(() => {
-    if (!running) return;
-    const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [parsed.activity.length, running, stepsOpened]);
+    threadRef.current && (threadRef.current.scrollTop = threadRef.current.scrollHeight);
+    if (stepsOpened) {
+      logRef.current && (logRef.current.scrollTop = logRef.current.scrollHeight);
+    }
+  }, [parsed.iterations.length, parsed.report, stepsActivity.length, running, stepsOpened]);
 
   function syncSession(nextSession: ResearchSession) {
     setSessions((current) => upsertSession(current, nextSession));
@@ -253,13 +248,10 @@ export default function App() {
 
   function handleToggleMode() {
     if (running) return;
-    setSettings((current) =>
-      updateSettings(
-        current,
-        "mode",
-        current.mode === "fast" ? "rigorous" : "fast",
-      ),
-    );
+    setSettings((current) => ({
+      ...current,
+      mode: current.mode === "fast" ? "rigorous" : "fast",
+    }));
   }
 
   function handleStop() {
@@ -269,7 +261,7 @@ export default function App() {
   const isActiveRunning =
     running && (!activeSession || activeSession.status === "running");
   const confidence = parsed.confidence;
-  const targetScore = MODE_TARGETS[settings.mode];
+  const targetScore = MODE_THRESHOLDS[settings.mode].targetScore;
   const sourceCount = uniqueSourceCount(parsed.iterations);
   const modeThresholds = MODE_THRESHOLDS[settings.mode];
   const weakEvidence =
@@ -281,7 +273,7 @@ export default function App() {
     Boolean(parsed.report) ||
     running ||
     Boolean(activeSession);
-  const showLogSidebar = parsed.activity.length > 0 || running;
+  const showLogSidebar = stepsActivity.length > 0 || running;
 
   return (
     <AppShell
@@ -386,7 +378,7 @@ export default function App() {
           <Group gap="xs">
             <Text fw={600}>{t("steps")}</Text>
             <Badge size="sm" variant="light">
-              {parsed.activity.length}
+              {stepsActivity.length}
             </Badge>
           </Group>
         }
@@ -394,11 +386,11 @@ export default function App() {
       >
         <ScrollArea h="calc(100dvh - 80px)" viewportRef={logRef}>
           <Stack component="ol" gap={6} style={{ listStyle: "decimal", paddingLeft: "1.1rem" }}>
-            {parsed.activity.map((line, index) => (
+            {stepsActivity.map((line, index) => (
               <ActivityLine
                 key={`${index}-${line.slice(0, 24)}`}
                 line={line}
-                active={isActiveRunning && index === parsed.activity.length - 1}
+                active={isActiveRunning && index === stepsActivity.length - 1}
               />
             ))}
           </Stack>
@@ -426,17 +418,12 @@ export default function App() {
                 size="compact-sm"
                 onClick={toggleSteps}
               >
-                {t("steps")} ({parsed.activity.length})
+                {t("steps")} ({stepsActivity.length})
               </Button>
             ) : null}
             {activeSession && !running ? (
               <Button variant="subtle" size="compact-sm" onClick={() => downloadSession(activeSession)}>
                 {t("export")}
-              </Button>
-            ) : null}
-            {isActiveRunning ? (
-              <Button variant="subtle" color="red" size="compact-sm" onClick={handleStop}>
-                {t("stop")}
               </Button>
             ) : null}
           </Group>
@@ -460,62 +447,7 @@ export default function App() {
                   ) : null}
 
                   {parsed.iterations.map((iteration) => (
-                    <Paper key={iteration.number} p="md" radius="md" withBorder>
-                      <Group justify="space-between" mb="sm">
-                        <Text size="sm" fw={600}>
-                          {t("step")} {iteration.number}
-                          {iteration.angle ? ` · ${iteration.angle}` : ""}
-                        </Text>
-                        <Badge variant="light">{iteration.score.toFixed(0)}%</Badge>
-                      </Group>
-
-                      {iteration.findings ? (
-                        <MarkdownContent content={iteration.findings} />
-                      ) : null}
-
-                      {iteration.scoreReasoning ? (
-                        <Text size="sm" c="dimmed" mt="sm">
-                          {iteration.scoreReasoning}
-                        </Text>
-                      ) : null}
-
-                      {iteration.synthesis ? (
-                        <Accordion variant="contained" mt="sm">
-                          <Accordion.Item value="synthesis">
-                            <Accordion.Control>{t("cumulativeSynthesis")}</Accordion.Control>
-                            <Accordion.Panel>
-                              <MarkdownContent content={iteration.synthesis} />
-                            </Accordion.Panel>
-                          </Accordion.Item>
-                        </Accordion>
-                      ) : null}
-
-                      {iteration.readUrls && iteration.readUrls.length > 0 ? (
-                        <Stack gap={4} mt="md" pt="sm" style={{ borderTop: "1px solid var(--mantine-color-dark-4)" }}>
-                          <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
-                            {t("pagesRead")}
-                          </Text>
-                          {iteration.readUrls.map((url) => (
-                            <SiteLink key={url} url={url} />
-                          ))}
-                        </Stack>
-                      ) : null}
-
-                      {iteration.sources && iteration.sources.length > 0 ? (
-                        <Stack gap={4} mt="md" pt="sm" style={{ borderTop: "1px solid var(--mantine-color-dark-4)" }}>
-                          <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
-                            {t("sources")}
-                          </Text>
-                          {iteration.sources.map((source) => (
-                            <SiteLink
-                              key={source.url}
-                              url={source.url}
-                              label={source.title || undefined}
-                            />
-                          ))}
-                        </Stack>
-                      ) : null}
-                    </Paper>
+                    <IterationCard key={iteration.number} iteration={iteration} />
                   ))}
 
                   {isActiveRunning && !parsed.report ? (
@@ -592,18 +524,33 @@ export default function App() {
                 }}
                 onChange={(event) => setObjective(event.currentTarget.value)}
               />
-              <ActionIcon
-                type="submit"
-                size="lg"
-                radius="xl"
-                variant="filled"
-                color="gray.0"
-                c="dark.9"
-                disabled={running || !objective.trim()}
-                aria-label={running ? t("researching") : t("research")}
-              >
-                {running ? <Loader size={18} color="dark.9" /> : <ArrowUp size={18} />}
-              </ActionIcon>
+              {isActiveRunning ? (
+                <ActionIcon
+                  type="button"
+                  size="lg"
+                  radius="xl"
+                  variant="filled"
+                  color="red"
+                  aria-label={t("stop")}
+                  title={t("stop")}
+                  onClick={handleStop}
+                >
+                  <Square size={16} fill="currentColor" />
+                </ActionIcon>
+              ) : (
+                <ActionIcon
+                  type="submit"
+                  size="lg"
+                  radius="xl"
+                  variant="filled"
+                  color="gray.0"
+                  c="dark.9"
+                  disabled={!objective.trim()}
+                  aria-label={t("research")}
+                >
+                  <ArrowUp size={18} />
+                </ActionIcon>
+              )}
             </Paper>
           </Box>
         </Box>

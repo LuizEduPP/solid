@@ -1,9 +1,8 @@
-import { normalizeLocale, type Locale } from "./i18n.js";
-import { readLocalStorageJson } from "./storage.js";
-import type { ResearchMode } from "../shared/types.js";
+import { normalizeLocale, type Locale } from "./i18n";
+import { readLocalStorageJson } from "./storage";
+import type { ResearchMode } from "../shared/types";
 
-export type { ResearchMode } from "../shared/types.js";
-export { MODE_TARGETS } from "../shared/thresholds.js";
+export type { ResearchMode } from "../shared/types";
 
 export const SETTINGS_KEY = "solid-settings";
 const LEGACY_SETTINGS_KEYS = ["rigor-settings", "deepsearch-settings"] as const;
@@ -24,12 +23,8 @@ export const DEFAULT_WEB_SETTINGS: WebSettings = {
   locale: "en",
 };
 
-export function updateSettings<K extends keyof WebSettings>(
-  current: WebSettings,
-  key: K,
-  value: WebSettings[K],
-): WebSettings {
-  return { ...current, [key]: value };
+export function isLocalLlmBaseUrl(baseUrl: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
 }
 
 export function loadWebSettings(): WebSettings {
