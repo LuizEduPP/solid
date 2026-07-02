@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import MarkdownContent from "./MarkdownContent";
 import type { IterationSnapshot, SourceSnapshot } from "./stream";
-import { faviconUrl, hostnameFromUrl, uniqueUrlsByHostname } from "../shared/domains";
+import { faviconUrl, hostnameFromUrl, uniqueUrlsByHostname } from "../shared";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;

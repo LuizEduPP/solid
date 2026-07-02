@@ -2,7 +2,7 @@ import { loads } from "ai-json-repair";
 import { z } from "zod";
 
 import { extractCitedUrls, normalizeRubric } from "./scoring.js";
-import type { ScoreRubric } from "../../shared/types.js";
+import type { ScoreRubric } from "../../shared.js";
 
 export interface PlanPayload {
   queries: string[];

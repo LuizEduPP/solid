@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
-import { SolidAgent, extractObjective } from "../agent/loop.js";
-import { MODE_THRESHOLDS } from "../agent/scoring.js";
-import { AGENT_DEFAULTS, type AgentConfig } from "../config.js";
+import { SolidAgent, extractObjective } from "./agent/loop.js";
+import { MODE_THRESHOLDS } from "../shared.js";
+import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
 
 const messageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),

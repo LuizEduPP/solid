@@ -51,7 +51,7 @@ import {
   streamResearch,
   uniqueSourceCount,
 } from "./stream";
-import { MODE_THRESHOLDS } from "../shared/thresholds";
+import { MODE_THRESHOLDS } from "../shared";
 
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";

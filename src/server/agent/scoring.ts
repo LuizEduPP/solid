@@ -1,14 +1,11 @@
-import type { SearchHit } from "../search/web.js";
-import { uniqueHostnamesFromHits } from "../../shared/domains.js";
-import { rubricTotal } from "../../shared/rubric.js";
-import { MODE_THRESHOLDS, type ModeThresholds } from "../../shared/thresholds.js";
-import type { ScoreRubric } from "../../shared/types.js";
-
-export type { ResearchMode, ScoreRubric } from "../../shared/types.js";
-export { MODE_THRESHOLDS } from "../../shared/thresholds.js";
-export type { ModeThresholds } from "../../shared/thresholds.js";
-export { rubricTotal } from "../../shared/rubric.js";
-export { tryHostname as extractDomain } from "../../shared/domains.js";
+import type { SearchHit } from "../search.js";
+import {
+  MODE_THRESHOLDS,
+  rubricTotal,
+  type ModeThresholds,
+  type ScoreRubric,
+  uniqueHostnamesFromHits,
+} from "../../shared.js";
 
 export function uniqueDomainsFromHits(hits: SearchHit[]): string[] {
   return uniqueHostnamesFromHits(hits);
@@ -130,3 +127,5 @@ export function extractCitedUrls(text: string, knownUrls: string[]): string[] {
   }
   return [...cited];
 }
+
+export { MODE_THRESHOLDS, rubricTotal, type ModeThresholds, type ScoreRubric };

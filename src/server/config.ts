@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import type { ResearchMode } from "../shared/types.js";
+import type { ResearchMode } from "../shared.js";
 
 export interface ServerConfig {
   host: string;

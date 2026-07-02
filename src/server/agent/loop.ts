@@ -12,13 +12,13 @@ import {
   uniqueDomainsFromHits,
   type ScoreRubric,
 } from "./scoring.js";
-import { fetchPages } from "../search/fetch.js";
-import { cacheFaviconsForUrls } from "../favicon/cache.js";
+import { cacheFaviconsForUrls } from "../favicon.js";
 import {
+  fetchPages,
   formatHits,
   searchWeb,
   type SearchHit,
-} from "../search/web.js";
+} from "../search.js";
 
 export interface IterationRecord {
   number: number;

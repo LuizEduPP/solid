@@ -7,7 +7,7 @@ import { parseStream } from "./stream";
 import type { ResearchSession, WebSettings } from "./types";
 
 export type { ResearchSession, WebSettings } from "./types";
-export type { ResearchMode } from "../shared/types";
+export type { ResearchMode } from "../shared";
 
 function readLocalStorageJson<T>(
   key: string,

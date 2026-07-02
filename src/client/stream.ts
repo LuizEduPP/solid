@@ -2,9 +2,11 @@ import { createParser } from "eventsource-parser";
 
 import i18n from "./i18n";
 import type { WebSettings } from "./types";
-import { countUniqueHostnames } from "../shared/domains";
-import { MODE_THRESHOLDS } from "../shared/thresholds";
-import type { ScoreRubric } from "../shared/types";
+import {
+  countUniqueHostnames,
+  MODE_THRESHOLDS,
+  type ScoreRubric,
+} from "../shared";
 
 export interface SourceSnapshot {
   title: string;

@@ -5,9 +5,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createOpenAiRouter } from "./api/openai.js";
+import { createOpenAiRouter } from "./api.js";
 import { loadServerConfig } from "./config.js";
-import { createFaviconRouter } from "./favicon/routes.js";
+import { createFaviconRouter } from "./favicon.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../client");

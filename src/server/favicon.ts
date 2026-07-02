@@ -1,7 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { tryHostname } from "../../shared/domains.js";
+import { Hono } from "hono";
+
+import { tryHostname } from "../shared.js";
 
 export const FAVICON_CACHE_DIR = path.join(process.cwd(), "cache/favicons");
 
@@ -98,7 +100,7 @@ async function downloadFavicon(hostname: string): Promise<string | null> {
   return null;
 }
 
-export function contentTypeForFaviconPath(filePath: string): string {
+function contentTypeForFaviconPath(filePath: string): string {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   return TYPE_BY_EXT[ext] ?? "application/octet-stream";
 }
@@ -113,12 +115,6 @@ export async function resolveFaviconFile(hostname: string): Promise<string | nul
   return downloadFavicon(safe);
 }
 
-export async function cacheFaviconForUrl(url: string): Promise<void> {
-  const hostname = tryHostname(url);
-  if (!hostname) return;
-  await resolveFaviconFile(hostname);
-}
-
 export async function cacheFaviconsForUrls(urls: string[]): Promise<void> {
   const hostnames = new Set<string>();
   for (const url of urls) {
@@ -127,4 +123,21 @@ export async function cacheFaviconsForUrls(urls: string[]): Promise<void> {
   }
 
   await Promise.all([...hostnames].map((hostname) => resolveFaviconFile(hostname)));
+}
+
+export function createFaviconRouter(): Hono {
+  const router = new Hono();
+
+  router.get("/:hostname", async (c) => {
+    const filePath = await resolveFaviconFile(c.req.param("hostname"));
+    if (!filePath) return c.notFound();
+
+    const bytes = await readFile(filePath);
+    return c.body(bytes, 200, {
+      "Content-Type": contentTypeForFaviconPath(filePath),
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+  });
+
+  return router;
 }

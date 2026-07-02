@@ -6,7 +6,7 @@ import rehypeExternalLinks from "rehype-external-links";
 import remarkGfm from "remark-gfm";
 import type { Plugin } from "unified";
 
-import { faviconUrl, hostnameFromUrl } from "../shared/domains";
+import { faviconUrl, hostnameFromUrl } from "../shared";
 import "github-markdown-css/github-markdown-dark.css";
 
 const BRACKET_URLS =

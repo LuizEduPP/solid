@@ -13,9 +13,13 @@ import {
 import { AlertTriangle, ShieldCheck, TrendingUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { RUBRIC_DIMENSIONS, RUBRIC_MAX, weakestRubricKey } from "../shared/rubric";
-import type { ModeThresholds } from "../shared/thresholds";
-import type { ScoreRubric } from "../shared/types";
+import {
+  RUBRIC_DIMENSIONS,
+  RUBRIC_MAX,
+  weakestRubricKey,
+  type ModeThresholds,
+  type ScoreRubric,
+} from "../shared";
 
 const DIMENSION_COLORS: Record<keyof ScoreRubric, string> = {
   direct_evidence: "blue",

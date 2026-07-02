@@ -1,7 +1,7 @@
 import type { Locale } from "./i18n";
-import type { ResearchMode } from "../shared/types";
+import type { ResearchMode } from "../shared";
 
-export type { ResearchMode } from "../shared/types";
+export type { ResearchMode } from "../shared";
 
 export interface WebSettings {
   apiKey: string;
