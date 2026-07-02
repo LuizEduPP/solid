@@ -1,11 +1,13 @@
 import type { SearchHit } from "../search/web.js";
 import { uniqueHostnamesFromHits } from "../../shared/domains.js";
+import { rubricTotal } from "../../shared/rubric.js";
 import { MODE_THRESHOLDS, type ModeThresholds } from "../../shared/thresholds.js";
 import type { ScoreRubric } from "../../shared/types.js";
 
 export type { ResearchMode, ScoreRubric } from "../../shared/types.js";
 export { MODE_THRESHOLDS } from "../../shared/thresholds.js";
 export type { ModeThresholds } from "../../shared/thresholds.js";
+export { rubricTotal } from "../../shared/rubric.js";
 export { tryHostname as extractDomain } from "../../shared/domains.js";
 
 export function uniqueDomainsFromHits(hits: SearchHit[]): string[] {
@@ -22,15 +24,6 @@ export function normalizeRubric(raw: Partial<ScoreRubric> | undefined): ScoreRub
     gap_coverage: clamp(raw?.gap_coverage),
     risk_contradiction: clamp(raw?.risk_contradiction),
   };
-}
-
-export function rubricTotal(rubric: ScoreRubric): number {
-  return (
-    rubric.direct_evidence +
-    rubric.source_diversity +
-    rubric.gap_coverage +
-    rubric.risk_contradiction
-  );
 }
 
 export function clampScore(value: number, minScore: number): number {

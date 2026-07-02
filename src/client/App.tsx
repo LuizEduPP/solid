@@ -22,6 +22,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ActivityLine, { compressStepsActivity } from "./activity";
+import ChatColumn from "./ChatColumn";
 import {
   createSession,
   deleteSession,
@@ -38,7 +39,7 @@ import MarkdownContent from "./MarkdownContent";
 import { downloadSession } from "./export";
 import IterationCard from "./IterationCard";
 import { fetchLlmModels, pickDefaultModel } from "./models";
-import RubricBars from "./RubricBars";
+import SolidnessPanel from "./SolidnessPanel";
 import { HOME_PATH, chatPath } from "./routes";
 import SettingsForm from "./SettingsForm";
 import {
@@ -264,10 +265,6 @@ export default function App() {
   const targetScore = MODE_THRESHOLDS[settings.mode].targetScore;
   const sourceCount = uniqueSourceCount(parsed.iterations);
   const modeThresholds = MODE_THRESHOLDS[settings.mode];
-  const weakEvidence =
-    confidence > 0 &&
-    (confidence < modeThresholds.weakEvidenceBelow ||
-      sourceCount < modeThresholds.minDomainsFor100);
   const hasContent =
     parsed.iterations.length > 0 ||
     Boolean(parsed.report) ||
@@ -399,47 +396,47 @@ export default function App() {
 
       <AppShell.Main>
         {hasContent ? (
-          <Group justify="flex-end" gap="xs" px="lg" py="sm">
-            {weakEvidence ? (
-              <Badge color="red" variant="light">
-                {t("weakEvidence")}
-              </Badge>
-            ) : null}
-            {(running || confidence > 0) && (
-              <Badge variant="outline" color="cyan">
-                {t("solidness")} {confidence.toFixed(0)}%
-                {parsed.iteration ? ` · ${parsed.iteration}` : ""}
-                {` / ${targetScore}%`}
-              </Badge>
-            )}
-            {showLogSidebar ? (
-              <Button
-                variant={stepsOpened ? "light" : "subtle"}
-                size="compact-sm"
-                onClick={toggleSteps}
-              >
-                {t("steps")} ({stepsActivity.length})
-              </Button>
-            ) : null}
-            {activeSession && !running ? (
-              <Button variant="subtle" size="compact-sm" onClick={() => downloadSession(activeSession)}>
-                {t("export")}
-              </Button>
-            ) : null}
-          </Group>
+          <ChatColumn py="sm">
+            <Group justify="flex-end" gap="xs">
+              {showLogSidebar ? (
+                <Button
+                  variant={stepsOpened ? "light" : "subtle"}
+                  size="compact-sm"
+                  onClick={toggleSteps}
+                >
+                  {t("steps")} ({stepsActivity.length})
+                </Button>
+              ) : null}
+              {activeSession && !running ? (
+                <Button variant="subtle" size="compact-sm" onClick={() => downloadSession(activeSession)}>
+                  {t("export")}
+                </Button>
+              ) : null}
+            </Group>
+          </ChatColumn>
         ) : null}
-
-        {parsed.rubric ? <RubricBars rubric={parsed.rubric} /> : null}
 
         <Box style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           <ScrollArea flex={1} viewportRef={threadRef} type="auto" h="100%">
-            <Box maw={720} mx="auto" px="lg" pb="xl">
+            <ChatColumn pb="xl">
               {!hasContent ? (
                 <Stack align="center" justify="center" mih="50vh">
                   <Title order={1}>solid</Title>
                 </Stack>
               ) : (
                 <Stack gap="lg">
+                  {(running || confidence > 0) ? (
+                    <SolidnessPanel
+                      confidence={confidence}
+                      iteration={parsed.iteration}
+                      rubric={parsed.rubric}
+                      sourceCount={sourceCount}
+                      targetScore={targetScore}
+                      thresholds={modeThresholds}
+                      running={running}
+                    />
+                  ) : null}
+
                   {activeSession?.objective ? (
                     <Paper p="md" radius="md" bg="dark.6">
                       <Text>{activeSession.objective}</Text>
@@ -475,12 +472,11 @@ export default function App() {
                   ) : null}
                 </Stack>
               )}
-            </Box>
+            </ChatColumn>
           </ScrollArea>
         </Box>
 
-        <Box px="md" pb="lg" pt="xs">
-          <Box maw={720} mx="auto">
+        <ChatColumn pb="lg" pt="xs">
             {error ? (
               <Text c="red" size="sm" mb="xs">
                 {error}
@@ -552,8 +548,7 @@ export default function App() {
                 </ActionIcon>
               )}
             </Paper>
-          </Box>
-        </Box>
+        </ChatColumn>
       </AppShell.Main>
     </AppShell>
   );
