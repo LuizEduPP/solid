@@ -6,6 +6,8 @@ dist/
 package-lock.json
 npm-debug.log*
 yarn-error.log
+error.log
+combined.log
 
 # Python (legado)
 .venv/

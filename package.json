@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
+    "@phukon/duckduckgo-search": "^1.2.0",
     "dotenv": "^17.2.3",
-    "duck-duck-scrape": "^2.2.7",
     "hono": "^4.11.4",
     "openai": "^6.16.0",
     "zod": "^3.24.0"

@@ -8,7 +8,7 @@ Given an objective and prior iteration context, produce the next research step a
 }
 
 Rules:
-- queries: 2-4 diverse web search strings (different angles, synonyms, counter-arguments)
+- queries: exactly 2 focused web search strings (short, specific, different angles)
 - Each iteration must vary approach: market data, competitors, risks, feasibility, regulations, trends
 - If prior score is low, pivot angle; if medium, deepen evidence; if high, seek disconfirming evidence
 - Output JSON only, no markdown fences`;

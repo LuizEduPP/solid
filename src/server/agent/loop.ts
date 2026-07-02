@@ -195,11 +195,20 @@ export class DeepSearchAgent {
 
       const queryResults: Array<[string, SearchHit[]]> = [];
       let totalHits = 0;
+
       for (const query of queries) {
         yield event("search", `Searching: ${query}`);
-        const hits = await searchWeb(query, this.settings.resultsPerQuery);
-        queryResults.push([query, hits]);
-        totalHits += hits.length;
+        const result = await searchWeb(query, this.settings.resultsPerQuery);
+
+        if (result.error) {
+          yield event(
+            "status",
+            `Busca indisponível para "${query}": ${result.error}`,
+          );
+        }
+
+        queryResults.push([query, result.hits]);
+        totalHits += result.hits.length;
       }
 
       yield event("search_done", `Collected ${totalHits} results`);
