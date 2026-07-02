@@ -85,5 +85,8 @@
   "gateOpenGaps": "{{count}} offene Lücke(n)",
   "gateMinIterations": "mindestens {{count}} Iterationen",
   "gateMinDomains": "mindestens {{count}} eindeutige Domains",
-  "gateDisconfirmation": "Widerlegungsrunde fehlt"
+  "gateDisconfirmation": "Widerlegungsrunde fehlt",
+  "scrollToBottom": "Nach unten scrollen",
+  "expandSolidness": "Soliditäts-Panel erweitern",
+  "collapseSolidness": "Soliditäts-Panel einklappen"
 }

@@ -17,7 +17,7 @@ import {
   type BoxProps,
 } from "@mantine/core";
 import { useDisclosure, useLocalStorage } from "@mantine/hooks";
-import { ArrowUp, Settings, Square, X, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, Settings, Square, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
@@ -61,6 +61,8 @@ export function chatPath(sessionId: string): string {
 }
 
 const CHAT_MAX_WIDTH = 720;
+const SCROLL_PIN_THRESHOLD = 72;
+const SCROLL_BOTTOM_TOLERANCE = 64;
 
 function ChatColumn({ children, ...props }: BoxProps & { children: ReactNode }) {
   return (
@@ -93,6 +95,10 @@ export default function App() {
   const [controller, setController] = useState<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const autoScrollRef = useRef(true);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [scrollPinned, setScrollPinned] = useState(false);
+  const [solidnessExpanded, setSolidnessExpanded] = useState(false);
 
   const activeSession = useMemo(
     () =>
@@ -175,11 +181,56 @@ export default function App() {
 
   useEffect(() => {
     if (!running) return;
-    threadRef.current && (threadRef.current.scrollTop = threadRef.current.scrollHeight);
-    if (stepsOpened) {
-      logRef.current && (logRef.current.scrollTop = logRef.current.scrollHeight);
+    autoScrollRef.current = true;
+    setAutoScroll(true);
+  }, [running, sessionId]);
+
+  useEffect(() => {
+    if (!autoScrollRef.current) return;
+    const viewport = threadRef.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, [
+    parsed.iterations.length,
+    parsed.report,
+    parsed.confidence,
+    parsed.activity.length,
+    running,
+  ]);
+
+  useEffect(() => {
+    if (!running || !stepsOpened) return;
+    const viewport = logRef.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, [stepsActivity.length, running, stepsOpened]);
+
+  function handleThreadScroll({ y }: { x: number; y: number }) {
+    setScrollPinned(y > SCROLL_PIN_THRESHOLD);
+
+    if (y <= SCROLL_PIN_THRESHOLD) {
+      setSolidnessExpanded(false);
     }
-  }, [parsed.iterations.length, parsed.report, stepsActivity.length, running, stepsOpened]);
+
+    const viewport = threadRef.current;
+    if (!viewport) return;
+
+    const atBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <=
+      SCROLL_BOTTOM_TOLERANCE;
+
+    if (!atBottom && autoScrollRef.current) {
+      autoScrollRef.current = false;
+      setAutoScroll(false);
+    }
+  }
+
+  function resumeAutoScroll() {
+    autoScrollRef.current = true;
+    setAutoScroll(true);
+    const viewport = threadRef.current;
+    if (viewport) {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
+    }
+  }
 
   function syncSession(nextSession: ResearchSession) {
     setSessions((current) => upsertSession(current, nextSession));
@@ -289,6 +340,7 @@ export default function App() {
     running ||
     Boolean(activeSession);
   const showLogSidebar = stepsActivity.length > 0 || running;
+  const showSolidness = running || confidence > 0;
 
   return (
     <AppShell
@@ -413,29 +465,14 @@ export default function App() {
       </Drawer>
 
       <AppShell.Main>
-        {hasContent ? (
-          <ChatColumn py="sm">
-            <Group justify="flex-end" gap="xs">
-              {showLogSidebar ? (
-                <Button
-                  variant={stepsOpened ? "light" : "subtle"}
-                  size="compact-sm"
-                  onClick={toggleSteps}
-                >
-                  {t("steps")} ({stepsActivity.length})
-                </Button>
-              ) : null}
-              {activeSession && !running ? (
-                <Button variant="subtle" size="compact-sm" onClick={() => downloadSession(activeSession)}>
-                  {t("export")}
-                </Button>
-              ) : null}
-            </Group>
-          </ChatColumn>
-        ) : null}
-
-        <Box style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-          <ScrollArea flex={1} viewportRef={threadRef} type="auto" h="100%">
+        <Box style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+          <ScrollArea
+            flex={1}
+            viewportRef={threadRef}
+            type="auto"
+            h="100%"
+            onScrollPositionChange={handleThreadScroll}
+          >
             <ChatColumn pb="xl">
               {!hasContent ? (
                 <Stack align="center" justify="center" mih="50vh">
@@ -443,16 +480,34 @@ export default function App() {
                 </Stack>
               ) : (
                 <Stack gap="lg">
-                  {(running || confidence > 0) ? (
-                    <SolidnessPanel
-                      confidence={confidence}
-                      iteration={parsed.iteration}
-                      rubric={parsed.rubric}
-                      sourceCount={sourceCount}
-                      targetScore={targetScore}
-                      thresholds={modeThresholds}
-                      running={running}
-                    />
+                  {showSolidness ? (
+                    <Box
+                      style={{
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 20,
+                        background: "var(--mantine-color-body)",
+                        ...(scrollPinned
+                          ? {
+                              borderBottom: "1px solid var(--mantine-color-dark-4)",
+                              boxShadow: "0 6px 16px rgba(0, 0, 0, 0.28)",
+                            }
+                          : {}),
+                      }}
+                    >
+                      <SolidnessPanel
+                        confidence={confidence}
+                        iteration={parsed.iteration}
+                        rubric={parsed.rubric}
+                        sourceCount={sourceCount}
+                        targetScore={targetScore}
+                        thresholds={modeThresholds}
+                        running={running}
+                        compact={scrollPinned}
+                        expanded={solidnessExpanded}
+                        onToggleExpand={() => setSolidnessExpanded((value) => !value)}
+                      />
+                    </Box>
                   ) : null}
 
                   {activeSession?.objective ? (
@@ -492,6 +547,34 @@ export default function App() {
               )}
             </ChatColumn>
           </ScrollArea>
+
+          {!autoScroll && hasContent ? (
+            <Box
+              style={{
+                position: "absolute",
+                bottom: 16,
+                left: 0,
+                right: 0,
+                pointerEvents: "none",
+                zIndex: 30,
+              }}
+            >
+              <ChatColumn style={{ display: "flex", justifyContent: "flex-end" }}>
+                <ActionIcon
+                  variant="filled"
+                  color="dark.5"
+                  radius="xl"
+                  size="lg"
+                  aria-label={t("scrollToBottom")}
+                  title={t("scrollToBottom")}
+                  onClick={resumeAutoScroll}
+                  style={{ pointerEvents: "auto", boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)" }}
+                >
+                  <ArrowDown size={18} />
+                </ActionIcon>
+              </ChatColumn>
+            </Box>
+          ) : null}
         </Box>
 
         <ChatColumn pb="lg" pt="xs">
@@ -499,6 +582,28 @@ export default function App() {
               <Text c="red" size="sm" mb="xs">
                 {error}
               </Text>
+            ) : null}
+            {hasContent && (showLogSidebar || (activeSession && !running)) ? (
+              <Group justify="flex-end" gap="xs" mb="xs">
+                {showLogSidebar ? (
+                  <Button
+                    variant={stepsOpened ? "light" : "subtle"}
+                    size="compact-sm"
+                    onClick={toggleSteps}
+                  >
+                    {t("steps")} ({stepsActivity.length})
+                  </Button>
+                ) : null}
+                {activeSession && !running ? (
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    onClick={() => downloadSession(activeSession)}
+                  >
+                    {t("export")}
+                  </Button>
+                ) : null}
+              </Group>
             ) : null}
             <Paper
               component="form"

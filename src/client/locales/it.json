@@ -85,5 +85,8 @@
   "gateOpenGaps": "{{count}} lacuna(e) aperta(e)",
   "gateMinIterations": "minimo {{count}} iterazioni",
   "gateMinDomains": "minimo {{count}} domini unici",
-  "gateDisconfirmation": "manca round di disconferma"
+  "gateDisconfirmation": "manca round di disconferma",
+  "scrollToBottom": "Vai in fondo",
+  "expandSolidness": "Espandi pannello solidità",
+  "collapseSolidness": "Comprimi pannello solidità"
 }

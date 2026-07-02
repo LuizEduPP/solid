@@ -85,5 +85,8 @@
   "gateOpenGaps": "{{count}} lacune(s) ouverte(s)",
   "gateMinIterations": "minimum {{count}} itérations",
   "gateMinDomains": "minimum {{count}} domaines uniques",
-  "gateDisconfirmation": "tour de déconfirmation manquant"
+  "gateDisconfirmation": "tour de déconfirmation manquant",
+  "scrollToBottom": "Aller en bas",
+  "expandSolidness": "Développer le panneau de solidité",
+  "collapseSolidness": "Réduire le panneau de solidité"
 }

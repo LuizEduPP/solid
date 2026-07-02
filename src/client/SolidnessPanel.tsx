@@ -1,5 +1,6 @@
 import {
   Alert,
+  ActionIcon,
   Box,
   Group,
   Paper,
@@ -10,7 +11,7 @@ import {
   Text,
   Tooltip,
 } from "@mantine/core";
-import { AlertTriangle, ShieldCheck, TrendingUp } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, ShieldCheck, TrendingUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -102,6 +103,9 @@ interface SolidnessPanelProps {
   targetScore: number;
   thresholds: ModeThresholds;
   running?: boolean;
+  compact?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 export default function SolidnessPanel({
@@ -112,6 +116,9 @@ export default function SolidnessPanel({
   targetScore,
   thresholds,
   running = false,
+  compact = false,
+  expanded = false,
+  onToggleExpand,
 }: SolidnessPanelProps) {
   const { t } = useTranslation();
 
@@ -124,102 +131,169 @@ export default function SolidnessPanel({
   const showReasons = reasons.length > 0 && status !== "solid";
   const weakest = rubric ? weakestRubricKey(rubric) : null;
 
-  return (
-    <Paper p="md" radius="md" withBorder bg="dark.7" w="100%">
-      <Group align="flex-start" wrap="nowrap" gap="md">
-        <RingProgress
-          size={92}
-          thickness={9}
-          roundCaps
-          sections={[{ value: Math.min(100, confidence), color }]}
-          label={
-            <Stack gap={0} align="center">
-              <Text size="lg" fw={700} lh={1.1}>
-                {confidence.toFixed(0)}%
-              </Text>
-              <Text size="10px" c="dimmed" lh={1.2}>
-                {t("solidnessTarget", { target: targetScore })}
-              </Text>
-            </Stack>
-          }
-        />
-
-        <Stack gap="xs" flex={1} miw={0}>
-          <Group gap={6} wrap="wrap">
-            <Group gap={4} wrap="nowrap">
-              <StatusIcon size={15} color={`var(--mantine-color-${color}-5)`} />
-              <Text size="sm" fw={600} c={color}>
-                {t(statusLabelKey(status))}
-              </Text>
-            </Group>
-            {iteration ? (
-              <Text size="xs" c="dimmed">
-                · {t("solidnessStep", { n: iteration })}
-              </Text>
-            ) : null}
-            <Text size="xs" c="dimmed">
-              · {t("solidnessDomains", { count: sourceCount })}
-            </Text>
-          </Group>
-
-          {rubric ? (
-            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing={8}>
-              {RUBRIC_DIMENSIONS.map(({ key, labelKey, hintKey }) => {
-                const value = rubric[key];
-                const dimColor = DIMENSION_COLORS[key];
-                const isWeakest = key === weakest;
-
-                return (
-                  <Tooltip key={key} label={t(hintKey)} multiline maw={260} withArrow>
-                    <Box
-                      p={6}
-                      style={{
-                        borderRadius: 8,
-                        border: isWeakest
-                          ? `1px solid var(--mantine-color-${dimColor}-8)`
-                          : "1px solid transparent",
-                        background: isWeakest ? "var(--mantine-color-dark-6)" : undefined,
-                      }}
-                    >
-                      <Group justify="space-between" gap={4} mb={4}>
-                        <Text size="10px" tt="uppercase" c="dimmed" fw={600} lh={1.2}>
-                          {t(labelKey)}
-                        </Text>
-                        <Text size="10px" c="dimmed" fw={600}>
-                          {value}/{RUBRIC_MAX}
-                        </Text>
-                      </Group>
-                      <Progress
-                        value={(value / RUBRIC_MAX) * 100}
-                        size="sm"
-                        radius="xl"
-                        color={dimColor}
-                      />
-                    </Box>
-                  </Tooltip>
-                );
-              })}
-            </SimpleGrid>
-          ) : running ? (
-            <Text size="xs" c="dimmed">
-              {t("solidnessPending")}
+  const ring = (size: number, thickness: number) => (
+    <RingProgress
+      size={size}
+      thickness={thickness}
+      roundCaps
+      sections={[{ value: Math.min(100, confidence), color }]}
+      label={
+        <Stack gap={0} align="center">
+          <Text size={size > 60 ? "lg" : "sm"} fw={700} lh={1.1}>
+            {confidence.toFixed(0)}%
+          </Text>
+          {size > 60 ? (
+            <Text size="10px" c="dimmed" lh={1.2}>
+              {t("solidnessTarget", { target: targetScore })}
             </Text>
           ) : null}
         </Stack>
+      }
+    />
+  );
+
+  const statusLine = (
+    <Group gap={6} wrap="wrap">
+      <Group gap={4} wrap="nowrap">
+        <StatusIcon size={15} color={`var(--mantine-color-${color}-5)`} />
+        <Text size="sm" fw={600} c={color}>
+          {t(statusLabelKey(status))}
+        </Text>
+      </Group>
+      {iteration ? (
+        <Text size="xs" c="dimmed">
+          · {t("solidnessStep", { n: iteration })}
+        </Text>
+      ) : null}
+      <Text size="xs" c="dimmed">
+        · {t("solidnessDomains", { count: sourceCount })}
+      </Text>
+    </Group>
+  );
+
+  const rubricGrid = rubric ? (
+    <SimpleGrid cols={{ base: 2, sm: 4 }} spacing={8}>
+      {RUBRIC_DIMENSIONS.map(({ key, labelKey, hintKey }) => {
+        const value = rubric[key];
+        const dimColor = DIMENSION_COLORS[key];
+        const isWeakest = key === weakest;
+
+        return (
+          <Tooltip key={key} label={t(hintKey)} multiline maw={260} withArrow>
+            <Box
+              p={6}
+              style={{
+                borderRadius: 8,
+                border: isWeakest
+                  ? `1px solid var(--mantine-color-${dimColor}-8)`
+                  : "1px solid transparent",
+                background: isWeakest ? "var(--mantine-color-dark-6)" : undefined,
+              }}
+            >
+              <Group justify="space-between" gap={4} mb={4}>
+                <Text size="10px" tt="uppercase" c="dimmed" fw={600} lh={1.2}>
+                  {t(labelKey)}
+                </Text>
+                <Text size="10px" c="dimmed" fw={600}>
+                  {value}/{RUBRIC_MAX}
+                </Text>
+              </Group>
+              <Progress
+                value={(value / RUBRIC_MAX) * 100}
+                size="sm"
+                radius="xl"
+                color={dimColor}
+              />
+            </Box>
+          </Tooltip>
+        );
+      })}
+    </SimpleGrid>
+  ) : running ? (
+    <Text size="xs" c="dimmed">
+      {t("solidnessPending")}
+    </Text>
+  ) : null;
+
+  const reasonsAlert = showReasons ? (
+    <Alert
+      mt="sm"
+      variant="light"
+      color={status === "weak" ? "red" : "yellow"}
+      icon={<AlertTriangle size={16} />}
+      py={6}
+      styles={{ message: { fontSize: "var(--mantine-font-size-xs)" } }}
+    >
+      {reasons.join(" · ")}
+    </Alert>
+  ) : null;
+
+  if (compact && !expanded) {
+    return (
+      <Paper p="xs" radius="md" withBorder bg="dark.7" w="100%">
+        <Group justify="space-between" wrap="nowrap" gap="xs">
+          <Group gap="sm" wrap="nowrap" flex={1} miw={0}>
+            {ring(48, 6)}
+            <Stack gap={2} miw={0}>
+              {statusLine}
+              <Text size="10px" c="dimmed">
+                {t("solidnessTarget", { target: targetScore })}
+              </Text>
+            </Stack>
+          </Group>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            aria-label={t("expandSolidness")}
+            onClick={onToggleExpand}
+          >
+            <ChevronDown size={18} />
+          </ActionIcon>
+        </Group>
+      </Paper>
+    );
+  }
+
+  return (
+    <Paper
+      p={compact ? "sm" : "md"}
+      radius="md"
+      withBorder
+      bg="dark.7"
+      w="100%"
+      style={
+        compact && expanded
+          ? { maxHeight: "min(70vh, 520px)", overflow: "auto" }
+          : undefined
+      }
+    >
+      {compact ? (
+        <Group justify="space-between" mb="xs" wrap="nowrap">
+          <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
+            {t("solidness")}
+          </Text>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size="sm"
+            aria-label={t("collapseSolidness")}
+            onClick={onToggleExpand}
+          >
+            <ChevronUp size={16} />
+          </ActionIcon>
+        </Group>
+      ) : null}
+
+      <Group align="flex-start" wrap="nowrap" gap="md">
+        {ring(compact ? 72 : 92, compact ? 7 : 9)}
+
+        <Stack gap="xs" flex={1} miw={0}>
+          {statusLine}
+          {rubricGrid}
+        </Stack>
       </Group>
 
-      {showReasons ? (
-        <Alert
-          mt="sm"
-          variant="light"
-          color={status === "weak" ? "red" : "yellow"}
-          icon={<AlertTriangle size={16} />}
-          py={6}
-          styles={{ message: { fontSize: "var(--mantine-font-size-xs)" } }}
-        >
-          {reasons.join(" · ")}
-        </Alert>
-      ) : null}
+      {showReasons && (!compact || expanded) ? reasonsAlert : null}
     </Paper>
   );
 }
