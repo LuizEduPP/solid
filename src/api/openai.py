@@ -60,13 +60,15 @@ async def list_models() -> dict[str, Any]:
     }
 
 
-@router.post("/chat/completions")
+@router.post("/chat/completions", response_model=None)
 async def chat_completions(
     request_body: ChatCompletionRequest,
     request: Request,
 ) -> ChatCompletionResponse | StreamingResponse:
     settings: Settings = request.app.state.settings
-    target_score, max_iterations, _ = _resolve_params(request_body, settings)
+    target_score, max_iterations, min_score = _resolve_params(request_body, settings)
+    if request_body.min_score is not None:
+        settings = settings.model_copy(update={"min_score": min_score})
 
     messages = [
         {"role": message.role, "content": _message_content(message)}
