@@ -61,8 +61,6 @@ export function chatPath(sessionId: string): string {
 }
 
 const CHAT_MAX_WIDTH = 720;
-const SCROLL_PIN_ENTER = 96;
-const SCROLL_PIN_EXIT = 48;
 const SCROLL_BOTTOM_TOLERANCE = 64;
 
 function ChatColumn({ children, ...props }: BoxProps & { children: ReactNode }) {
@@ -95,6 +93,7 @@ export default function App() {
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [controller, setController] = useState<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const solidnessSentinelRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
   const ignoreScrollPauseRef = useRef(false);
@@ -205,17 +204,7 @@ export default function App() {
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
   }, [stepsActivity.length, running, stepsOpened]);
 
-  function handleThreadScroll({ y }: { x: number; y: number }) {
-    setScrollPinned((pinned) => {
-      if (!pinned && y > SCROLL_PIN_ENTER) return true;
-      if (pinned && y < SCROLL_PIN_EXIT) return false;
-      return pinned;
-    });
-
-    if (y < SCROLL_PIN_EXIT) {
-      setSolidnessExpanded(false);
-    }
-
+  function handleThreadScroll() {
     const viewport = threadRef.current;
     if (!viewport) return;
 
@@ -376,6 +365,29 @@ export default function App() {
   const showLogSidebar = stepsActivity.length > 0 || running;
   const showSolidness = running || confidence > 0;
 
+  useEffect(() => {
+    if (!showSolidness) {
+      setScrollPinned(false);
+      return;
+    }
+
+    const root = threadRef.current;
+    const sentinel = solidnessSentinelRef.current;
+    if (!root || !sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const pinned = !entry.isIntersecting;
+        setScrollPinned(pinned);
+        if (!pinned) setSolidnessExpanded(false);
+      },
+      { root, threshold: 0 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [showSolidness, sessionId]);
+
   return (
     <AppShell
       navbar={{ width: 260, breakpoint: "sm" }}
@@ -505,6 +517,24 @@ export default function App() {
 
       <AppShell.Main>
         <Box style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
+          {scrollPinned && showSolidness ? (
+            <Box className="solidness-sticky" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 20 }}>
+              <ChatColumn>
+                <SolidnessPanel
+                  confidence={confidence}
+                  iteration={parsed.iteration}
+                  rubric={parsed.rubric}
+                  sourceCount={sourceCount}
+                  targetScore={targetScore}
+                  thresholds={modeThresholds}
+                  running={running}
+                  compact
+                  expanded={solidnessExpanded}
+                  onToggleExpand={() => setSolidnessExpanded((value) => !value)}
+                />
+              </ChatColumn>
+            </Box>
+          ) : null}
           <ScrollArea
             flex={1}
             viewportRef={threadRef}
@@ -520,17 +550,8 @@ export default function App() {
               ) : (
                 <Stack gap="lg">
                   {showSolidness ? (
-                    <Box
-                      className={scrollPinned ? "solidness-sticky" : undefined}
-                      style={{
-                        position: "sticky",
-                        top: 0,
-                        zIndex: 20,
-                        ...(scrollPinned
-                          ? {}
-                          : { background: "transparent" }),
-                      }}
-                    >
+                    <>
+                      <Box ref={solidnessSentinelRef} h={1} aria-hidden style={{ pointerEvents: "none" }} />
                       <SolidnessPanel
                         confidence={confidence}
                         iteration={parsed.iteration}
@@ -539,11 +560,8 @@ export default function App() {
                         targetScore={targetScore}
                         thresholds={modeThresholds}
                         running={running}
-                        compact={scrollPinned}
-                        expanded={solidnessExpanded}
-                        onToggleExpand={() => setSolidnessExpanded((value) => !value)}
                       />
-                    </Box>
+                    </>
                   ) : null}
 
                   {activeSession?.objective ? (

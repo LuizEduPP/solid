@@ -31,7 +31,7 @@ body {
   background: var(--mantine-color-body);
   border-bottom: 1px solid var(--solid-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  min-height: 3.25rem;
+  contain: layout style paint;
 }
 
 /* RGB border ring on input while research is running */
