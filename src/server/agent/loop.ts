@@ -132,8 +132,20 @@ function collectOpenGaps(run: AgentRun): string[] {
   return run.iterations.at(-1)?.gaps ?? [];
 }
 
-function event(kind: "status" | "synthesis" | "score" | "report", content: string): string {
+function event(kind: "status" | "synthesis" | "score" | "report" | "iter", content: string): string {
   return `@@${kind.toUpperCase()}@@\n${content}\n\n`;
+}
+
+function eventIteration(record: {
+  number: number;
+  angle: string;
+  score: number;
+  scoreDelta: string;
+  findings: string;
+  synthesis: string;
+  scoreReasoning: string;
+}): string {
+  return event("iter", JSON.stringify(record));
 }
 
 function extractMessageContent(
@@ -323,7 +335,15 @@ export class DeepSearchAgent {
       agentRun.cumulativeSynthesis = analysis.cumulative_synthesis;
       agentRun.currentScore = score;
 
-      yield event("synthesis", analysis.cumulative_synthesis);
+      yield eventIteration({
+        number: iteration,
+        angle,
+        score,
+        scoreDelta: analysis.score_delta,
+        findings: analysis.iteration_findings,
+        synthesis: analysis.cumulative_synthesis,
+        scoreReasoning: analysis.score_reasoning,
+      });
       yield event("score", score.toFixed(2));
 
       if (score >= targetScore) {
