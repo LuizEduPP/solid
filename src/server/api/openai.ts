@@ -105,20 +105,38 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       return streamSSE(c, async (stream) => {
         let roleSent = false;
 
-        for await (const chunk of agent.run(objective, targetScore, maxIterations)) {
-          const delta: Record<string, string> = { content: chunk };
-          if (!roleSent) {
-            delta.role = "assistant";
-            roleSent = true;
-          }
+        try {
+          for await (const chunk of agent.run(objective, targetScore, maxIterations)) {
+            const delta: Record<string, string> = { content: chunk };
+            if (!roleSent) {
+              delta.role = "assistant";
+              roleSent = true;
+            }
 
+            await stream.writeSSE({
+              data: JSON.stringify({
+                id,
+                object: "chat.completion.chunk",
+                created,
+                model,
+                choices: [{ index: 0, delta }],
+              }),
+            });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Agent failed";
           await stream.writeSSE({
             data: JSON.stringify({
               id,
               object: "chat.completion.chunk",
               created,
               model,
-              choices: [{ index: 0, delta }],
+              choices: [
+                {
+                  index: 0,
+                  delta: { content: `\n\n❌ Erro: ${message}\n` },
+                },
+              ],
             }),
           });
         }

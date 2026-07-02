@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import type { AgentConfig } from "../config.js";
+import { parseJsonPayload } from "./json.js";
 import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM } from "./prompts.js";
 import {
   formatHits,
@@ -49,19 +50,30 @@ export function extractObjective(messages: Array<{ role: string; content: string
   throw new Error("No user message with objective found");
 }
 
-function parseJsonPayload(raw: string): Record<string, unknown> {
-  let text = raw.trim();
-  const fence = text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
-  if (fence) {
-    text = fence[1];
-  } else {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start !== -1 && end !== -1) {
-      text = text.slice(start, end + 1);
-    }
-  }
-  return JSON.parse(text) as Record<string, unknown>;
+function normalizePlan(payload: Record<string, unknown>): PlanPayload {
+  const queries = Array.isArray(payload.queries)
+    ? payload.queries.map(String).filter(Boolean)
+    : [];
+  return {
+    queries: queries.slice(0, 2),
+    angle: String(payload.angle ?? ""),
+  };
+}
+
+function normalizeAnalysis(payload: Record<string, unknown>): AnalysisPayload {
+  const gaps = Array.isArray(payload.gaps) ? payload.gaps.map(String) : [];
+  const score = Number(payload.score ?? payload.confidence ?? 0);
+  return {
+    findings: String(payload.findings ?? ""),
+    gaps,
+    score,
+    score_reasoning: String(
+      payload.score_reasoning ?? payload.scoreReasoning ?? "",
+    ),
+    next_variation: String(
+      payload.next_variation ?? payload.nextVariation ?? "",
+    ),
+  };
 }
 
 function formatHistory(run: AgentRun, includeFindings = false): string {
@@ -124,15 +136,35 @@ export class DeepSearchAgent {
     return content;
   }
 
+  private async chatJson(
+    system: string,
+    user: string,
+  ): Promise<Record<string, unknown>> {
+    let lastRaw = "";
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const prompt =
+        attempt === 0
+          ? user
+          : `${user}\n\nYour previous reply was invalid JSON:\n${lastRaw}\n\nReply with ONLY a valid JSON object. Use \\n for line breaks inside strings.`;
+
+      lastRaw = await this.chat(system, prompt);
+
+      try {
+        return parseJsonPayload(lastRaw);
+      } catch {
+        // retry with correction prompt
+      }
+    }
+
+    throw new Error("LLM returned invalid JSON after retries");
+  }
+
   private async plan(objective: string, run: AgentRun): Promise<PlanPayload> {
     const history = formatHistory(run);
     const user = `Objective:\n${objective}\n\nPrior iterations:\n${history || "(first iteration)"}`;
-    const raw = await this.chat(PLANNER_SYSTEM, user);
-    const payload = parseJsonPayload(raw);
-    return {
-      queries: (payload.queries as string[]) ?? [],
-      angle: String(payload.angle ?? ""),
-    };
+    const payload = await this.chatJson(PLANNER_SYSTEM, user);
+    return normalizePlan(payload);
   }
 
   private async analyze(
@@ -152,10 +184,11 @@ export class DeepSearchAgent {
       `Prior iterations:\n${history || "(none)"}\n\n` +
       `Web results this iteration:\n${evidence}`;
 
-    const raw = await this.chat(ANALYST_SYSTEM, user);
-    const payload = parseJsonPayload(raw) as unknown as AnalysisPayload;
-    const score = Number(payload.score);
-    payload.score = Math.max(this.settings.minScore, Math.min(100, score));
+    const payload = normalizeAnalysis(await this.chatJson(ANALYST_SYSTEM, user));
+    payload.score = Math.max(
+      this.settings.minScore,
+      Math.min(100, Number(payload.score) || 0),
+    );
     return payload;
   }
 
