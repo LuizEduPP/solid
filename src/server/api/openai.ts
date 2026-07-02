@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
-import { DeepSearchAgent, extractObjective } from "../agent/loop.js";
+import { SolidAgent, extractObjective } from "../agent/loop.js";
+import { MODE_THRESHOLDS } from "../agent/scoring.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "../config.js";
 
 const messageSchema = z.object({
@@ -11,12 +12,13 @@ const messageSchema = z.object({
 });
 
 const requestSchema = z.object({
-  model: z.string().default("deepsearch"),
+  model: z.string().default("solid"),
   messages: z.array(messageSchema).min(1),
   stream: z.boolean().default(false),
   temperature: z.number().optional(),
   target_score: z.number().min(0.01).max(100).optional(),
   min_score: z.number().min(0.01).max(100).optional(),
+  research_mode: z.enum(["rigorous", "fast"]).optional(),
   llm_api_key: z.string().optional().default(""),
   llm_base_url: z.string().min(1).optional(),
   llm_model: z.string().min(1).optional(),
@@ -40,13 +42,22 @@ function messageContent(
 }
 
 function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
+  const mode = body.research_mode ?? AGENT_DEFAULTS.mode;
   return {
     openaiApiKey: body.llm_api_key,
     openaiBaseUrl: body.llm_base_url ?? AGENT_DEFAULTS.openaiBaseUrl,
     model: body.llm_model ?? AGENT_DEFAULTS.model,
     minScore: body.min_score ?? AGENT_DEFAULTS.minScore,
     resultsPerQuery: AGENT_DEFAULTS.resultsPerQuery,
+    mode,
+    pagesPerIteration: AGENT_DEFAULTS.pagesPerIteration,
   };
+}
+
+function resolveTargetScore(body: z.infer<typeof requestSchema>): number {
+  const mode = body.research_mode ?? AGENT_DEFAULTS.mode;
+  const modeDefault = MODE_THRESHOLDS[mode].targetScore;
+  return body.target_score ?? modeDefault;
 }
 
 function completionId(): string {
@@ -109,9 +120,9 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       object: "list",
       data: [
         {
-          id: "deepsearch",
+          id: "solid",
           object: "model",
-          owned_by: "deepsearch",
+          owned_by: "solid",
         },
       ],
     }),
@@ -124,7 +135,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     }
 
     const body = parsed.data;
-    const targetScore = body.target_score ?? AGENT_DEFAULTS.targetScore;
+    const targetScore = resolveTargetScore(body);
     const agentConfig = buildAgentConfig(body);
 
     const messages = body.messages.map((message) => ({
@@ -142,10 +153,10 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       );
     }
 
-    const agent = new DeepSearchAgent(agentConfig);
+    const agent = new SolidAgent(agentConfig);
     const id = completionId();
     const created = Math.floor(Date.now() / 1000);
-    const model = body.model || "deepsearch";
+    const model = body.model || "solid";
 
     if (body.stream) {
       return streamSSE(c, async (stream) => {
@@ -180,7 +191,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
               choices: [
                 {
                   index: 0,
-                  delta: { content: `\n\n❌ Erro: ${message}\n` },
+                  delta: { content: `\n\n❌ Error: ${message}\n` },
                 },
               ],
             }),

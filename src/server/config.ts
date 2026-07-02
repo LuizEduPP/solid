@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+import type { ResearchMode } from "./agent/scoring.js";
+
 export interface ServerConfig {
   host: string;
   port: number;
@@ -11,14 +13,18 @@ export interface AgentConfig {
   model: string;
   minScore: number;
   resultsPerQuery: number;
+  mode: ResearchMode;
+  pagesPerIteration: number;
 }
 
 export const AGENT_DEFAULTS = {
   openaiBaseUrl: "https://api.openai.com/v1",
   model: "gpt-4o-mini",
   minScore: 0.01,
-  resultsPerQuery: 5,
+  resultsPerQuery: 8,
   targetScore: 100,
+  mode: "rigorous" as ResearchMode,
+  pagesPerIteration: 3,
 } as const;
 
 export function loadServerConfig(): ServerConfig {

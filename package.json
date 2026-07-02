@@ -1,5 +1,5 @@
 {
-  "name": "deepsearch",
+  "name": "solid",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,8 @@
     "dev": "concurrently -n api,web -c blue,green \"tsx watch src/server/index.ts\" \"vite\"",
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "NODE_ENV=production node dist/server/index.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "test": "node --import tsx --test src/server/agent/scoring.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",

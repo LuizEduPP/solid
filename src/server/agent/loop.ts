@@ -4,6 +4,18 @@ import type { AgentConfig } from "../config.js";
 import { parseJsonPayload } from "./json.js";
 import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM } from "./prompts.js";
 import {
+  applyCumulativeScore,
+  canReachTargetScore,
+  computeEvidenceScore,
+  extractCitedUrls,
+  MODE_THRESHOLDS,
+  normalizeRubric,
+  rubricTotal,
+  uniqueDomainsAcrossHits,
+  type ScoreRubric,
+} from "./scoring.js";
+import { fetchPages } from "../search/fetch.js";
+import {
   formatHits,
   searchWeb,
   type SearchHit,
@@ -14,13 +26,17 @@ export interface IterationRecord {
   angle: string;
   queries: string[];
   hits: SearchHit[];
+  fetchedPages: Array<{ url: string; text: string }>;
   iterationFindings: string;
   cumulativeSynthesis: string;
   resolvedGaps: string[];
   gaps: string[];
+  citedUrls: string[];
+  rubric: ScoreRubric;
   score: number;
   scoreDelta: string;
   scoreReasoning: string;
+  disconfirming: boolean;
   nextVariation: string;
 }
 
@@ -30,11 +46,15 @@ export interface AgentRun {
   cumulativeSynthesis: string;
   currentScore: number | null;
   iterations: IterationRecord[];
+  allHits: SearchHit[];
+  fetchedUrlCache: Set<string>;
+  hadDisconfirmingSearch: boolean;
 }
 
 interface PlanPayload {
   queries: string[];
   angle: string;
+  disconfirming: boolean;
 }
 
 interface AnalysisPayload {
@@ -42,6 +62,8 @@ interface AnalysisPayload {
   cumulative_synthesis: string;
   resolved_gaps?: string[];
   open_gaps?: string[];
+  cited_urls?: string[];
+  score_rubric: ScoreRubric;
   score: number;
   score_delta: string;
   score_reasoning: string;
@@ -68,10 +90,14 @@ function normalizePlan(payload: Record<string, unknown>): PlanPayload {
   return {
     queries: queries.slice(0, 2),
     angle: String(payload.angle ?? ""),
+    disconfirming: Boolean(payload.disconfirming),
   };
 }
 
-function normalizeAnalysis(payload: Record<string, unknown>): AnalysisPayload {
+function normalizeAnalysis(
+  payload: Record<string, unknown>,
+  knownUrls: string[],
+): AnalysisPayload {
   const resolvedGaps = Array.isArray(payload.resolved_gaps)
     ? payload.resolved_gaps.map(String)
     : [];
@@ -84,14 +110,30 @@ function normalizeAnalysis(payload: Record<string, unknown>): AnalysisPayload {
   const synthesis = String(
     payload.cumulative_synthesis ?? payload.cumulativeSynthesis ?? payload.findings ?? "",
   );
+  const findings = String(
+    payload.iteration_findings ?? payload.iterationFindings ?? synthesis,
+  );
+
+  const citedFromPayload = Array.isArray(payload.cited_urls)
+    ? payload.cited_urls.map(String)
+    : [];
+  const cited_urls = [
+    ...new Set([
+      ...citedFromPayload,
+      ...extractCitedUrls(findings, knownUrls),
+      ...extractCitedUrls(synthesis, knownUrls),
+    ]),
+  ];
 
   return {
-    iteration_findings: String(
-      payload.iteration_findings ?? payload.iterationFindings ?? synthesis,
-    ),
+    iteration_findings: findings,
     cumulative_synthesis: synthesis,
     resolved_gaps: resolvedGaps,
     open_gaps: openGaps,
+    cited_urls,
+    score_rubric: normalizeRubric(
+      payload.score_rubric as Partial<ScoreRubric> | undefined,
+    ),
     score: Number(payload.score ?? payload.confidence ?? 0),
     score_delta: String(payload.score_delta ?? payload.scoreDelta ?? ""),
     score_reasoning: String(
@@ -106,24 +148,6 @@ function normalizeAnalysis(payload: Record<string, unknown>): AnalysisPayload {
   };
 }
 
-function clampScore(value: number, minScore: number): number {
-  return Math.max(minScore, Math.min(100, value));
-}
-
-function applyCumulativeScore(
-  previous: number | null,
-  proposed: number,
-  contradictionFound: boolean,
-  minScore: number,
-): number {
-  const next = clampScore(proposed, minScore);
-  if (previous === null) return next;
-  if (next >= previous) return next;
-
-  const maxDrop = contradictionFound ? 15 : 5;
-  return Math.max(next, previous - maxDrop);
-}
-
 function collectPriorQueries(run: AgentRun): string[] {
   return run.iterations.flatMap((record) => record.queries);
 }
@@ -132,7 +156,7 @@ function collectOpenGaps(run: AgentRun): string[] {
   return run.iterations.at(-1)?.gaps ?? [];
 }
 
-function event(kind: "status" | "synthesis" | "score" | "report" | "iter", content: string): string {
+function event(kind: "status" | "score" | "report" | "iter" | "rubric", content: string): string {
   return `@@${kind.toUpperCase()}@@\n${content}\n\n`;
 }
 
@@ -144,6 +168,10 @@ function eventIteration(record: {
   findings: string;
   synthesis: string;
   scoreReasoning: string;
+  rubric: ScoreRubric;
+  citedUrls: string[];
+  sources: SearchHit[];
+  disconfirming: boolean;
 }): string {
   return event("iter", JSON.stringify(record));
 }
@@ -166,11 +194,50 @@ function extractMessageContent(
   }
 
   throw new Error(
-    "Modelo retornou resposta vazia — desative reasoning no LM Studio ou use outro modelo",
+    "Model returned empty content — disable reasoning in LM Studio or use another model",
   );
 }
 
-export class DeepSearchAgent {
+function finalizeScore(
+  run: AgentRun,
+  analysis: AnalysisPayload,
+  iteration: number,
+  settings: AgentConfig,
+): number {
+  const thresholds = MODE_THRESHOLDS[settings.mode];
+  const rubric = analysis.score_rubric;
+  const isFirstIteration = iteration === 1;
+
+  let score = applyCumulativeScore(run.currentScore, analysis.score, rubric, {
+    contradictionFound: Boolean(analysis.contradiction_found),
+    minScore: settings.minScore,
+    maxDelta: thresholds.maxScoreDelta,
+    firstIterationCap: thresholds.firstIterationCap,
+    isFirstIteration,
+  });
+
+  const uniqueDomains = uniqueDomainsAcrossHits(run.allHits).length;
+  const evidenceScore = computeEvidenceScore(
+    uniqueDomains,
+    analysis.cited_urls?.length ?? 0,
+    iteration,
+    analysis.open_gaps?.length ?? 0,
+  );
+
+  score = Math.min(score, evidenceScore + 8);
+
+  if ((analysis.open_gaps?.length ?? 0) > 0) {
+    score = Math.min(score, 94);
+  }
+
+  if (score > 90 && (analysis.cited_urls?.length ?? 0) < 2) {
+    score = Math.min(score, 90);
+  }
+
+  return score;
+}
+
+export class SolidAgent {
   private readonly client: OpenAI;
   private readonly settings: AgentConfig;
 
@@ -192,8 +259,7 @@ export class DeepSearchAgent {
       temperature: 0.3,
     });
 
-    const content = extractMessageContent(response.choices[0]!.message);
-    return content;
+    return extractMessageContent(response.choices[0]!.message);
   }
 
   private async chatJson(
@@ -213,7 +279,7 @@ export class DeepSearchAgent {
       try {
         return parseJsonPayload(lastRaw);
       } catch {
-        // retry with correction prompt
+        // retry
       }
     }
 
@@ -221,18 +287,25 @@ export class DeepSearchAgent {
   }
 
   private async plan(objective: string, run: AgentRun): Promise<PlanPayload> {
+    const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const priorQueries = collectPriorQueries(run);
     const openGaps = collectOpenGaps(run);
+    const requireDisconfirm =
+      (run.currentScore ?? 0) >= thresholds.disconfirmThreshold &&
+      !run.hadDisconfirmingSearch;
 
     const user =
       `Objective:\n${objective}\n\n` +
-      `Current cumulative confidence: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
+      `Current cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
+      `Disconfirming search REQUIRED this round: ${requireDisconfirm ? "YES — you MUST set disconfirming: true" : "no"}\n\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(first iteration)"}\n\n` +
       `Open gaps:\n${openGaps.length ? openGaps.map((gap) => `- ${gap}`).join("\n") : "(none yet)"}\n\n` +
       `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
 
     const payload = await this.chatJson(PLANNER_SYSTEM, user);
-    return normalizePlan(payload);
+    const plan = normalizePlan(payload);
+    if (requireDisconfirm) plan.disconfirming = true;
+    return plan;
   }
 
   private async analyze(
@@ -240,32 +313,40 @@ export class DeepSearchAgent {
     run: AgentRun,
     angle: string,
     queryResults: Array<[string, SearchHit[]]>,
+    fetchedPages: Array<{ url: string; text: string }>,
   ): Promise<AnalysisPayload> {
-    const evidence = queryResults
-      .map(([query, hits]) => `Query: ${query}\n${formatHits(hits)}`)
-      .join("\n\n");
+    const hits = queryResults.flatMap(([, queryHits]) => queryHits);
+    const knownUrls = [...hits.map((hit) => hit.url), ...fetchedPages.map((p) => p.url)];
+
+    const evidence =
+      queryResults
+        .map(([query, queryHits]) => `Query: ${query}\n${formatHits(queryHits)}`)
+        .join("\n\n") +
+      (fetchedPages.length
+        ? `\n\nFetched page excerpts:\n${fetchedPages
+            .map(
+              (page) =>
+                `URL: ${page.url}\nExcerpt: ${page.text.slice(0, 1200)}`,
+            )
+            .join("\n\n")}`
+        : "");
 
     const user =
       `Objective:\n${objective}\n\n` +
-      `Previous cumulative confidence: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
+      `Previous cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
+      `Unique domains seen so far: ${uniqueDomainsAcrossHits(run.allHits).length}\n\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(none)"}\n\n` +
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
 
-    const payload = normalizeAnalysis(await this.chatJson(ANALYST_SYSTEM, user));
-    payload.score = applyCumulativeScore(
-      run.currentScore,
-      payload.score,
-      Boolean(payload.contradiction_found),
-      this.settings.minScore,
-    );
+    const payload = normalizeAnalysis(await this.chatJson(ANALYST_SYSTEM, user), knownUrls);
     return payload;
   }
 
   private async finalReport(objective: string, run: AgentRun): Promise<string> {
     const user =
       `Objective:\n${objective}\n\n` +
-      `Final cumulative confidence: ${run.currentScore?.toFixed(2) ?? "0.00"}%\n\n` +
+      `Final cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "0.00"}%\n\n` +
       `Cumulative synthesis:\n${run.cumulativeSynthesis}\n\n` +
       `Remaining gaps:\n${collectOpenGaps(run).map((gap) => `- ${gap}`).join("\n") || "(none)"}`;
     return this.chat(FINAL_SYSTEM, user);
@@ -275,15 +356,21 @@ export class DeepSearchAgent {
     objective: string,
     targetScore: number,
   ): AsyncGenerator<string> {
+    const thresholds = MODE_THRESHOLDS[this.settings.mode];
+    const effectiveTarget = Math.min(targetScore, thresholds.targetScore);
+
     const agentRun: AgentRun = {
       objective,
-      targetScore,
+      targetScore: effectiveTarget,
       cumulativeSynthesis: "",
       currentScore: null,
       iterations: [],
+      allHits: [],
+      fetchedUrlCache: new Set<string>(),
+      hadDisconfirmingSearch: false,
     };
 
-    yield event("status", "Pesquisa iniciada");
+    yield event("status", "Research started");
 
     let iteration = 0;
     while (true) {
@@ -294,7 +381,7 @@ export class DeepSearchAgent {
 
       yield event(
         "status",
-        `Iteração ${iteration} · ${angle}`,
+        `Iteration ${iteration} · ${angle}${plan.disconfirming ? " · disconfirmation" : ""}`,
       );
 
       const queryResults: Array<[string, SearchHit[]]> = [];
@@ -304,31 +391,75 @@ export class DeepSearchAgent {
         const result = await searchWeb(query, this.settings.resultsPerQuery);
 
         if (result.error) {
-          yield event("status", `Busca falhou: ${query}`);
+          yield event("status", `Search failed: ${query}`);
         }
 
         queryResults.push([query, result.hits]);
         totalHits += result.hits.length;
+        agentRun.allHits.push(...result.hits);
       }
 
-      yield event("status", `${totalHits} resultados · analisando`);
-
-      const analysis = await this.analyze(objective, agentRun, angle, queryResults);
       const hits = queryResults.flatMap(([, queryHits]) => queryHits);
-      const score = Number(analysis.score);
+      const fetchCandidates = hits.map((hit) => hit.url);
+      const fetchedPages = await fetchPages(
+        fetchCandidates,
+        this.settings.pagesPerIteration,
+        agentRun.fetchedUrlCache,
+      );
+
+      if (fetchedPages.length > 0) {
+        yield event("status", `${fetchedPages.length} page(s) fetched`);
+      }
+
+      yield event("status", `${totalHits} results · analyzing`);
+
+      const analysis = await this.analyze(
+        objective,
+        agentRun,
+        angle,
+        queryResults,
+        fetchedPages,
+      );
+
+      if (plan.disconfirming) {
+        agentRun.hadDisconfirmingSearch = true;
+      }
+
+      const rubric = analysis.score_rubric;
+      let score = finalizeScore(agentRun, analysis, iteration, this.settings);
+
+      const gate = canReachTargetScore({
+        score,
+        targetScore: effectiveTarget,
+        openGaps: analysis.open_gaps ?? [],
+        iteration,
+        thresholds,
+        uniqueDomainCount: uniqueDomainsAcrossHits(agentRun.allHits).length,
+        hadDisconfirmingSearch: agentRun.hadDisconfirmingSearch,
+      });
+
+      if (score >= effectiveTarget && !gate.allowed) {
+        score = Math.min(score, effectiveTarget - 1);
+        yield event("status", `Score capped: ${gate.reason}`);
+        analysis.should_continue = true;
+      }
 
       const record: IterationRecord = {
         number: iteration,
         angle,
         queries,
         hits,
+        fetchedPages,
         iterationFindings: analysis.iteration_findings,
         cumulativeSynthesis: analysis.cumulative_synthesis,
         resolvedGaps: (analysis.resolved_gaps ?? []).map(String),
         gaps: (analysis.open_gaps ?? []).map(String),
+        citedUrls: analysis.cited_urls ?? [],
+        rubric,
         score,
         scoreDelta: analysis.score_delta,
         scoreReasoning: analysis.score_reasoning,
+        disconfirming: plan.disconfirming,
         nextVariation: String(analysis.next_variation ?? ""),
       };
       agentRun.iterations.push(record);
@@ -343,25 +474,35 @@ export class DeepSearchAgent {
         findings: analysis.iteration_findings,
         synthesis: analysis.cumulative_synthesis,
         scoreReasoning: analysis.score_reasoning,
+        rubric,
+        citedUrls: analysis.cited_urls ?? [],
+        sources: hits.slice(0, 6),
+        disconfirming: plan.disconfirming,
       });
+      yield event("rubric", JSON.stringify({ iteration, rubric, total: rubricTotal(rubric) }));
       yield event("score", score.toFixed(2));
 
-      if (score >= targetScore) {
-        yield event("status", "Meta de 100% atingida");
+      if (score >= effectiveTarget && gate.allowed) {
+        yield event("status", `Target ${effectiveTarget}% reached`);
         break;
       }
 
       if (!analysis.should_continue) {
         yield event(
           "status",
-          analysis.stop_reason || "IA encerrou — retorno decrescente nas buscas",
+          analysis.stop_reason || "Model stopped — diminishing returns from search",
         );
         break;
       }
     }
 
-    yield event("status", "Gerando relatório final...");
+    yield event("status", "Generating final report...");
     const report = await this.finalReport(objective, agentRun);
     yield event("report", report);
   }
 }
+
+/** @deprecated Use SolidAgent */
+export const RigorAgent = SolidAgent;
+/** @deprecated Use SolidAgent */
+export const DeepSearchAgent = SolidAgent;

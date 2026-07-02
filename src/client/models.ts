@@ -19,7 +19,7 @@ export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
     throw new Error(
       typeof payload?.error === "string"
         ? payload.error
-        : `Falha ao listar modelos (${response.status})`,
+        : `Failed to list models (${response.status})`,
     );
   }
 

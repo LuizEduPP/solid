@@ -48,8 +48,48 @@
 
 .history-scroll {
   flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding: 0 0.25rem 1rem;
+  padding: 0 0.25rem 0.5rem;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding: 0 0.25rem 0.15rem;
+}
+
+.sidebar-config-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-config-btn:hover,
+.sidebar-config-btn.active {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--border) 70%, var(--text-muted));
+}
+
+.config-sheet.sidebar-config {
+  grid-template-columns: 1fr;
+  margin-bottom: 0;
+  max-height: min(52vh, 28rem);
+  overflow: auto;
 }
 
 .history-group {
@@ -166,24 +206,88 @@
   background: var(--bg);
 }
 
-.thread-header {
+.chat-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.log-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: var(--log-sidebar);
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.log-sidebar-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  min-height: 3.25rem;
-  padding: 0 1.5rem;
+  gap: 0.5rem;
+  padding: 1rem 0.85rem 0.65rem;
   border-bottom: 1px solid var(--border);
 }
 
-.thread-header h1 {
+.log-sidebar-head h2 {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 500;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.log-count {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.log-sidebar-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 0.65rem 0.75rem 1rem;
+}
+
+.log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.log-list li {
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.55rem;
+  background: var(--bg-elevated);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.log-list li.active {
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px rgba(32, 184, 205, 0.22);
+}
+
+.thread-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 2.75rem;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .thread-header-actions {
@@ -220,8 +324,8 @@
 
 .thread-scroll {
   flex: 1;
+  min-width: 0;
   overflow: auto;
-  min-height: 0;
 }
 
 .thread-column {
@@ -259,36 +363,14 @@
   font-weight: 500;
 }
 
-.steps-panel {
-  margin-bottom: 1.25rem;
-  padding: 0.65rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 0.65rem;
-  background: var(--bg-elevated);
-}
-
-.steps-panel summary {
-  cursor: pointer;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-}
-
-.steps-panel pre {
-  margin: 0.75rem 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
 
 .answer-block {
   margin-bottom: 2rem;
 }
 
 .answer-block.final-answer {
-  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
 
@@ -418,13 +500,90 @@
 
 .config-sheet {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
   margin-bottom: 0.65rem;
   padding: 0.85rem;
   border: 1px solid var(--border);
   border-radius: 0.85rem;
   background: var(--bg-elevated);
+}
+
+.rubric-panel {
+  padding: 0.65rem 1.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rubric-bars {
+  max-width: var(--column);
+  margin: 0 auto;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.rubric-row {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr 1.75rem;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.rubric-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.rubric-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.rubric-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.weak-badge {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--danger);
+}
+
+.sources-block {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.sources-block h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sources-block ul {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.8125rem;
+}
+
+.sources-block a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.sources-block a:hover {
+  text-decoration: underline;
 }
 
 .field {
@@ -525,6 +684,16 @@
   color: var(--text);
 }
 
+.ask-action.mode-toggle.active {
+  background: var(--fast-dim);
+  color: var(--fast);
+}
+
+.ask-action.mode-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .ask-submit {
   background: var(--text);
   color: var(--bg);
@@ -570,6 +739,17 @@
   .main-shell {
     height: auto;
     min-height: calc(100vh - 240px);
+  }
+
+  .chat-body {
+    flex-direction: column;
+  }
+
+  .log-sidebar {
+    width: 100%;
+    max-height: 220px;
+    border-left: 0;
+    border-top: 1px solid var(--border);
   }
 
   .home-hero {

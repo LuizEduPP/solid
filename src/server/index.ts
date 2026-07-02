@@ -32,11 +32,11 @@ if (isProduction) {
 } else {
   app.get("/", (c) =>
     c.html(`<!doctype html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DeepSearch</title>
+    <title>Solid</title>
     <style>
       body { font-family: system-ui, sans-serif; background: #0b1020; color: #e8edf8; display: grid; place-items: center; min-height: 100vh; margin: 0; }
       main { max-width: 36rem; padding: 2rem; text-align: center; }
@@ -46,9 +46,9 @@ if (isProduction) {
   </head>
   <body>
     <main>
-      <h1>DeepSearch API</h1>
-      <p>Em desenvolvimento, abra a interface em <a href="http://localhost:5173">http://localhost:5173</a>.</p>
-      <p>API em <code>http://localhost:${server.port}</code></p>
+      <h1>Solid API</h1>
+      <p>In development, open the UI at <a href="http://localhost:5173">http://localhost:5173</a>.</p>
+      <p>API at <code>http://localhost:${server.port}</code></p>
     </main>
   </body>
 </html>`),
@@ -62,7 +62,7 @@ serve(
     port: server.port,
   },
   (info) => {
-    console.log(`DeepSearch API on http://${info.address}:${info.port}`);
+    console.log(`Solid API on http://${info.address}:${info.port}`);
     if (!isProduction) {
       console.log("Web UI on http://localhost:5173");
     }

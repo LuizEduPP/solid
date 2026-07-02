@@ -1,103 +1,65 @@
-# DeepSearch
+# Solid
 
-Agente de pesquisa iterativa com interface web. Recebe um objetivo, busca na web em várias rodadas, revalida a ideia sob ângulos diferentes e converge para um score de confiança de **0,01% a 100%**.
+Iterative web research agent with evidence scoring. Validates ideas step by step with a **solidness** score (not optimistic confidence).
+
+The agent responds in the user's language; the app UI supports multiple languages (default: English).
+
+## UI languages
+
+English (default), Español, Português (Brasil), Português (Portugal), Français, Deutsch, Italiano — change in **Settings → Language**.
 
 ## Stack
 
 - TypeScript + Node.js
 - Hono (API) + React (UI)
-- Qualquer LLM compatível com OpenAI (OpenAI, Ollama, vLLM, etc.)
-- DuckDuckGo para busca web
+- OpenAI-compatible LLM (OpenAI, LM Studio, Ollama, vLLM)
+- DuckDuckGo + page fetch for primary evidence
 
 ## Setup
 
 ```bash
-cd projects/027-deep-search
 yarn install
-```
-
-Opcional: copie `.env.example` para `.env` se quiser mudar a porta do servidor.
-
-## Rodar
-
-### Desenvolvimento
-
-```bash
 yarn dev
 ```
 
-- Interface web: [http://localhost:5173](http://localhost:5173)
+- UI: [http://localhost:5173](http://localhost:5173)
 - API: [http://localhost:8787](http://localhost:8787)
 
-### Produção
+## Modes
 
-```bash
-yarn build
-yarn start
-```
+| Mode | Target | Min. iterations | Domains for 100% |
+|------|--------|-----------------|------------------|
+| **Rigorous** | 100% | 6 | 5 + disconfirmation |
+| **Fast** | 85% | 3 | 3 + disconfirmation |
 
-Abra [http://localhost:8787](http://localhost:8787) — interface e API no mesmo servidor.
+## Scoring
 
-## Interface web
+- Rubric 0–25 across 4 dimensions: evidence, sources, gaps, risks
+- Per-iteration score increase cap
+- Hybrid score with objective evidence (domains, citations, gaps)
+- 100% blocked while open gaps remain
+- Mandatory **disconfirmation** round above threshold
 
-Todas as configurações ficam na própria interface (salvas no navegador):
-
-1. **API key**, **base URL** e **modelo** do LLM (botão Config)
-2. **Objetivo** da pesquisa
-
-A meta é sempre **100%** de confiança. A IA decide a cada iteração se continua pesquisando ou encerra — com base no score e na qualidade das evidências, não em um limite fixo de rodadas.
-
-### Exemplo com Ollama
-
-| Campo | Valor |
-|---|---|
-| API key | `ollama` |
-| Base URL | `http://localhost:11434/v1` |
-| Modelo | `llama3.2` |
-
-## API (OpenAI-compatible)
-
-| Endpoint | Descrição |
-|---|---|
-| `GET /health` | Health check |
-| `GET /v1/models` | Lista o modelo `deepsearch` |
-| `POST /v1/chat/completions` | Executa o agente de pesquisa |
-
-### Campos extras no request
-
-| Campo | Obrigatório | Descrição |
-|---|---|---|
-| `llm_api_key` | sim | Chave do provedor LLM |
-| `llm_base_url` | não | Padrão: `https://api.openai.com/v1` |
-| `llm_model` | não | Padrão: `gpt-4o-mini` |
-| `target_score` | não | Padrão: `100` |
-
-### Exemplo curl (streaming)
+## API
 
 ```bash
 curl -N http://localhost:8787/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "deepsearch",
+    "model": "solid",
     "stream": true,
-    "llm_api_key": "ollama",
-    "llm_base_url": "http://localhost:11434/v1",
-    "llm_model": "llama3.2",
-    "messages": [
-      {"role": "user", "content": "Avaliar viabilidade de app de delivery só de marmitas fitness em Campinas"}
-    ]
+    "research_mode": "rigorous",
+    "llm_api_key": "",
+    "llm_base_url": "http://127.0.0.1:1234/v1",
+    "llm_model": "google/gemma-4-e4b",
+    "messages": [{"role": "user", "content": "Your question"}]
   }'
 ```
 
-## Como funciona
+## Tests
 
-1. Você envia o **objetivo** como mensagem do usuário.
-2. O agente planeja queries de busca com um ângulo diferente a cada iteração.
-3. Busca na web e sintetiza os achados.
-4. Atribui um **score de confiança** (0,01–100%) com justificativa.
-5. A **IA decide** se continua ou encerra (`should_continue`), com base no score e nas lacunas pesquisáveis.
-6. Retorna um relatório final baseado em evidências.
-
-## License
+```bash
+yarn test
+```
 
 MIT

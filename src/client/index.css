@@ -18,9 +18,12 @@
   --text-muted: #6e6e6e;
   --accent: #20b8cd;
   --accent-dim: rgba(32, 184, 205, 0.14);
+  --fast: #f59e0b;
+  --fast-dim: rgba(245, 158, 11, 0.16);
   --danger: #f87171;
   --column: 720px;
   --sidebar: 260px;
+  --log-sidebar: 280px;
 }
 
 * {
