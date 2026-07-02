@@ -66,7 +66,7 @@ export default function IterationCard({ iteration }: IterationCardProps) {
   const pages = mergedPageUrls(iteration.readUrls ?? [], iteration.sources ?? []);
 
   return (
-    <Paper p="md" radius="md" withBorder>
+    <Paper p="md" radius="md" className="glass-panel">
       <Group justify="space-between" mb="sm">
         <Text size="sm" fw={600}>
           {t("step")} {iteration.number}

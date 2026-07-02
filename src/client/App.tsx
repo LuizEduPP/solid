@@ -348,7 +348,7 @@ export default function App() {
       padding={0}
       styles={{ main: { display: "flex", flexDirection: "column", height: "100dvh" } }}
     >
-      <AppShell.Navbar p="sm" withBorder style={{ display: "flex", flexDirection: "column" }}>
+      <AppShell.Navbar p="sm" withBorder className="glass-navbar" style={{ display: "flex", flexDirection: "column" }}>
         <Title order={4} px="xs" mb="sm">
           solid
         </Title>
@@ -482,17 +482,14 @@ export default function App() {
                 <Stack gap="lg">
                   {showSolidness ? (
                     <Box
+                      className={scrollPinned ? "glass-sticky" : undefined}
                       style={{
                         position: "sticky",
                         top: 0,
                         zIndex: 20,
-                        background: "var(--mantine-color-body)",
                         ...(scrollPinned
-                          ? {
-                              borderBottom: "1px solid var(--mantine-color-dark-4)",
-                              boxShadow: "0 6px 16px rgba(0, 0, 0, 0.28)",
-                            }
-                          : {}),
+                          ? {}
+                          : { background: "transparent" }),
                       }}
                     >
                       <SolidnessPanel
@@ -511,7 +508,7 @@ export default function App() {
                   ) : null}
 
                   {activeSession?.objective ? (
-                    <Paper p="md" radius="md" bg="dark.6">
+                    <Paper p="md" radius="md" className="glass-panel-subtle">
                       <Text>{activeSession.objective}</Text>
                     </Paper>
                   ) : null}
@@ -530,7 +527,7 @@ export default function App() {
                   ) : null}
 
                   {parsed.report ? (
-                    <Paper p="md" radius="md" withBorder>
+                    <Paper p="md" radius="md" className="glass-panel">
                       <Text size="sm" fw={600} mb="sm">
                         {t("answer")}
                       </Text>
@@ -565,10 +562,11 @@ export default function App() {
                   color="dark.5"
                   radius="xl"
                   size="lg"
+                  className="glass-scroll-btn"
                   aria-label={t("scrollToBottom")}
                   title={t("scrollToBottom")}
                   onClick={resumeAutoScroll}
-                  style={{ pointerEvents: "auto", boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)" }}
+                  style={{ pointerEvents: "auto" }}
                 >
                   <ArrowDown size={18} />
                 </ActionIcon>
@@ -605,14 +603,18 @@ export default function App() {
                 ) : null}
               </Group>
             ) : null}
-            <Paper
-              component="form"
-              onSubmit={handleSubmit}
-              radius="xl"
-              p="xs"
-              withBorder
-              style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem" }}
+            <Box
+              className={`chat-input-rgb-wrap${isActiveRunning ? " chat-input-rgb-wrap--active" : ""}`}
             >
+              <Paper
+                component="form"
+                onSubmit={handleSubmit}
+                radius="xl"
+                p="xs"
+                withBorder={false}
+                className="glass-panel chat-input-form"
+                style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem" }}
+              >
               <ActionIcon
                 variant={settings.mode === "fast" ? "light" : "subtle"}
                 color={settings.mode === "fast" ? "yellow" : "gray"}
@@ -670,7 +672,8 @@ export default function App() {
                   <ArrowUp size={18} />
                 </ActionIcon>
               )}
-            </Paper>
+              </Paper>
+            </Box>
         </ChatColumn>
       </AppShell.Main>
     </AppShell>

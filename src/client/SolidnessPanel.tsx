@@ -259,7 +259,7 @@ export default function SolidnessPanel({
 
   if (compact && !expanded) {
     return (
-      <Paper p="xs" radius="md" withBorder bg="dark.7" w="100%">
+      <Paper p="xs" radius="md" withBorder={false} className="glass-panel" w="100%">
         <Group justify="space-between" wrap="nowrap" gap="xs">
           <Group gap="sm" wrap="nowrap" flex={1} miw={0}>
             <Box style={{ flexShrink: 0, lineHeight: 0 }}>{ring(52, 5, false)}</Box>
@@ -284,8 +284,8 @@ export default function SolidnessPanel({
     <Paper
       p={compact ? "sm" : "md"}
       radius="md"
-      withBorder
-      bg="dark.7"
+      withBorder={false}
+      className="glass-panel"
       w="100%"
       style={
         compact && expanded
