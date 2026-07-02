@@ -14,9 +14,12 @@ export interface IterationRecord {
   angle: string;
   queries: string[];
   hits: SearchHit[];
-  findings: string;
+  iterationFindings: string;
+  cumulativeSynthesis: string;
+  resolvedGaps: string[];
   gaps: string[];
   score: number;
+  scoreDelta: string;
   scoreReasoning: string;
   nextVariation: string;
 }
@@ -24,6 +27,8 @@ export interface IterationRecord {
 export interface AgentRun {
   objective: string;
   targetScore: number;
+  cumulativeSynthesis: string;
+  currentScore: number | null;
   iterations: IterationRecord[];
 }
 
@@ -33,10 +38,14 @@ interface PlanPayload {
 }
 
 interface AnalysisPayload {
-  findings: string;
-  gaps?: string[];
+  iteration_findings: string;
+  cumulative_synthesis: string;
+  resolved_gaps?: string[];
+  open_gaps?: string[];
   score: number;
+  score_delta: string;
   score_reasoning: string;
+  contradiction_found?: boolean;
   next_variation?: string;
 }
 
@@ -61,37 +70,62 @@ function normalizePlan(payload: Record<string, unknown>): PlanPayload {
 }
 
 function normalizeAnalysis(payload: Record<string, unknown>): AnalysisPayload {
-  const gaps = Array.isArray(payload.gaps) ? payload.gaps.map(String) : [];
-  const score = Number(payload.score ?? payload.confidence ?? 0);
+  const resolvedGaps = Array.isArray(payload.resolved_gaps)
+    ? payload.resolved_gaps.map(String)
+    : [];
+  const openGaps = Array.isArray(payload.open_gaps)
+    ? payload.open_gaps.map(String)
+    : Array.isArray(payload.gaps)
+      ? payload.gaps.map(String)
+      : [];
+
+  const synthesis = String(
+    payload.cumulative_synthesis ?? payload.cumulativeSynthesis ?? payload.findings ?? "",
+  );
+
   return {
-    findings: String(payload.findings ?? ""),
-    gaps,
-    score,
+    iteration_findings: String(
+      payload.iteration_findings ?? payload.iterationFindings ?? synthesis,
+    ),
+    cumulative_synthesis: synthesis,
+    resolved_gaps: resolvedGaps,
+    open_gaps: openGaps,
+    score: Number(payload.score ?? payload.confidence ?? 0),
+    score_delta: String(payload.score_delta ?? payload.scoreDelta ?? ""),
     score_reasoning: String(
       payload.score_reasoning ?? payload.scoreReasoning ?? "",
     ),
+    contradiction_found: Boolean(payload.contradiction_found ?? payload.contradictionFound),
     next_variation: String(
       payload.next_variation ?? payload.nextVariation ?? "",
     ),
   };
 }
 
-function formatHistory(run: AgentRun, includeFindings = false): string {
-  if (run.iterations.length === 0) return "";
+function clampScore(value: number, minScore: number): number {
+  return Math.max(minScore, Math.min(100, value));
+}
 
-  return run.iterations
-    .map((record) => {
-      let block =
-        `Iteration ${record.number} | score ${record.score.toFixed(2)}%\n` +
-        `Angle: ${record.angle}\n` +
-        `Queries: ${record.queries.join(", ")}\n` +
-        `Reasoning: ${record.scoreReasoning}`;
-      if (includeFindings) {
-        block += `\nFindings: ${record.findings}`;
-      }
-      return block;
-    })
-    .join("\n\n");
+function applyCumulativeScore(
+  previous: number | null,
+  proposed: number,
+  contradictionFound: boolean,
+  minScore: number,
+): number {
+  const next = clampScore(proposed, minScore);
+  if (previous === null) return next;
+  if (next >= previous) return next;
+
+  const maxDrop = contradictionFound ? 15 : 5;
+  return Math.max(next, previous - maxDrop);
+}
+
+function collectPriorQueries(run: AgentRun): string[] {
+  return run.iterations.flatMap((record) => record.queries);
+}
+
+function collectOpenGaps(run: AgentRun): string[] {
+  return run.iterations.at(-1)?.gaps ?? [];
 }
 
 function event(kind: string, content: string): string {
@@ -101,6 +135,7 @@ function event(kind: string, content: string): string {
     plan: "📋",
     search: "🔍",
     search_done: "✅",
+    synthesis: "🧠",
     score: "📊",
     report: "📄",
   };
@@ -126,7 +161,7 @@ export class DeepSearchAgent {
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      temperature: 0.4,
+      temperature: 0.3,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -161,8 +196,16 @@ export class DeepSearchAgent {
   }
 
   private async plan(objective: string, run: AgentRun): Promise<PlanPayload> {
-    const history = formatHistory(run);
-    const user = `Objective:\n${objective}\n\nPrior iterations:\n${history || "(first iteration)"}`;
+    const priorQueries = collectPriorQueries(run);
+    const openGaps = collectOpenGaps(run);
+
+    const user =
+      `Objective:\n${objective}\n\n` +
+      `Current cumulative confidence: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
+      `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(first iteration)"}\n\n` +
+      `Open gaps:\n${openGaps.length ? openGaps.map((gap) => `- ${gap}`).join("\n") : "(none yet)"}\n\n` +
+      `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
+
     const payload = await this.chatJson(PLANNER_SYSTEM, user);
     return normalizePlan(payload);
   }
@@ -173,32 +216,33 @@ export class DeepSearchAgent {
     angle: string,
     queryResults: Array<[string, SearchHit[]]>,
   ): Promise<AnalysisPayload> {
-    const history = formatHistory(run);
     const evidence = queryResults
       .map(([query, hits]) => `Query: ${query}\n${formatHits(hits)}`)
       .join("\n\n");
 
     const user =
       `Objective:\n${objective}\n\n` +
+      `Previous cumulative confidence: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
+      `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(none)"}\n\n` +
       `Current angle: ${angle}\n\n` +
-      `Prior iterations:\n${history || "(none)"}\n\n` +
-      `Web results this iteration:\n${evidence}`;
+      `New web results this iteration:\n${evidence}`;
 
     const payload = normalizeAnalysis(await this.chatJson(ANALYST_SYSTEM, user));
-    payload.score = Math.max(
+    payload.score = applyCumulativeScore(
+      run.currentScore,
+      payload.score,
+      Boolean(payload.contradiction_found),
       this.settings.minScore,
-      Math.min(100, Number(payload.score) || 0),
     );
     return payload;
   }
 
   private async finalReport(objective: string, run: AgentRun): Promise<string> {
-    const history = formatHistory(run, true);
-    const latestScore = run.iterations.at(-1)?.score ?? 0;
     const user =
       `Objective:\n${objective}\n\n` +
-      `Target confidence reached: ${latestScore.toFixed(2)}%\n\n` +
-      `Research log:\n${history}`;
+      `Final cumulative confidence: ${run.currentScore?.toFixed(2) ?? "0.00"}%\n\n` +
+      `Cumulative synthesis:\n${run.cumulativeSynthesis}\n\n` +
+      `Remaining gaps:\n${collectOpenGaps(run).map((gap) => `- ${gap}`).join("\n") || "(none)"}`;
     return this.chat(FINAL_SYSTEM, user);
   }
 
@@ -210,41 +254,40 @@ export class DeepSearchAgent {
     const agentRun: AgentRun = {
       objective,
       targetScore,
+      cumulativeSynthesis: "",
+      currentScore: null,
       iterations: [],
     };
 
     yield event(
       "status",
-      `DeepSearch started — target: ${targetScore.toFixed(2)}%, max iterations: ${maxIterations}`,
+      `DeepSearch iniciado — meta: ${targetScore.toFixed(2)}%, máx. ${maxIterations} iterações`,
     );
 
     for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-      yield event("iteration", `--- Iteration ${iteration}/${maxIterations} ---`);
+      yield event("iteration", `--- Iteração ${iteration}/${maxIterations} ---`);
 
       const plan = await this.plan(objective, agentRun);
       const queries = plan.queries;
       const angle = plan.angle;
-      yield event("plan", `Angle: ${angle}\nQueries: ${queries.join(", ")}`);
+      yield event("plan", `Foco: ${angle}\nBuscas: ${queries.join(" · ")}`);
 
       const queryResults: Array<[string, SearchHit[]]> = [];
       let totalHits = 0;
 
       for (const query of queries) {
-        yield event("search", `Searching: ${query}`);
+        yield event("search", `Buscando: ${query}`);
         const result = await searchWeb(query, this.settings.resultsPerQuery);
 
         if (result.error) {
-          yield event(
-            "status",
-            `Busca indisponível para "${query}": ${result.error}`,
-          );
+          yield event("status", `Busca indisponível para "${query}": ${result.error}`);
         }
 
         queryResults.push([query, result.hits]);
         totalHits += result.hits.length;
       }
 
-      yield event("search_done", `Collected ${totalHits} results`);
+      yield event("search_done", `${totalHits} resultados coletados`);
 
       const analysis = await this.analyze(objective, agentRun, angle, queryResults);
       const hits = queryResults.flatMap(([, queryHits]) => queryHits);
@@ -255,46 +298,54 @@ export class DeepSearchAgent {
         angle,
         queries,
         hits,
-        findings: String(analysis.findings),
-        gaps: (analysis.gaps ?? []).map(String),
+        iterationFindings: analysis.iteration_findings,
+        cumulativeSynthesis: analysis.cumulative_synthesis,
+        resolvedGaps: (analysis.resolved_gaps ?? []).map(String),
+        gaps: (analysis.open_gaps ?? []).map(String),
         score,
-        scoreReasoning: String(analysis.score_reasoning),
+        scoreDelta: analysis.score_delta,
+        scoreReasoning: analysis.score_reasoning,
         nextVariation: String(analysis.next_variation ?? ""),
       };
       agentRun.iterations.push(record);
+      agentRun.cumulativeSynthesis = analysis.cumulative_synthesis;
+      agentRun.currentScore = score;
+
+      yield event(
+        "synthesis",
+        analysis.cumulative_synthesis,
+      );
 
       yield event(
         "score",
-        `Confidence: **${score.toFixed(2)}%** (target: ${targetScore.toFixed(2)}%)\n` +
-          `Reasoning: ${record.scoreReasoning}\n` +
-          `Gaps: ${record.gaps.join(", ") || "none"}`,
+        `Confiança acumulada: **${score.toFixed(2)}%** (meta: ${targetScore.toFixed(2)}%)\n` +
+          `Variação: ${analysis.score_delta || "n/a"}\n` +
+          `Novidades desta rodada: ${analysis.iteration_findings}\n` +
+          `Lacunas em aberto: ${record.gaps.join("; ") || "nenhuma"}`,
       );
 
       if (score >= targetScore) {
         yield event(
           "status",
-          `Target score reached at iteration ${iteration} (${score.toFixed(2)}%)`,
+          `Meta atingida na iteração ${iteration} (${score.toFixed(2)}%)`,
         );
         break;
       }
 
-      if (iteration < maxIterations) {
-        yield event(
-          "status",
-          `Below target — next variation: ${record.nextVariation}`,
-        );
+      if (iteration < maxIterations && record.nextVariation) {
+        yield event("status", `Próximo passo: ${record.nextVariation}`);
       }
     }
 
-    const latestScore = agentRun.iterations.at(-1)?.score ?? 0;
+    const latestScore = agentRun.currentScore ?? 0;
     if (agentRun.iterations.length === maxIterations && latestScore < targetScore) {
       yield event(
         "status",
-        `Max iterations reached — final score: ${latestScore.toFixed(2)}%`,
+        `Máximo de iterações atingido — confiança final: ${latestScore.toFixed(2)}%`,
       );
     }
 
-    yield event("status", "Generating final report...");
+    yield event("status", "Gerando relatório final unificado...");
     const report = await this.finalReport(objective, agentRun);
     yield event("report", report);
   }
