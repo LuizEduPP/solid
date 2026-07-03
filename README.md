@@ -18,7 +18,7 @@
 
 <p align="center">
   Plan → search → read → score → repeat until the evidence holds up.<br />
-  Self-hostable. Any OpenAI-compatible LLM. UI in 7 languages.
+  Follow up in the same thread. Self-hostable. Any OpenAI-compatible LLM. UI in 7 languages.
 </p>
 
 <p align="center">
@@ -48,20 +48,22 @@ You get a running **solidness score** (0–100) backed by a visible 4-part rubri
 | Source quality | Often opaque | Domains, citations, gaps tracked |
 | High scores | Easy to inflate | Capped with open gaps; disconfirmation required |
 | Output | One blob of text | Iterations, steps log, exportable markdown report |
+| Deepening | Start over | **Follow-up in the same session** with prior context |
 
 ---
 
 ## Features
 
-- **Evidence-first agent loop** — plans angles, searches DuckDuckGo, fetches page excerpts, updates a cumulative synthesis each iteration
-- **Solidness panel** — ring score + rubric breakdown (evidence, sources, gaps, risks) with weak/building/solid status
-- **Two research modes** — **Rigorous** (100% target) and **Fast** (85% target); toggle from the composer
-- **ChatGPT-style UI** — collapsible sidebar, session history, centered empty-state composer, sticky solidness bar, glass footer
-- **Streaming research** — live steps drawer, stop/cancel mid-run, scroll-aware solidness pin
-- **Bring your own LLM** — OpenAI, Ollama, LM Studio, or any `/v1` compatible endpoint
+- **Evidence-first agent loop** — plans angles, searches DuckDuckGo (lite + html backends), fetches page excerpts, updates a cumulative synthesis each iteration
+- **Solidness panel** — ring score + 4-part rubric (evidence, sources, gaps, risks) with weak / building / solid status
+- **Two research modes** — **Rigorous** (100% target) and **Fast** (85% target); toggle from the composer (⚡ icon)
+- **Follow-up in the same thread** — after a report, ask to deepen a point; prior score, synthesis, gaps, queries, and citations carry over
+- **ChatGPT-style UI** — collapsible sidebar (280px / 56px rail), session history, centered empty-state composer, sticky solidness bar, glass footer
+- **Streaming research** — live steps drawer, stop/cancel mid-run (abort signal), scroll-aware solidness pin
+- **Bring your own LLM** — OpenAI, Ollama, LM Studio, or any `/v1` compatible endpoint (default model: `gpt-4o-mini`, temperature `0.3`)
 - **OpenAI-compatible API** — drop-in `POST /v1/chat/completions` with `model: "solid"`
 - **7 UI languages** — English, Español, Português (BR/PT), Français, Deutsch, Italiano
-- **Local-first sessions** — history + settings in `localStorage`, markdown export
+- **Local-first sessions** — history (`solid-history`) + settings (`solid-settings`) in `localStorage`, markdown export per session
 
 ---
 
@@ -94,7 +96,11 @@ Open **Settings** in the sidebar:
 
 ### 2. Ask a question
 
-Type a research objective and hit **Research**. Watch iterations, rubric scores, and the final markdown report stream in.
+Type a research objective and submit. Watch iterations, rubric scores, and the final markdown report stream in.
+
+### 3. Follow up (optional)
+
+After a report finishes, stay in the same chat and ask something like *“deepen point X from the report”*. Solid continues from the prior synthesis, score, gaps, and sources instead of starting over.
 
 ### Production build
 
@@ -115,12 +121,16 @@ cp .env.example .env
 
 ## Research modes
 
-| Mode | Target score | Min. iterations | Domains for 100% | Disconfirmation |
-| --- | ---: | ---: | ---: | --- |
-| **Rigorous** | 100% | 6 | 5 unique domains | Required above 70% |
-| **Fast** | 85% | 3 | 3 unique domains | Required above 80% |
+Thresholds are defined in `src/shared.ts` (`MODE_THRESHOLDS`).
 
-Toggle modes with the lightning icon in the composer (saved in browser settings).
+| Mode | Target score | Min. iterations | Min. unique domains | Max score Δ / iter | 1st iteration cap | Disconfirm at ≥ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Rigorous** | 100% | 6 | 5 | 6 | 40% | 70% |
+| **Fast** | 85% | 3 | 3 | 12 | 55% | 80% |
+
+Toggle modes with the ⚡ icon in the composer (saved in browser settings).
+
+To reach the target score, **all** gates must pass: no open gaps, minimum iterations, minimum unique domains, and at least one disconfirming search round.
 
 ---
 
@@ -135,22 +145,26 @@ flowchart LR
   E --> F{Gates met?}
   F -->|No| B
   F -->|Yes| G[Final report]
+  G --> H[Follow-up?]
+  H -->|Yes| B
+  H -->|No| I[Done]
 ```
 
 Each iteration:
 
-1. **Plan** — new angle or disconfirmation query  
-2. **Search** — DuckDuckGo (lite + html backends, retries on rate limits)  
-3. **Read** — up to 3 pages per iteration (~3.5k chars each)  
-4. **Score** — hybrid solidness update with per-iteration caps and gap penalties  
-5. **Gate** — continue until mode thresholds pass or the model stops with diminishing returns  
+1. **Plan** — new angle or disconfirmation query (forced when score crosses the mode threshold and no disconfirming round yet)
+2. **Search** — DuckDuckGo via `@phukon/duckduckgo-search` (lite + html backends, 2.5s throttle, up to 5 retries on rate limits)
+3. **Read** — up to **3 pages** per iteration (~**3,500** chars each, 8s fetch timeout); **8** search hits per query
+4. **Score** — hybrid cumulative update (55% model / 45% rubric blend) with per-iteration caps, gap penalties, and domain caps
+5. **Gate** — continue until all mode thresholds pass **or** the analyst sets `should_continue: false`
 
 **Scoring highlights**
 
-- Rubric: 4 × 0–25 (direct evidence, source diversity, gap coverage, risk/contradiction)
-- Hybrid cumulative score blended with objective signals (domains, citations, open gaps)
-- 100% blocked while critical gaps remain open
-- High scores require ≥3 cited domains
+- Rubric: 4 × 0–25 (`direct_evidence`, `source_diversity`, `gap_coverage`, `risk_contradiction`)
+- Hybrid cumulative score blended with objective signals (unique domains, citations, iterations, open gaps)
+- Scores **>90** capped at **90** unless **≥3 cited domains** (`capScoreForCitedDomains`)
+- Scores capped at **94** while open gaps remain
+- Target score blocked while critical gaps remain, minimum iterations/domains are unmet, or disconfirmation is missing
 
 Agent reasoning and reports follow **the language of your question**. The app UI is translated separately via i18n.
 
@@ -158,7 +172,17 @@ Agent reasoning and reports follow **the language of your question**. The app UI
 
 ## API
 
-Streaming OpenAI-compatible endpoint:
+OpenAI-compatible routes under `/v1`:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/v1/chat/completions` | Run research (streaming or not) |
+| `POST` | `/v1/llm/models` | List models from your LLM provider |
+| `GET` | `/v1/models` | List Solid as a model (`solid`) |
+| `GET` | `/health` | Health check |
+| `GET` | `/favicons/:hostname` | Cached favicon for a source domain |
+
+### New research (streaming)
 
 ```bash
 curl -N http://localhost:8787/v1/chat/completions \
@@ -174,9 +198,48 @@ curl -N http://localhost:8787/v1/chat/completions \
   }'
 ```
 
-**Stream markers:** `@@STATUS@@` · `@@SCORE@@` · `@@ITER@@` · `@@RUBRIC@@` · `@@REPORT@@`
+### Follow-up in the same session
 
-**Other routes:** `POST /v1/llm/models` · `GET /health` · `GET /favicons/:hostname`
+Send the follow-up as the user message and include `prior_context` from the previous run:
+
+```bash
+curl -N http://localhost:8787/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "solid",
+    "stream": true,
+    "research_mode": "rigorous",
+    "llm_api_key": "",
+    "llm_base_url": "http://127.0.0.1:1234/v1",
+    "llm_model": "your-model-id",
+    "messages": [{"role": "user", "content": "Deepen the regulatory risks section"}],
+    "prior_context": {
+      "rootObjective": "What evidence supports X?",
+      "followUp": "Deepen the regulatory risks section",
+      "cumulativeSynthesis": "...",
+      "currentScore": 72.5,
+      "report": "...",
+      "openGaps": ["..."],
+      "priorQueries": ["..."],
+      "citedUrls": ["https://..."],
+      "uniqueDomainCount": 4,
+      "iterationCount": 3,
+      "hadDisconfirmingSearch": true
+    }
+  }'
+```
+
+**Request fields (optional unless noted):**
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `research_mode` | `rigorous` | `rigorous` or `fast` |
+| `target_score` | mode default (100 / 85) | Override target solidness |
+| `min_score` | `0.01` | Floor for cumulative score |
+| `temperature` | `0.3` | LLM temperature (0–2) |
+| `prior_context` | — | Resume / follow-up from prior state |
+
+**Stream markers in the assistant content:** `@@STATUS@@` · `@@SCORE@@` · `@@ITER@@` · `@@RUBRIC@@` · `@@REPORT@@`
 
 ---
 
@@ -186,7 +249,7 @@ curl -N http://localhost:8787/v1/chat/completions \
 | --- | --- |
 | **Runtime** | TypeScript, Node.js, ESM |
 | **API** | Hono, `@hono/node-server`, OpenAI SDK, Zod |
-| **Agent** | Custom loop, DuckDuckGo search, direct page fetch |
+| **Agent** | Custom loop, DuckDuckGo search (`@phukon/duckduckgo-search`), direct page fetch, `ai-json-repair` |
 | **UI** | React 19, Vite 7, Mantine 9, react-router-dom |
 | **Markdown** | react-markdown, remark-gfm, github-markdown-css |
 | **i18n** | react-i18next (7 locales) |
@@ -200,7 +263,7 @@ public/              Static assets (logo)
 src/client/          React app — UI, streaming, localStorage, locales
 src/server/          Hono API — search, favicons, config
 src/server/agent/    Agent loop, prompts, scoring, schemas, tests
-src/shared.ts        Shared types, mode thresholds, rubric helpers
+src/shared.ts        Shared types, MODE_THRESHOLDS, PriorResearchContext, rubric helpers
 ```
 
 ---
