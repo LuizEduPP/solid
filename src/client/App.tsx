@@ -18,7 +18,7 @@ import {
   UnstyledButton,
   type BoxProps,
 } from "@mantine/core";
-import { useDisclosure, useLocalStorage } from "@mantine/hooks";
+import { useDisclosure, useLocalStorage, useMediaQuery } from "@mantine/hooks";
 import { ArrowDown, ArrowUp, PanelLeft, PanelLeftClose, Plus, Settings, Square, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -275,6 +275,7 @@ export default function App() {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [controller, setController] = useState<AbortController | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const solidnessSentinelRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -302,10 +303,19 @@ export default function App() {
     [parsed.activity],
   );
 
+  const isDesktop = useMediaQuery("(min-width: 48em)");
+  const navbarCollapsedDesktop = isDesktop === true && sidebarCollapsed;
+  const navbarWidth = navbarCollapsedDesktop ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+  const showMobileChrome = isDesktop !== true;
+
   const historyGroups = useMemo(
     () => groupSessionsByDate(sessions),
     [sessions],
   );
+
+  useEffect(() => {
+    if (isDesktop) closeMobile();
+  }, [isDesktop, closeMobile]);
 
   useEffect(() => {
     void i18n.changeLanguage(settings.locale);
@@ -324,8 +334,10 @@ export default function App() {
       return;
     }
 
-    if (activeSession && activeSession.status !== "running") {
+    if (activeSession?.status === "running") {
       setObjective(activeSession.objective);
+    } else if (!running) {
+      setObjective("");
     }
   }, [sessionId, sessions, activeSession, running, navigate]);
 
@@ -482,6 +494,7 @@ export default function App() {
 
     controller?.abort();
     const nextController = new AbortController();
+    controllerRef.current = nextController;
     setController(nextController);
     setRunning(true);
     setError(null);
@@ -520,6 +533,7 @@ export default function App() {
       }
     } finally {
       setRunning(false);
+      controllerRef.current = null;
       setController(null);
     }
   }
@@ -533,7 +547,8 @@ export default function App() {
   }
 
   function handleStop() {
-    controller?.abort();
+    controllerRef.current?.abort();
+    setRunning(false);
   }
 
   const isActiveRunning =
@@ -595,8 +610,9 @@ export default function App() {
 
   return (
     <AppShell
+      header={showMobileChrome ? { height: 48 } : undefined}
       navbar={{
-        width: sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
+        width: navbarWidth,
         breakpoint: "sm",
         collapsed: { mobile: !mobileOpened, desktop: false },
       }}
@@ -606,19 +622,32 @@ export default function App() {
         navbar: { transition: "width 200ms ease" },
       }}
     >
+      {showMobileChrome ? (
+        <AppShell.Header className="mobile-nav-bar">
+          <Group h="100%" px="md">
+            <Burger
+              opened={mobileOpened}
+              onClick={toggleMobile}
+              size="sm"
+              aria-label={mobileOpened ? t("collapseSidebar") : t("expandSidebar")}
+            />
+          </Group>
+        </AppShell.Header>
+      ) : null}
+
       <AppShell.Navbar
-        className={`app-sidebar${sidebarCollapsed ? " app-sidebar--collapsed" : ""}`}
+        className={`app-sidebar${navbarCollapsedDesktop ? " app-sidebar--collapsed" : ""}`}
         withBorder={false}
         p={0}
         style={{ display: "flex", flexDirection: "column" }}
       >
         <Box className="sidebar-header">
           <Group
-            justify={sidebarCollapsed ? "center" : "space-between"}
-            mb={sidebarCollapsed ? "sm" : "lg"}
+            justify={navbarCollapsedDesktop ? "center" : "space-between"}
+            mb={navbarCollapsedDesktop ? "sm" : "lg"}
             wrap="nowrap"
           >
-            {sidebarCollapsed ? (
+            {navbarCollapsedDesktop ? (
               <Tooltip label={t("expandSidebar")} position="right" withArrow>
                 <ActionIcon
                   variant="subtle"
@@ -631,11 +660,26 @@ export default function App() {
                   <PanelLeft size={16} />
                 </ActionIcon>
               </Tooltip>
+            ) : showMobileChrome ? (
+              <>
+                <SolidLogo wordmarkSize="md" />
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="md"
+                  radius="md"
+                  aria-label={t("collapseSidebar")}
+                  onClick={closeMobile}
+                >
+                  <X size={18} />
+                </ActionIcon>
+              </>
             ) : (
               <>
                 <SolidLogo wordmarkSize="md" />
                 <Tooltip label={t("collapseSidebar")} withArrow>
                   <ActionIcon
+                    className="sidebar-collapse-desktop"
                     variant="subtle"
                     color="gray"
                     size="md"
@@ -650,7 +694,7 @@ export default function App() {
             )}
           </Group>
 
-          {sidebarCollapsed ? (
+          {navbarCollapsedDesktop ? (
             <Box className="sidebar-rail-btn">
               <Tooltip label={t("newResearch")} position="right" withArrow>
                 <ActionIcon
@@ -680,7 +724,7 @@ export default function App() {
           )}
         </Box>
 
-        {!sidebarCollapsed ? (
+        {!navbarCollapsedDesktop ? (
           <ScrollArea flex={1} type="auto" scrollbars="y" classNames={{ viewport: "sidebar-scroll-viewport" }}>
             <Box className="sidebar-scroll">
               {historyGroups.length === 0 ? (
@@ -716,7 +760,7 @@ export default function App() {
         )}
 
         <Box className="sidebar-footer">
-          {sidebarCollapsed ? (
+          {navbarCollapsedDesktop ? (
             <Box className="sidebar-rail-btn">
               <Tooltip label={t("settings")} position="right" withArrow>
                 <ActionIcon
@@ -795,15 +839,6 @@ export default function App() {
 
       <AppShell.Main>
         <Box className="chat-main">
-          <Box hiddenFrom="sm" className="mobile-nav-bar">
-            <Burger
-              opened={mobileOpened}
-              onClick={toggleMobile}
-              size="sm"
-              aria-label={mobileOpened ? t("collapseSidebar") : t("expandSidebar")}
-            />
-          </Box>
-
           {!hasContent ? (
             <Box className="chat-empty">
               <ChatColumn className="chat-empty-column">

@@ -1,6 +1,17 @@
 {
   "name": "solid",
   "version": "0.1.0",
+  "description": "Iterative deep research agent with evidence scoring (solidness)",
+  "author": "Luiz Eduardo <https://github.com/luizedupp>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luizedupp/solid.git"
+  },
+  "homepage": "https://github.com/luizedupp/solid#readme",
+  "bugs": {
+    "url": "https://github.com/luizedupp/solid/issues"
+  },
   "private": true,
   "type": "module",
   "scripts": {

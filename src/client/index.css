@@ -56,6 +56,16 @@ body {
   overflow: hidden;
 }
 
+@media (max-width: 47.99em) {
+  .app-sidebar--collapsed {
+    width: auto !important;
+  }
+
+  .sidebar-collapse-desktop {
+    display: none !important;
+  }
+}
+
 .app-sidebar--collapsed .sidebar-header {
   display: flex;
   flex-direction: column;
@@ -82,8 +92,8 @@ body {
 
 .mobile-nav-bar {
   flex-shrink: 0;
-  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
   border-bottom: 1px solid var(--solid-border);
+  background: var(--solid-surface);
 }
 
 .chat-main {

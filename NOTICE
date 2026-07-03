@@ -1,0 +1,25 @@
+Solid — deep research agent with evidence scoring
+
+Copyright (c) 2026 Luiz Eduardo
+GitHub: https://github.com/luizedupp
+Repository: https://github.com/luizedupp/solid
+
+Attribution requirements
+------------------------
+
+The MIT License allows commercial use, modification, and distribution. In return,
+everyone who uses, forks, ships, or sells this software (including as a hosted
+service, SaaS, or white-label product) MUST:
+
+1. Keep this NOTICE file and the LICENSE copyright notice in all source
+   distributions and substantial portions of the codebase.
+2. Credit the original author visibly in product documentation, marketing pages,
+   or an "About / Credits" screen, for example:
+
+   "Based on Solid by Luiz Eduardo (@luizedupp)"
+   https://github.com/luizedupp/solid
+
+3. Not remove or hide existing copyright headers added to this project.
+
+Removing attribution from distributed copies violates the MIT License condition
+that the copyright notice must remain included.

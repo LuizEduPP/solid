@@ -217,6 +217,16 @@ export async function streamResearch(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+
+  const abortReader = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  if (signal.aborted) {
+    abortReader();
+  } else {
+    signal.addEventListener("abort", abortReader, { once: true });
+  }
+
   const parser = createParser({
     onEvent: (event) => {
       const data = event.data.trim();
@@ -231,6 +241,11 @@ export async function streamResearch(
   });
 
   while (true) {
+    if (signal.aborted) {
+      abortReader();
+      throw new DOMException("Aborted", "AbortError");
+    }
+
     const { done, value } = await reader.read();
     if (done) break;
     parser.feed(decoder.decode(value, { stream: true }));

@@ -169,11 +169,15 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     const model = body.model || "solid";
 
     if (body.stream) {
+      const abortSignal = c.req.raw.signal;
+
       return streamSSE(c, async (stream) => {
         let roleSent = false;
 
         try {
-          for await (const chunk of agent.run(objective, targetScore)) {
+          for await (const chunk of agent.run(objective, targetScore, abortSignal)) {
+            if (abortSignal.aborted) break;
+
             const delta: Record<string, string> = { content: chunk };
             if (!roleSent) {
               delta.role = "assistant";
@@ -191,6 +195,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
             });
           }
         } catch (error) {
+          if (abortSignal.aborted) return;
+
           const message = error instanceof Error ? error.message : "Agent failed";
           await stream.writeSSE({
             data: JSON.stringify({
@@ -207,6 +213,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
             }),
           });
         }
+
+        if (abortSignal.aborted) return;
 
         await stream.writeSSE({
           data: JSON.stringify({

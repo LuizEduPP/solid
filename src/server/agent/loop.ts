@@ -282,7 +282,14 @@ export class SolidAgent {
   async *run(
     objective: string,
     targetScore: number,
+    signal?: AbortSignal,
   ): AsyncGenerator<string> {
+    const throwIfAborted = () => {
+      if (signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+    };
+
     const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const effectiveTarget = Math.min(targetScore, thresholds.targetScore);
 
@@ -301,8 +308,10 @@ export class SolidAgent {
 
     let iteration = 0;
     while (true) {
+      throwIfAborted();
       iteration += 1;
       const plan = await this.plan(objective, agentRun);
+      throwIfAborted();
       const queries = plan.queries;
       const angle = plan.angle;
 
@@ -315,6 +324,7 @@ export class SolidAgent {
       let totalHits = 0;
 
       for (const query of queries) {
+        throwIfAborted();
         const result = await searchWeb(query, this.settings.resultsPerQuery);
 
         if (result.error) {
@@ -333,6 +343,7 @@ export class SolidAgent {
         this.settings.pagesPerIteration,
         agentRun.fetchedUrlCache,
       );
+      throwIfAborted();
 
       void cacheFaviconsForUrls([
         ...fetchedPages.map((page) => page.url),
@@ -352,6 +363,7 @@ export class SolidAgent {
         queryResults,
         fetchedPages,
       );
+      throwIfAborted();
 
       if (plan.disconfirming) {
         agentRun.hadDisconfirmingSearch = true;
@@ -430,7 +442,9 @@ export class SolidAgent {
     }
 
     yield event("status", "Generating final report...");
+    throwIfAborted();
     const report = await this.finalReport(objective, agentRun);
+    throwIfAborted();
     yield event("report", report);
   }
 }
