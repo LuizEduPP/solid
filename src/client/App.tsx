@@ -580,12 +580,14 @@ export default function App() {
       syncSession(session);
       navigate(chatPath(session.id), { replace: true });
 
-      const newId = session.id;
-      void fetchTitle(settings, objective.trim()).then((title) => {
-        if (title) {
-          setSessions((current) =>
-            current.map((s) => (s.id === newId ? { ...s, title } : s)),
-          );
+      const titleSessionId = session.id;
+      void fetchTitle(settings, objective.trim()).then((generatedTitle) => {
+        if (!generatedTitle) return;
+        setSessions((current) =>
+          current.map((s) => s.id === titleSessionId ? { ...s, title: generatedTitle } : s),
+        );
+        if (inFlightRef.current?.session.id === titleSessionId) {
+          inFlightRef.current.session = { ...inFlightRef.current.session, title: generatedTitle };
         }
       });
     }
@@ -602,27 +604,28 @@ export default function App() {
           if (inFlightRef.current) {
             inFlightRef.current.rawStream = rawStream;
           }
-          syncSession(
-            touchSession({ ...session, status: "running" }, { rawStream }),
-          );
+          const live = inFlightRef.current?.session ?? session;
+          syncSession(touchSession({ ...live, status: "running" }, { rawStream }));
         },
         nextController.signal,
         priorContext,
       );
 
       if (nextController.signal.aborted) return;
-      syncSession(touchSession(session, { rawStream, status: "completed" }));
+      const final = inFlightRef.current?.session ?? session;
+      syncSession(touchSession(final, { rawStream, status: "completed" }));
     } catch (err) {
+      const errSession = inFlightRef.current?.session ?? session;
       if (err instanceof DOMException && err.name === "AbortError") {
         if (!stopRequestedRef.current) {
           rawStream += `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
         }
-        syncSession(touchSession(session, { rawStream, status: "cancelled" }));
+        syncSession(touchSession(errSession, { rawStream, status: "cancelled" }));
       } else {
         const message = err instanceof Error ? err.message : t("errorUnexpected");
         setError(message);
         syncSession(
-          touchSession(session, { rawStream, status: "error", error: message }),
+          touchSession(errSession, { rawStream, status: "error", error: message }),
         );
       }
     } finally {
