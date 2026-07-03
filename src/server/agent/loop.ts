@@ -9,7 +9,13 @@ import {
   capScoreForCitedDomains,
   computeEvidenceScore,
 } from "./scoring.js";
-import { rubricTotal, uniqueHostnamesFromHits, MODE_THRESHOLDS, type ScoreRubric } from "../../shared.js";
+import {
+  countUniqueHostnames,
+  MODE_THRESHOLDS,
+  rubricTotal,
+  type PriorResearchContext,
+  type ScoreRubric,
+} from "../../shared.js";
 import { cacheFaviconsForUrls } from "../favicon.js";
 import {
   fetchPages,
@@ -46,6 +52,12 @@ export interface AgentRun {
   allHits: SearchHit[];
   fetchedUrlCache: Set<string>;
   hadDisconfirmingSearch: boolean;
+  followUp?: string;
+  priorReport?: string;
+  seedOpenGaps?: string[];
+  seedQueries?: string[];
+  seedCitedUrls?: string[];
+  seedUniqueDomainCount?: number;
 }
 
 export function extractObjective(messages: Array<{ role: string; content: string }>): string {
@@ -59,11 +71,24 @@ export function extractObjective(messages: Array<{ role: string; content: string
 }
 
 function collectPriorQueries(run: AgentRun): string[] {
-  return run.iterations.flatMap((record) => record.queries);
+  return [
+    ...(run.seedQueries ?? []),
+    ...run.iterations.flatMap((record) => record.queries),
+  ];
 }
 
 function collectOpenGaps(run: AgentRun): string[] {
-  return run.iterations.at(-1)?.gaps ?? [];
+  if (run.iterations.length) return run.iterations.at(-1)?.gaps ?? [];
+  return run.seedOpenGaps ?? [];
+}
+
+function totalUniqueDomainCount(run: AgentRun): number {
+  const urls = [
+    ...(run.seedCitedUrls ?? []),
+    ...run.iterations.flatMap((record) => record.citedUrls),
+    ...run.allHits.map((hit) => hit.url),
+  ];
+  return countUniqueHostnames(urls);
 }
 
 function event(kind: "status" | "score" | "report" | "iter" | "rubric", content: string): string {
@@ -83,6 +108,7 @@ function eventIteration(record: {
   readUrls?: string[];
   sources: SearchHit[];
   disconfirming: boolean;
+  gaps?: string[];
 }): string {
   return event("iter", JSON.stringify(record));
 }
@@ -127,7 +153,7 @@ function finalizeScore(
     isFirstIteration,
   });
 
-  const uniqueDomains = uniqueHostnamesFromHits(run.allHits).length;
+  const uniqueDomains = totalUniqueDomainCount(run);
   const evidenceScore = computeEvidenceScore(
     uniqueDomains,
     analysis.cited_urls?.length ?? 0,
@@ -142,6 +168,7 @@ function finalizeScore(
   }
 
   const cumulativeCitedUrls = [
+    ...(run.seedCitedUrls ?? []),
     ...run.iterations.flatMap((record) => record.citedUrls),
     ...(analysis.cited_urls ?? []),
   ];
@@ -223,6 +250,9 @@ export class SolidAgent {
 
     const user =
       `Objective:\n${objective}\n\n` +
+      (run.followUp
+        ? `Follow-up request:\n${run.followUp}\n\nPrior report excerpt:\n${run.priorReport?.slice(0, 4000) || "(none)"}\n\n`
+        : "") +
       `Current cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
       `Disconfirming search REQUIRED this round: ${requireDisconfirm ? "YES — you MUST set disconfirming: true" : "no"}\n\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(first iteration)"}\n\n` +
@@ -260,7 +290,7 @@ export class SolidAgent {
     const user =
       `Objective:\n${objective}\n\n` +
       `Previous cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
-      `Unique domains seen so far: ${uniqueHostnamesFromHits(run.allHits).length}\n\n` +
+      `Unique domains seen so far: ${totalUniqueDomainCount(run)}\n\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(none)"}\n\n` +
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
@@ -273,6 +303,7 @@ export class SolidAgent {
   private async finalReport(objective: string, run: AgentRun): Promise<string> {
     const user =
       `Objective:\n${objective}\n\n` +
+      (run.followUp ? `Follow-up request:\n${run.followUp}\n\n` : "") +
       `Final cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "0.00"}%\n\n` +
       `Cumulative synthesis:\n${run.cumulativeSynthesis}\n\n` +
       `Remaining gaps:\n${collectOpenGaps(run).map((gap) => `- ${gap}`).join("\n") || "(none)"}`;
@@ -283,6 +314,7 @@ export class SolidAgent {
     objective: string,
     targetScore: number,
     signal?: AbortSignal,
+    prior?: PriorResearchContext,
   ): AsyncGenerator<string> {
     const throwIfAborted = () => {
       if (signal?.aborted) {
@@ -292,25 +324,35 @@ export class SolidAgent {
 
     const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const effectiveTarget = Math.min(targetScore, thresholds.targetScore);
+    const rootObjective = prior?.rootObjective ?? objective;
 
     const agentRun: AgentRun = {
-      objective,
+      objective: rootObjective,
       targetScore: effectiveTarget,
-      cumulativeSynthesis: "",
-      currentScore: null,
+      cumulativeSynthesis: prior?.cumulativeSynthesis ?? "",
+      currentScore: prior?.currentScore ?? null,
       iterations: [],
       allHits: [],
       fetchedUrlCache: new Set<string>(),
-      hadDisconfirmingSearch: false,
+      hadDisconfirmingSearch: prior?.hadDisconfirmingSearch ?? false,
+      followUp: prior?.followUp,
+      priorReport: prior?.report,
+      seedOpenGaps: prior?.openGaps,
+      seedQueries: prior?.priorQueries,
+      seedCitedUrls: prior?.citedUrls,
+      seedUniqueDomainCount: prior?.uniqueDomainCount ?? 0,
     };
 
-    yield event("status", "Research started");
+    yield event(
+      "status",
+      prior ? `Follow-up: ${prior.followUp}` : "Research started",
+    );
 
-    let iteration = 0;
+    let iteration = prior?.iterationCount ?? 0;
     while (true) {
       throwIfAborted();
       iteration += 1;
-      const plan = await this.plan(objective, agentRun);
+      const plan = await this.plan(rootObjective, agentRun);
       throwIfAborted();
       const queries = plan.queries;
       const angle = plan.angle;
@@ -357,7 +399,7 @@ export class SolidAgent {
       yield event("status", `${totalHits} results · analyzing`);
 
       const analysis = await this.analyze(
-        objective,
+        rootObjective,
         agentRun,
         angle,
         queryResults,
@@ -378,7 +420,7 @@ export class SolidAgent {
         openGaps: analysis.open_gaps ?? [],
         iteration,
         thresholds,
-        uniqueDomainCount: uniqueHostnamesFromHits(agentRun.allHits).length,
+        uniqueDomainCount: totalUniqueDomainCount(agentRun),
         hadDisconfirmingSearch: agentRun.hadDisconfirmingSearch,
       });
 
@@ -423,6 +465,7 @@ export class SolidAgent {
         readUrls: fetchedPages.map((page) => page.url),
         sources: hits.slice(0, 6),
         disconfirming: plan.disconfirming,
+        gaps: (analysis.open_gaps ?? []).map(String),
       });
       yield event("rubric", JSON.stringify({ iteration, rubric, total: rubricTotal(rubric) }));
       yield event("score", score.toFixed(2));
@@ -443,7 +486,7 @@ export class SolidAgent {
 
     yield event("status", "Generating final report...");
     throwIfAborted();
-    const report = await this.finalReport(objective, agentRun);
+    const report = await this.finalReport(rootObjective, agentRun);
     throwIfAborted();
     yield event("report", report);
   }

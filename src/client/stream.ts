@@ -5,6 +5,7 @@ import type { WebSettings } from "./types";
 import {
   countUniqueHostnames,
   MODE_THRESHOLDS,
+  type PriorResearchContext,
   type ScoreRubric,
 } from "../shared";
 
@@ -26,6 +27,7 @@ export interface IterationSnapshot {
   citedUrls?: string[];
   readUrls?: string[];
   sources?: SourceSnapshot[];
+  gaps?: string[];
   disconfirming?: boolean;
 }
 
@@ -91,6 +93,7 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
       readUrls: payload.readUrls,
       sources: payload.sources,
       disconfirming: Boolean(payload.disconfirming),
+      gaps: payload.gaps?.map(String),
     };
   } catch {
     return null;
@@ -185,6 +188,7 @@ export async function streamResearch(
   objective: string,
   onChunk: (chunk: string) => void,
   signal: AbortSignal,
+  priorContext?: PriorResearchContext,
 ): Promise<void> {
   const response = await fetch("/v1/chat/completions", {
     method: "POST",
@@ -199,6 +203,7 @@ export async function streamResearch(
       llm_base_url: settings.baseUrl,
       llm_model: settings.model,
       messages: [{ role: "user", content: objective }],
+      prior_context: priorContext,
     }),
   });
 

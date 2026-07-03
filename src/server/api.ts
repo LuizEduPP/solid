@@ -3,7 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
 import { SolidAgent, extractObjective } from "./agent/loop.js";
-import { MODE_THRESHOLDS } from "../shared.js";
+import { MODE_THRESHOLDS, type PriorResearchContext } from "../shared.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
 
 const messageSchema = z.object({
@@ -22,6 +22,21 @@ const requestSchema = z.object({
   llm_api_key: z.string().optional().default(""),
   llm_base_url: z.string().min(1).optional(),
   llm_model: z.string().min(1).optional(),
+  prior_context: z
+    .object({
+      rootObjective: z.string().min(1),
+      followUp: z.string().min(1),
+      cumulativeSynthesis: z.string(),
+      currentScore: z.number(),
+      report: z.string(),
+      openGaps: z.array(z.string()),
+      priorQueries: z.array(z.string()),
+      citedUrls: z.array(z.string()),
+      uniqueDomainCount: z.number().int().nonnegative(),
+      iterationCount: z.number().int().nonnegative(),
+      hadDisconfirmingSearch: z.boolean(),
+    })
+    .optional(),
 });
 
 type AppEnv = {
@@ -167,6 +182,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     const id = completionId();
     const created = Math.floor(Date.now() / 1000);
     const model = body.model || "solid";
+    const priorContext = body.prior_context as PriorResearchContext | undefined;
 
     if (body.stream) {
       const abortSignal = c.req.raw.signal;
@@ -175,7 +191,12 @@ export function createOpenAiRouter(): Hono<AppEnv> {
         let roleSent = false;
 
         try {
-          for await (const chunk of agent.run(objective, targetScore, abortSignal)) {
+          for await (const chunk of agent.run(
+            priorContext?.followUp ?? objective,
+            targetScore,
+            abortSignal,
+            priorContext,
+          )) {
             if (abortSignal.aborted) break;
 
             const delta: Record<string, string> = { content: chunk };
@@ -231,7 +252,12 @@ export function createOpenAiRouter(): Hono<AppEnv> {
 
     const parts: string[] = [];
     try {
-      for await (const chunk of agent.run(objective, targetScore)) {
+      for await (const chunk of agent.run(
+        priorContext?.followUp ?? objective,
+        targetScore,
+        undefined,
+        priorContext,
+      )) {
         parts.push(chunk);
       }
     } catch (error) {

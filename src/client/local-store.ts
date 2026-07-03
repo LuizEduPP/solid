@@ -3,7 +3,8 @@ import { saveAs } from "file-saver";
 
 import { compressStepsActivity, translateActivityLine } from "./activity";
 import i18n, { normalizeLocale, type HistoryGroupKey } from "./i18n";
-import { parseStream } from "./stream";
+import { parseStream, uniqueSourceCount } from "./stream";
+import type { PriorResearchContext } from "../shared";
 import type { ResearchSession, WebSettings } from "./types";
 
 export type { ResearchSession, WebSettings } from "./types";
@@ -140,6 +141,28 @@ export function sessionPreview(session: ResearchSession, untitled: string): stri
     parsed.iterations[0]?.findings ||
     untitled;
   return text.length > 56 ? `${text.slice(0, 56)}…` : text;
+}
+
+export function buildPriorContext(
+  session: ResearchSession,
+  followUp: string,
+): PriorResearchContext {
+  const parsed = parseStream(session.rawStream);
+  const lastIteration = parsed.iterations.at(-1);
+
+  return {
+    rootObjective: session.objective,
+    followUp,
+    cumulativeSynthesis: lastIteration?.synthesis ?? "",
+    currentScore: parsed.confidence,
+    report: parsed.report,
+    openGaps: lastIteration?.gaps ?? [],
+    priorQueries: parsed.iterations.map((iteration) => iteration.angle).filter(Boolean),
+    citedUrls: parsed.iterations.flatMap((iteration) => iteration.citedUrls ?? []),
+    uniqueDomainCount: uniqueSourceCount(parsed.iterations),
+    iterationCount: parsed.iterations.length,
+    hadDisconfirmingSearch: parsed.iterations.some((iteration) => iteration.disconfirming),
+  };
 }
 
 export interface HistoryGroup {

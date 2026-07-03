@@ -32,6 +32,7 @@ import {
   deleteSession,
   downloadSession,
   groupSessionsByDate,
+  buildPriorContext,
   HISTORY_KEY,
   isLocalLlmBaseUrl,
   loadHistory,
@@ -133,6 +134,7 @@ type ChatComposerProps = {
   onToggleMode: () => void;
   onToggleSteps: () => void;
   onDownload: () => void;
+  placeholder: string;
   t: (key: string, opts?: Record<string, unknown>) => string;
 };
 
@@ -153,6 +155,7 @@ function ChatComposer({
   onToggleMode,
   onToggleSteps,
   onDownload,
+  placeholder,
   t,
 }: ChatComposerProps) {
   return (
@@ -201,7 +204,7 @@ function ChatComposer({
           <Textarea
             flex={1}
             variant="unstyled"
-            placeholder={t("askPlaceholder")}
+            placeholder={placeholder}
             value={objective}
             disabled={running}
             autosize
@@ -500,16 +503,36 @@ export default function App() {
     setError(null);
     closeSteps();
 
-    const session = createSession(objective.trim());
-    syncSession(session);
-    navigate(chatPath(session.id), { replace: true });
+    const followUpSession =
+      activeSession &&
+      sessionId === activeSession.id &&
+      activeSession.status !== "running" &&
+      (Boolean(parsed.report) || parsed.iterations.length > 0)
+        ? activeSession
+        : null;
 
+    const priorContext = followUpSession
+      ? buildPriorContext(followUpSession, objective.trim())
+      : undefined;
+
+    let session: ResearchSession;
     let rawStream = "";
+
+    if (followUpSession) {
+      session = touchSession(followUpSession, { status: "running", error: undefined });
+      rawStream = followUpSession.rawStream;
+      rawStream += `\n\n@@STATUS@@\n${t("followUpStarted", { message: objective.trim() })}\n\n`;
+      syncSession(touchSession(session, { rawStream }));
+    } else {
+      session = createSession(objective.trim());
+      syncSession(session);
+      navigate(chatPath(session.id), { replace: true });
+    }
 
     try {
       await streamResearch(
         settings,
-        session.objective,
+        objective.trim(),
         (chunk) => {
           rawStream += chunk;
           syncSession(
@@ -517,6 +540,7 @@ export default function App() {
           );
         },
         nextController.signal,
+        priorContext,
       );
 
       syncSession(touchSession(session, { rawStream, status: "completed" }));
@@ -582,6 +606,12 @@ export default function App() {
     onToggleMode: handleToggleMode,
     onToggleSteps: toggleSteps,
     onDownload: () => activeSession && downloadSession(activeSession),
+    placeholder:
+      activeSession &&
+      activeSession.status !== "running" &&
+      (Boolean(parsed.report) || parsed.iterations.length > 0)
+        ? t("askFollowUpPlaceholder")
+        : t("askPlaceholder"),
     t,
   };
 

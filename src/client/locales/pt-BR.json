@@ -27,6 +27,8 @@
   "research": "Pesquisar",
   "researching": "Pesquisando",
   "askPlaceholder": "Pergunte qualquer coisa...",
+  "askFollowUpPlaceholder": "Aprofunde um ponto do relatório…",
+  "followUpStarted": "Follow-up: {{message}}",
   "errorApiKey": "Informe a chave API nas configurações.",
   "errorSelectModel": "Selecione um modelo nas configurações.",
   "errorUnexpected": "Erro inesperado",

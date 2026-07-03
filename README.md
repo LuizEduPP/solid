@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  Created by <a href="https://github.com/luizedupp"><strong>Luiz Eduardo</strong></a> (<a href="https://github.com/luizedupp">@luizedupp</a>)
+  Created by <a href="https://github.com/LuizEduPP"><strong>Luiz Eduardo</strong></a> (<a href="https://github.com/LuizEduPP">@LuizEduPP</a>)
 </p>
 
 <p align="center">
@@ -70,7 +70,7 @@ You get a running **solidness score** (0–100) backed by a visible 4-part rubri
 **Prerequisites:** Node.js 20+, [Yarn](https://yarnpkg.com/)
 
 ```bash
-git clone https://github.com/luizedupp/solid.git
+git clone https://github.com/LuizEduPP/solid.git
 cd solid
 yarn install
 yarn dev
@@ -225,16 +225,16 @@ English (default), Español, Português (Brasil), Português (Portugal), França
 
 ## Author & attribution
 
-**Solid** was created by **[Luiz Eduardo](https://github.com/luizedupp)** ([@luizedupp](https://github.com/luizedupp)).
+**Solid** was created by **[Luiz Eduardo](https://github.com/LuizEduPP)** ([@LuizEduPP](https://github.com/LuizEduPP)).
 
-Official repository: **https://github.com/luizedupp/solid**
+Official repository: **https://github.com/LuizEduPP/solid**
 
 If you use, fork, modify, distribute, or **sell** this project (including SaaS or white-label):
 
 - Keep the [LICENSE](LICENSE) and [NOTICE](NOTICE) files in your codebase and releases.
 - Credit the original author in docs, landing pages, or an About/Credits screen, for example:
 
-  > Based on [Solid](https://github.com/luizedupp/solid) by [Luiz Eduardo](https://github.com/luizedupp) ([@luizedupp](https://github.com/luizedupp))
+  > Based on [Solid](https://github.com/LuizEduPP/solid) by [Luiz Eduardo](https://github.com/LuizEduPP) ([@LuizEduPP](https://github.com/LuizEduPP))
 
 Removing copyright notices from distributed copies **violates the MIT License**. See [NOTICE](NOTICE) for details.
 
@@ -254,10 +254,10 @@ Issues and PRs welcome. Before submitting:
 
 [MIT](LICENSE) — commercial use allowed **with attribution**. See [NOTICE](NOTICE).
 
-Copyright © 2026 [Luiz Eduardo](https://github.com/luizedupp).
+Copyright © 2026 [Luiz Eduardo](https://github.com/LuizEduPP).
 
 ---
 
 <p align="center">
-  If Solid helps your research workflow, star the <a href="https://github.com/luizedupp/solid">official repo</a> — it helps others find the original work.
+  If Solid helps your research workflow, star the <a href="https://github.com/LuizEduPP/solid">official repo</a> — it helps others find the original work.
 </p>

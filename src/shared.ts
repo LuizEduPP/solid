@@ -121,3 +121,18 @@ export const DEFAULT_FAVICON_URL = "/favicons/default";
 export function isDefaultFaviconSrc(src: string): boolean {
   return src.includes(DEFAULT_FAVICON_URL);
 }
+
+/** Prior research state for follow-up turns in the same session. */
+export interface PriorResearchContext {
+  rootObjective: string;
+  followUp: string;
+  cumulativeSynthesis: string;
+  currentScore: number;
+  report: string;
+  openGaps: string[];
+  priorQueries: string[];
+  citedUrls: string[];
+  uniqueDomainCount: number;
+  iterationCount: number;
+  hadDisconfirmingSearch: boolean;
+}
