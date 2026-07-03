@@ -105,5 +105,14 @@
   "openGaps": "Lacunas Abertas",
   "evidenceDirect": "Direta",
   "evidenceContextual": "Contextual",
-  "evidenceNone": "Nenhuma"
+  "evidenceNone": "Nenhuma",
+  "verdictConfirmed": "Confirmada",
+  "verdictLikely": "Provável",
+  "verdictUncertain": "Incerta",
+  "verdictUnlikely": "Improvável",
+  "verdictNonexistent": "Inexistente",
+  "qualityProgressing": "A progredir",
+  "qualityStagnating": "Estagnada",
+  "qualityCircular": "Circular",
+  "qualityExhausted": "Esgotada"
 }

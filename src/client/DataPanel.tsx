@@ -23,19 +23,19 @@ import FaviconImg from "./FaviconImg";
 import type { IterationSnapshot, ReflectionSnapshot, EntityVerdict, InvestigationQuality } from "./stream";
 import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniqueUrlsByHostname, RUBRIC_DIMENSIONS, RUBRIC_MAX, type ScoreRubric } from "../shared";
 
-const VERDICT_CONFIG: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2 }> = {
-  confirmed: { color: "green", icon: CheckCircle2 },
-  likely: { color: "blue", icon: CheckCircle2 },
-  uncertain: { color: "yellow", icon: HelpCircle },
-  unlikely: { color: "orange", icon: AlertTriangle },
-  nonexistent: { color: "red", icon: XCircle },
+const VERDICT_CONFIG: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2; i18n: string }> = {
+  confirmed: { color: "green", icon: CheckCircle2, i18n: "verdictConfirmed" },
+  likely: { color: "blue", icon: CheckCircle2, i18n: "verdictLikely" },
+  uncertain: { color: "yellow", icon: HelpCircle, i18n: "verdictUncertain" },
+  unlikely: { color: "orange", icon: AlertTriangle, i18n: "verdictUnlikely" },
+  nonexistent: { color: "red", icon: XCircle, i18n: "verdictNonexistent" },
 };
 
-const QUALITY_CONFIG: Record<InvestigationQuality, { color: string }> = {
-  progressing: { color: "green" },
-  stagnating: { color: "yellow" },
-  circular: { color: "orange" },
-  exhausted: { color: "red" },
+const QUALITY_CONFIG: Record<InvestigationQuality, { color: string; i18n: string }> = {
+  progressing: { color: "green", i18n: "qualityProgressing" },
+  stagnating: { color: "yellow", i18n: "qualityStagnating" },
+  circular: { color: "orange", i18n: "qualityCircular" },
+  exhausted: { color: "red", i18n: "qualityExhausted" },
 };
 
 const RUBRIC_COLORS: Record<keyof ScoreRubric, string> = {
@@ -96,9 +96,9 @@ function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }
           variant="light"
           color={cfg.color}
           leftSection={<Icon size={14} />}
-          style={{ cursor: "help", textTransform: "capitalize" }}
+          style={{ cursor: "help" }}
         >
-          {reflection.entity_verdict} ({reflection.entity_confidence}%)
+          {t(cfg.i18n)} ({reflection.entity_confidence}%)
         </Badge>
       </Tooltip>
     </Box>
@@ -117,9 +117,9 @@ function QualitySection({ reflection }: { reflection: ReflectionSnapshot }) {
           size="md"
           variant="light"
           color={cfg.color}
-          style={{ cursor: "help", textTransform: "capitalize" }}
+          style={{ cursor: "help" }}
         >
-          {reflection.investigation_quality}
+          {t(cfg.i18n)}
         </Badge>
       </Tooltip>
     </Box>

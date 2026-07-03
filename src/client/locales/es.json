@@ -105,5 +105,14 @@
   "openGaps": "Lagunas Abiertas",
   "evidenceDirect": "Directa",
   "evidenceContextual": "Contextual",
-  "evidenceNone": "Ninguna"
+  "evidenceNone": "Ninguna",
+  "verdictConfirmed": "Confirmada",
+  "verdictLikely": "Probable",
+  "verdictUncertain": "Incierta",
+  "verdictUnlikely": "Improbable",
+  "verdictNonexistent": "Inexistente",
+  "qualityProgressing": "Progresando",
+  "qualityStagnating": "Estancada",
+  "qualityCircular": "Circular",
+  "qualityExhausted": "Agotada"
 }
