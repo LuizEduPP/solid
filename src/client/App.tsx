@@ -131,7 +131,7 @@ function SidebarSessionRow({
 
   return (
     <Box className={`sidebar-session-row${active ? " sidebar-session-row--active" : ""}`}>
-      <Tooltip label={session.objective} multiline maw={280} withArrow openDelay={400}>
+      <Tooltip label={session.title || session.objective} multiline maw={280} withArrow openDelay={400}>
         <UnstyledButton className="sidebar-session-button" onClick={onSelect}>
           <Group gap={6} wrap="nowrap" style={{ width: "100%" }}>
             <Box
