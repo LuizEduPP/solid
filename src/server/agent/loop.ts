@@ -1,18 +1,27 @@
 import OpenAI from "openai";
 
 import type { AgentConfig } from "../config.js";
-import { parseAnalysisPayload, parsePlanPayload, type AnalysisPayload, type PlanPayload } from "./schemas.js";
-import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM } from "./prompts.js";
+import {
+  parseAnalysisPayload,
+  parsePlanPayload,
+  parseReflectionPayload,
+  type AnalysisPayload,
+  type PlanPayload,
+  type ReflectionPayload,
+} from "./schemas.js";
+import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM, REFLECTOR_SYSTEM } from "./prompts.js";
 import {
   applyCumulativeScore,
   canReachTargetScore,
   capScoreForCitedDomains,
+  capScoreForEntityConfidence,
   computeEvidenceScore,
 } from "./scoring.js";
 import {
   countUniqueHostnames,
   MODE_THRESHOLDS,
   rubricTotal,
+  type EvidenceType,
   type PriorResearchContext,
   type ScoreRubric,
 } from "../../shared.js";
@@ -41,6 +50,9 @@ export interface IterationRecord {
   scoreReasoning: string;
   disconfirming: boolean;
   nextVariation: string;
+  evidenceType: EvidenceType;
+  directEntityEvidence: boolean;
+  disambiguationNotes: string;
 }
 
 export interface AgentRun {
@@ -52,6 +64,7 @@ export interface AgentRun {
   allHits: SearchHit[];
   fetchedUrlCache: Set<string>;
   hadDisconfirmingSearch: boolean;
+  lastReflection: ReflectionPayload | null;
   followUp?: string;
   priorReport?: string;
   seedOpenGaps?: string[];
@@ -177,6 +190,33 @@ function finalizeScore(
   return score;
 }
 
+/**
+ * Builds a compact summary of all iteration records for the reflector to
+ * review. Includes evidence types, scores, disambiguation notes, and
+ * findings — everything the reflector needs to reason holistically.
+ */
+function buildIterationSummary(run: AgentRun): string {
+  if (run.iterations.length === 0) return "(no iterations yet)";
+
+  return run.iterations
+    .map((iter) => {
+      const lines = [
+        `--- Iteration ${iter.number} (score: ${iter.score.toFixed(1)}, evidence: ${iter.evidenceType}) ---`,
+        `Angle: ${iter.angle}`,
+        `Queries: ${iter.queries.join(" | ")}`,
+        `Findings: ${iter.iterationFindings.slice(0, 600)}`,
+      ];
+      if (iter.disambiguationNotes) {
+        lines.push(`Disambiguation: ${iter.disambiguationNotes}`);
+      }
+      if (iter.gaps.length > 0) {
+        lines.push(`Open gaps: ${iter.gaps.join("; ")}`);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
 export class SolidAgent {
   private readonly client: OpenAI;
   private readonly settings: AgentConfig;
@@ -257,6 +297,42 @@ export class SolidAgent {
     throw new Error("LLM returned invalid JSON after retries");
   }
 
+  private formatReflectionContext(reflection: ReflectionPayload | null): string {
+    if (!reflection) return "SUPERVISOR REFLECTION: Not available yet (first iteration).\n";
+
+    return [
+      `SUPERVISOR REFLECTION:`,
+      `- Entity verdict: ${reflection.entity_verdict} (confidence: ${reflection.entity_confidence}%)`,
+      `- Entity reasoning: ${reflection.entity_reasoning}`,
+      `- Investigation quality: ${reflection.investigation_quality}`,
+      `- Quality reasoning: ${reflection.quality_reasoning}`,
+      `- Recommendation: ${reflection.recommendation}`,
+      `- Recommendation reasoning: ${reflection.recommendation_reasoning}`,
+      ...(reflection.pivot_suggestion
+        ? [`- Pivot suggestion: ${reflection.pivot_suggestion}`]
+        : []),
+      ...(reflection.key_observations.length
+        ? [`- Key observations:\n${reflection.key_observations.map((o) => `  • ${o}`).join("\n")}`]
+        : []),
+    ].join("\n") + "\n";
+  }
+
+  private async reflect(objective: string, run: AgentRun): Promise<ReflectionPayload> {
+    const scoreTrajectory = run.iterations.map((i) => i.score.toFixed(1)).join(" → ");
+    const evidenceTrajectory = run.iterations.map((i) => i.evidenceType).join(" → ");
+
+    const user =
+      `Objective:\n${objective}\n\n` +
+      `Total iterations completed: ${run.iterations.length}\n` +
+      `Score trajectory: ${scoreTrajectory || "(none)"}\n` +
+      `Evidence type trajectory: ${evidenceTrajectory || "(none)"}\n` +
+      `Current score: ${run.currentScore?.toFixed(2) ?? "not scored"}%\n\n` +
+      `Complete iteration-by-iteration record:\n${buildIterationSummary(run)}\n\n` +
+      `Current cumulative synthesis:\n${run.cumulativeSynthesis || "(none)"}`;
+
+    return this.chatJson(REFLECTOR_SYSTEM, user, parseReflectionPayload);
+  }
+
   private async plan(objective: string, run: AgentRun): Promise<PlanPayload> {
     const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const priorQueries = collectPriorQueries(run);
@@ -265,6 +341,8 @@ export class SolidAgent {
       (run.currentScore ?? 0) >= thresholds.disconfirmThreshold &&
       !run.hadDisconfirmingSearch;
 
+    const reflectionContext = this.formatReflectionContext(run.lastReflection);
+
     const user =
       `Objective:\n${objective}\n\n` +
       (run.followUp
@@ -272,6 +350,7 @@ export class SolidAgent {
         : "") +
       `Current cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
       `Disconfirming search REQUIRED this round: ${requireDisconfirm ? "YES — you MUST set disconfirming: true" : "no"}\n\n` +
+      `${reflectionContext}\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(first iteration)"}\n\n` +
       `Open gaps:\n${openGaps.length ? openGaps.map((gap) => `- ${gap}`).join("\n") : "(none yet)"}\n\n` +
       `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
@@ -304,10 +383,13 @@ export class SolidAgent {
             .join("\n\n")}`
         : "");
 
+    const reflectionContext = this.formatReflectionContext(run.lastReflection);
+
     const user =
       `Objective:\n${objective}\n\n` +
       `Previous cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "null (first iteration)"}\n\n` +
       `Unique domains seen so far: ${totalUniqueDomainCount(run)}\n\n` +
+      `${reflectionContext}\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(none)"}\n\n` +
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
@@ -318,10 +400,19 @@ export class SolidAgent {
   }
 
   private async finalReport(objective: string, run: AgentRun): Promise<string> {
+    const reflection = run.lastReflection;
+    const reflectionSummary = reflection
+      ? `Entity verdict: ${reflection.entity_verdict} (confidence: ${reflection.entity_confidence}%)\n` +
+        `Entity reasoning: ${reflection.entity_reasoning}\n` +
+        `Investigation quality: ${reflection.investigation_quality}\n` +
+        `Key observations:\n${reflection.key_observations.map((o) => `- ${o}`).join("\n") || "(none)"}\n`
+      : "";
+
     const user =
       `Objective:\n${objective}\n\n` +
       (run.followUp ? `Follow-up request:\n${run.followUp}\n\n` : "") +
       `Final cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "0.00"}%\n\n` +
+      `${reflectionSummary}\n` +
       `Cumulative synthesis:\n${run.cumulativeSynthesis}\n\n` +
       `Remaining gaps:\n${collectOpenGaps(run).map((gap) => `- ${gap}`).join("\n") || "(none)"}`;
     return this.chat(FINAL_SYSTEM, user);
@@ -355,6 +446,7 @@ export class SolidAgent {
       allHits: [],
       fetchedUrlCache: new Set<string>(),
       hadDisconfirmingSearch: prior?.hadDisconfirmingSearch ?? false,
+      lastReflection: null,
       followUp: prior?.followUp,
       priorReport: prior?.report,
       seedOpenGaps: prior?.openGaps,
@@ -467,6 +559,9 @@ export class SolidAgent {
         scoreReasoning: analysis.score_reasoning,
         disconfirming: plan.disconfirming,
         nextVariation: String(analysis.next_variation ?? ""),
+        evidenceType: analysis.evidence_type,
+        directEntityEvidence: analysis.direct_entity_evidence,
+        disambiguationNotes: analysis.disambiguation_notes,
       };
       agentRun.iterations.push(record);
       agentRun.cumulativeSynthesis = analysis.cumulative_synthesis;
@@ -495,7 +590,36 @@ export class SolidAgent {
         break;
       }
 
-      if (!analysis.should_continue) {
+      // --- Reflection: the LLM reviews the entire investigation and decides ---
+      yield event("status", "Reflecting on investigation...");
+      const reflection = await this.reflect(rootObjective, agentRun);
+      throwIfAborted();
+      agentRun.lastReflection = reflection;
+
+      if (reflection.entity_confidence < 50) {
+        score = capScoreForEntityConfidence(score, reflection.entity_confidence);
+        agentRun.currentScore = score;
+        yield event("score", score.toFixed(2));
+      }
+
+      if (!reflection.should_continue) {
+        const reason = reflection.recommendation === "stop"
+          ? `${reflection.recommendation_reasoning} (entity: ${reflection.entity_verdict}, confidence: ${reflection.entity_confidence}%)`
+          : reflection.recommendation_reasoning || "Investigation concluded by supervisor";
+        yield event("status", reason);
+        break;
+      }
+
+      if (reflection.recommendation === "pivot") {
+        yield event(
+          "status",
+          `Pivoting strategy: ${reflection.pivot_suggestion || reflection.recommendation_reasoning}`,
+        );
+      }
+
+      if (!analysis.should_continue && reflection.should_continue) {
+        yield event("status", "Analyst recommended stopping, but supervisor sees value in continuing");
+      } else if (!analysis.should_continue) {
         yield event(
           "status",
           analysis.stop_reason || "Model stopped — diminishing returns from search",

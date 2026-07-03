@@ -38,6 +38,8 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
   },
 };
 
+export type EvidenceType = "direct" | "contextual" | "none";
+
 export const RUBRIC_MAX = 25;
 
 export const RUBRIC_DIMENSIONS = [

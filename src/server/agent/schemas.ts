@@ -2,7 +2,7 @@ import { loads } from "ai-json-repair";
 import { z } from "zod";
 
 import { extractCitedUrls, normalizeRubric } from "./scoring.js";
-import type { ScoreRubric } from "../../shared.js";
+import type { EvidenceType, ScoreRubric } from "../../shared.js";
 
 export interface PlanPayload {
   queries: string[];
@@ -24,6 +24,9 @@ export interface AnalysisPayload {
   should_continue: boolean;
   stop_reason: string;
   next_variation: string;
+  direct_entity_evidence: boolean;
+  evidence_type: EvidenceType;
+  disambiguation_notes: string;
 }
 
 const scoreRubricSchema = z
@@ -47,6 +50,10 @@ const planSchema = z
     angle: payload.angle ?? "",
     disconfirming: payload.disconfirming ?? false,
   }));
+
+const evidenceTypeSchema = z
+  .enum(["direct", "contextual", "none"])
+  .catch("contextual");
 
 const analysisSchema = z
   .object({
@@ -74,6 +81,12 @@ const analysisSchema = z
     stopReason: z.coerce.string().optional(),
     next_variation: z.coerce.string().optional(),
     nextVariation: z.coerce.string().optional(),
+    direct_entity_evidence: z.coerce.boolean().optional(),
+    directEntityEvidence: z.coerce.boolean().optional(),
+    evidence_type: evidenceTypeSchema.optional(),
+    evidenceType: evidenceTypeSchema.optional(),
+    disambiguation_notes: z.coerce.string().optional(),
+    disambiguationNotes: z.coerce.string().optional(),
   })
   .transform((payload) => {
     const synthesis =
@@ -83,6 +96,13 @@ const analysisSchema = z
       "";
     const findings =
       payload.iteration_findings ?? payload.iterationFindings ?? synthesis;
+
+    const evidenceType =
+      payload.evidence_type ?? payload.evidenceType ?? "contextual";
+    const directEntity =
+      payload.direct_entity_evidence ??
+      payload.directEntityEvidence ??
+      evidenceType === "direct";
 
     return {
       iteration_findings: findings,
@@ -100,6 +120,10 @@ const analysisSchema = z
         payload.should_continue !== false && payload.shouldContinue !== false,
       stop_reason: payload.stop_reason ?? payload.stopReason ?? "",
       next_variation: payload.next_variation ?? payload.nextVariation ?? "",
+      direct_entity_evidence: directEntity,
+      evidence_type: evidenceType as EvidenceType,
+      disambiguation_notes:
+        payload.disambiguation_notes ?? payload.disambiguationNotes ?? "",
     };
   });
 
@@ -150,4 +174,75 @@ export function parseAnalysisPayload(raw: string, knownUrls: string[]): Analysis
   ];
 
   return { ...parsed, cited_urls };
+}
+
+export type EntityVerdict = "confirmed" | "likely" | "uncertain" | "unlikely" | "nonexistent";
+export type InvestigationQuality = "progressing" | "stagnating" | "circular" | "exhausted";
+export type ReflectionRecommendation = "continue" | "pivot" | "stop";
+
+export interface ReflectionPayload {
+  entity_verdict: EntityVerdict;
+  entity_confidence: number;
+  entity_reasoning: string;
+  investigation_quality: InvestigationQuality;
+  quality_reasoning: string;
+  recommendation: ReflectionRecommendation;
+  recommendation_reasoning: string;
+  pivot_suggestion: string;
+  key_observations: string[];
+  should_continue: boolean;
+}
+
+const entityVerdictEnum = z.enum(["confirmed", "likely", "uncertain", "unlikely", "nonexistent"]);
+const investigationQualityEnum = z.enum(["progressing", "stagnating", "circular", "exhausted"]);
+
+const reflectionSchema = z
+  .object({
+    entity_verdict: entityVerdictEnum.optional(),
+    entityVerdict: entityVerdictEnum.optional(),
+    entity_confidence: z.coerce.number().optional(),
+    entityConfidence: z.coerce.number().optional(),
+    entity_reasoning: z.coerce.string().optional(),
+    entityReasoning: z.coerce.string().optional(),
+    investigation_quality: investigationQualityEnum.optional(),
+    investigationQuality: investigationQualityEnum.optional(),
+    quality_reasoning: z.coerce.string().optional(),
+    qualityReasoning: z.coerce.string().optional(),
+    recommendation: z.enum(["continue", "pivot", "stop"]).catch("continue"),
+    recommendation_reasoning: z.coerce.string().optional(),
+    recommendationReasoning: z.coerce.string().optional(),
+    pivot_suggestion: z.coerce.string().optional(),
+    pivotSuggestion: z.coerce.string().optional(),
+    key_observations: z.array(z.coerce.string()).optional(),
+    keyObservations: z.array(z.coerce.string()).optional(),
+    should_continue: z.coerce.boolean().optional(),
+    shouldContinue: z.coerce.boolean().optional(),
+  })
+  .transform((p) => {
+    const verdict = p.entity_verdict ?? p.entityVerdict ?? "uncertain" as const;
+    const recommendation = p.recommendation ?? "continue";
+    const shouldContinue =
+      p.should_continue ?? p.shouldContinue ?? recommendation !== "stop";
+
+    return {
+      entity_verdict: verdict,
+      entity_confidence: Math.max(
+        0,
+        Math.min(100, p.entity_confidence ?? p.entityConfidence ?? 50),
+      ),
+      entity_reasoning: p.entity_reasoning ?? p.entityReasoning ?? "",
+      investigation_quality:
+        p.investigation_quality ?? p.investigationQuality ?? "progressing",
+      quality_reasoning: p.quality_reasoning ?? p.qualityReasoning ?? "",
+      recommendation,
+      recommendation_reasoning:
+        p.recommendation_reasoning ?? p.recommendationReasoning ?? "",
+      pivot_suggestion: p.pivot_suggestion ?? p.pivotSuggestion ?? "",
+      key_observations: p.key_observations ?? p.keyObservations ?? [],
+      should_continue: shouldContinue,
+    } satisfies ReflectionPayload;
+  });
+
+export function parseReflectionPayload(raw: string): ReflectionPayload {
+  return reflectionSchema.parse(parseLlmJson(raw));
 }

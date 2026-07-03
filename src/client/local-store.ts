@@ -30,8 +30,6 @@ function readLocalStorageJson<T>(
   }
 }
 
-// --- settings ---
-
 export const SETTINGS_KEY = "solid-settings";
 const LEGACY_SETTINGS_KEYS = ["rigor-settings", "deepsearch-settings"] as const;
 
@@ -62,8 +60,6 @@ export function loadWebSettings(): WebSettings {
     locale: normalizeLocale(parsed.locale),
   };
 }
-
-// --- history ---
 
 export const HISTORY_KEY = "solid-history";
 const LEGACY_HISTORY_KEYS = ["rigor-history", "deepsearch-history"] as const;
@@ -194,8 +190,6 @@ export function groupSessionsByDate(
     .filter((key) => groups.has(key))
     .map((key) => ({ key, sessions: groups.get(key)! }));
 }
-
-// --- export ---
 
 function exportSessionMarkdown(session: ResearchSession): string {
   const t = i18n.t.bind(i18n);

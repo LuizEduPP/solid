@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseAnalysisPayload, parsePlanPayload } from "./schemas.js";
+import { parseAnalysisPayload, parsePlanPayload, parseReflectionPayload } from "./schemas.js";
 import { rubricTotal, uniqueHostnamesFromHits, MODE_THRESHOLDS } from "../../shared.js";
 import {
   applyCumulativeScore,
   canReachTargetScore,
   capScoreForCitedDomains,
+  capScoreForEntityConfidence,
   computeEvidenceScore,
   extractCitedUrls,
   normalizeRubric,
@@ -233,6 +234,147 @@ describe("agent", () => {
         }),
       );
       assert.equal(total, 100);
+    });
+  });
+
+  describe("entity confidence score cap", () => {
+    it("caps score when reflector entity confidence is very low", () => {
+      const capped = capScoreForEntityConfidence(60, 15);
+      assert.equal(capped, 20);
+    });
+
+    it("uses entity confidence as floor for cap", () => {
+      assert.equal(capScoreForEntityConfidence(80, 30), 30);
+      assert.equal(capScoreForEntityConfidence(80, 45), 45);
+    });
+
+    it("does not cap score when entity confidence is adequate", () => {
+      assert.equal(capScoreForEntityConfidence(60, 55), 60);
+      assert.equal(capScoreForEntityConfidence(90, 80), 90);
+    });
+  });
+
+  describe("analysis evidence fields", () => {
+    it("parses direct_entity_evidence and evidence_type", () => {
+      const parsed = parseAnalysisPayload(
+        `{
+          "iteration_findings": "Found direct benchmark data",
+          "cumulative_synthesis": "Synthesis",
+          "score": 55,
+          "direct_entity_evidence": true,
+          "evidence_type": "direct",
+          "disambiguation_notes": ""
+        }`,
+        [],
+      );
+      assert.equal(parsed.direct_entity_evidence, true);
+      assert.equal(parsed.evidence_type, "direct");
+      assert.equal(parsed.disambiguation_notes, "");
+    });
+
+    it("defaults evidence_type to contextual when absent", () => {
+      const parsed = parseAnalysisPayload(
+        `{
+          "iteration_findings": "Generic RAG info",
+          "cumulative_synthesis": "Synthesis",
+          "score": 30
+        }`,
+        [],
+      );
+      assert.equal(parsed.evidence_type, "contextual");
+      assert.equal(parsed.direct_entity_evidence, false);
+    });
+
+    it("parses disambiguation_notes", () => {
+      const parsed = parseAnalysisPayload(
+        `{
+          "iteration_findings": "Found Snowflake Cortex",
+          "cumulative_synthesis": "Synthesis",
+          "score": 28,
+          "evidence_type": "contextual",
+          "disambiguation_notes": "Found Snowflake Cortex Search but it is NOT DeepContext AI's Cortex Retriever"
+        }`,
+        [],
+      );
+      assert.ok(parsed.disambiguation_notes.includes("Snowflake Cortex"));
+    });
+  });
+
+  describe("reflection schema", () => {
+    it("parses a complete reflection payload", () => {
+      const reflection = parseReflectionPayload(`{
+        "entity_verdict": "unlikely",
+        "entity_confidence": 12,
+        "entity_reasoning": "After 4 iterations, no direct evidence found for the entity",
+        "investigation_quality": "circular",
+        "quality_reasoning": "Same types of contextual results repeating",
+        "recommendation": "stop",
+        "recommendation_reasoning": "Entity likely does not exist",
+        "pivot_suggestion": "",
+        "key_observations": ["Only contextual evidence found", "Similar entities confused with target"],
+        "should_continue": false
+      }`);
+
+      assert.equal(reflection.entity_verdict, "unlikely");
+      assert.equal(reflection.entity_confidence, 12);
+      assert.equal(reflection.investigation_quality, "circular");
+      assert.equal(reflection.recommendation, "stop");
+      assert.equal(reflection.should_continue, false);
+      assert.equal(reflection.key_observations.length, 2);
+    });
+
+    it("defaults to safe values when fields are missing", () => {
+      const reflection = parseReflectionPayload(`{
+        "entity_verdict": "confirmed",
+        "entity_confidence": 85,
+        "recommendation": "continue"
+      }`);
+
+      assert.equal(reflection.entity_verdict, "confirmed");
+      assert.equal(reflection.entity_confidence, 85);
+      assert.equal(reflection.should_continue, true);
+      assert.equal(reflection.investigation_quality, "progressing");
+    });
+
+    it("infers should_continue from recommendation when absent", () => {
+      const stop = parseReflectionPayload(`{
+        "recommendation": "stop",
+        "entity_verdict": "nonexistent",
+        "entity_confidence": 5
+      }`);
+      assert.equal(stop.should_continue, false);
+
+      const pivot = parseReflectionPayload(`{
+        "recommendation": "pivot",
+        "entity_verdict": "uncertain",
+        "entity_confidence": 40
+      }`);
+      assert.equal(pivot.should_continue, true);
+    });
+
+    it("clamps entity_confidence to 0-100", () => {
+      const r = parseReflectionPayload(`{
+        "entity_verdict": "confirmed",
+        "entity_confidence": 150,
+        "recommendation": "continue"
+      }`);
+      assert.equal(r.entity_confidence, 100);
+    });
+
+    it("accepts camelCase fields", () => {
+      const r = parseReflectionPayload(`{
+        "entityVerdict": "likely",
+        "entityConfidence": 72,
+        "investigationQuality": "progressing",
+        "recommendationReasoning": "Good progress",
+        "recommendation": "continue",
+        "keyObservations": ["found official docs"]
+      }`);
+
+      assert.equal(r.entity_verdict, "likely");
+      assert.equal(r.entity_confidence, 72);
+      assert.equal(r.investigation_quality, "progressing");
+      assert.equal(r.key_observations[0], "found official docs");
     });
   });
 });

@@ -135,3 +135,17 @@ export function extractCitedUrls(text: string, knownUrls: string[]): string[] {
   }
   return [...cited];
 }
+
+/**
+ * Caps the solidness score based on entity confidence assessed by
+ * the reflector LLM. When the reflector determines the target entity
+ * likely doesn't exist, this prevents inflated scores.
+ */
+export function capScoreForEntityConfidence(
+  score: number,
+  entityConfidence: number,
+): number {
+  if (entityConfidence >= 50) return score;
+  const cap = Math.max(20, entityConfidence);
+  return Math.min(score, cap);
+}
