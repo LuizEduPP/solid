@@ -130,7 +130,7 @@ type ChatComposerProps = {
   activeSession: ResearchSession | null;
   onObjectiveChange: (value: string) => void;
   onSubmit: (event: React.FormEvent) => void;
-  onStop: () => void;
+  onStop: (event: React.MouseEvent) => void;
   onToggleMode: () => void;
   onToggleSteps: () => void;
   onDownload: () => void;
@@ -228,6 +228,7 @@ function ChatComposer({
               color="red"
               aria-label={t("stop")}
               title={t("stop")}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={onStop}
             >
               <Square size={16} fill="currentColor" />
@@ -279,6 +280,8 @@ export default function App() {
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [controller, setController] = useState<AbortController | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const inFlightRef = useRef<{ session: ResearchSession; rawStream: string } | null>(null);
+  const stopRequestedRef = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const solidnessSentinelRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -481,7 +484,7 @@ export default function App() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!objective.trim() || running) return;
+    if (!objective.trim() || running || controllerRef.current) return;
 
     if (!settings.apiKey.trim() && !isLocalLlmBaseUrl(settings.baseUrl)) {
       setError(t("errorApiKey"));
@@ -502,6 +505,7 @@ export default function App() {
     setRunning(true);
     setError(null);
     closeSteps();
+    stopRequestedRef.current = false;
 
     const followUpSession =
       activeSession &&
@@ -529,12 +533,18 @@ export default function App() {
       navigate(chatPath(session.id), { replace: true });
     }
 
+    inFlightRef.current = { session, rawStream };
+
     try {
       await streamResearch(
         settings,
         objective.trim(),
         (chunk) => {
+          if (nextController.signal.aborted) return;
           rawStream += chunk;
+          if (inFlightRef.current) {
+            inFlightRef.current.rawStream = rawStream;
+          }
           syncSession(
             touchSession({ ...session, status: "running" }, { rawStream }),
           );
@@ -543,10 +553,13 @@ export default function App() {
         priorContext,
       );
 
+      if (nextController.signal.aborted) return;
       syncSession(touchSession(session, { rawStream, status: "completed" }));
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        rawStream += `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
+        if (!stopRequestedRef.current) {
+          rawStream += `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
+        }
         syncSession(touchSession(session, { rawStream, status: "cancelled" }));
       } else {
         const message = err instanceof Error ? err.message : t("errorUnexpected");
@@ -556,6 +569,8 @@ export default function App() {
         );
       }
     } finally {
+      inFlightRef.current = null;
+      stopRequestedRef.current = false;
       setRunning(false);
       controllerRef.current = null;
       setController(null);
@@ -570,13 +585,30 @@ export default function App() {
     }));
   }
 
-  function handleStop() {
+  function handleStop(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const inflight = inFlightRef.current;
+    if (!controllerRef.current && !inflight) return;
+
+    stopRequestedRef.current = true;
     controllerRef.current?.abort();
-    setRunning(false);
+
+    if (inflight) {
+      const cancelledStream =
+        inflight.rawStream + `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
+      inflight.rawStream = cancelledStream;
+      syncSession(
+        touchSession(inflight.session, {
+          rawStream: cancelledStream,
+          status: "cancelled",
+        }),
+      );
+    }
   }
 
-  const isActiveRunning =
-    running && (!activeSession || activeSession.status === "running");
+  const isActiveRunning = running;
   const confidence = parsed.confidence;
   const targetScore = MODE_THRESHOLDS[settings.mode].targetScore;
   const sourceCount = uniqueSourceCount(parsed.iterations);
