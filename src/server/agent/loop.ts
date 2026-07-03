@@ -180,6 +180,7 @@ function finalizeScore(
 export class SolidAgent {
   private readonly client: OpenAI;
   private readonly settings: AgentConfig;
+  private runSignal?: AbortSignal;
 
   constructor(settings: AgentConfig) {
     this.settings = settings;
@@ -189,7 +190,14 @@ export class SolidAgent {
     });
   }
 
+  private throwIfAborted(): void {
+    if (this.runSignal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+  }
+
   private async chat(system: string, user: string, json = false): Promise<string> {
+    this.throwIfAborted();
     const request = {
       model: this.settings.model,
       messages: [
@@ -199,18 +207,26 @@ export class SolidAgent {
       temperature: this.settings.temperature,
       ...(json ? { response_format: { type: "json_object" as const } } : {}),
     };
+    const options = this.runSignal ? { signal: this.runSignal } : undefined;
 
     try {
-      const response = await this.client.chat.completions.create(request);
+      const response = await this.client.chat.completions.create(request, options);
       return extractMessageContent(response.choices[0]!.message);
     } catch (error) {
+      if (this.runSignal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
       if (!json) throw error;
 
-      const response = await this.client.chat.completions.create({
-        model: this.settings.model,
-        messages: request.messages,
-        temperature: this.settings.temperature,
-      });
+      this.throwIfAborted();
+      const response = await this.client.chat.completions.create(
+        {
+          model: this.settings.model,
+          messages: request.messages,
+          temperature: this.settings.temperature,
+        },
+        options,
+      );
       return extractMessageContent(response.choices[0]!.message);
     }
   }
@@ -223,6 +239,7 @@ export class SolidAgent {
     let lastRaw = "";
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      this.throwIfAborted();
       const prompt =
         attempt === 0
           ? user
@@ -316,11 +333,14 @@ export class SolidAgent {
     signal?: AbortSignal,
     prior?: PriorResearchContext,
   ): AsyncGenerator<string> {
+    this.runSignal = signal;
     const throwIfAborted = () => {
       if (signal?.aborted) {
         throw new DOMException("Aborted", "AbortError");
       }
     };
+
+    try {
 
     const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const effectiveTarget = Math.min(targetScore, thresholds.targetScore);
@@ -489,5 +509,8 @@ export class SolidAgent {
     const report = await this.finalReport(rootObjective, agentRun);
     throwIfAborted();
     yield event("report", report);
+    } finally {
+      this.runSignal = undefined;
+    }
   }
 }

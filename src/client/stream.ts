@@ -234,6 +234,8 @@ export async function streamResearch(
 
   const parser = createParser({
     onEvent: (event) => {
+      if (signal.aborted) return;
+
       const data = event.data.trim();
       if (!data || data === "[DONE]") return;
 

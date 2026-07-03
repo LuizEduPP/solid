@@ -189,16 +189,29 @@ export function createOpenAiRouter(): Hono<AppEnv> {
 
       return streamSSE(c, async (stream) => {
         let roleSent = false;
+        const run = agent.run(
+          priorContext?.followUp ?? objective,
+          targetScore,
+          abortSignal,
+          priorContext,
+        );
 
         try {
-          for await (const chunk of agent.run(
-            priorContext?.followUp ?? objective,
-            targetScore,
-            abortSignal,
-            priorContext,
-          )) {
-            if (abortSignal.aborted) break;
+          while (true) {
+            if (abortSignal.aborted) {
+              await run.return(undefined);
+              return;
+            }
 
+            const next = await run.next();
+            if (next.done) break;
+
+            if (abortSignal.aborted) {
+              await run.return(undefined);
+              return;
+            }
+
+            const chunk = next.value;
             const delta: Record<string, string> = { content: chunk };
             if (!roleSent) {
               delta.role = "assistant";
