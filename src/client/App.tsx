@@ -33,7 +33,7 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -67,6 +67,7 @@ import {
   parseStream,
   pickDefaultModel,
   streamResearch,
+  type ResearchRound,
 } from "./stream";
 import { MODE_THRESHOLDS, type EntityVerdict } from "../shared";
 
@@ -573,7 +574,7 @@ export default function App() {
     if (followUpSession) {
       session = touchSession(followUpSession, { status: "running", error: undefined });
       rawStream = followUpSession.rawStream;
-      rawStream += `\n\n@@STATUS@@\n${t("followUpStarted", { message: objective.trim() })}\n\n`;
+      rawStream += `\n\n@@FOLLOWUP@@\n${objective.trim()}\n\n@@STATUS@@\n${t("followUpStarted", { message: objective.trim() })}\n\n`;
       syncSession(touchSession(session, { rawStream }));
     } else {
       session = createSession(objective.trim());
@@ -962,53 +963,70 @@ export default function App() {
               >
                 <ChatColumn pb={160}>
                   <Stack gap="lg">
-                    {activeSession?.objective ? (
-                      <Paper p="md" radius="md" withBorder={false} bg="dark.6">
-                        <Text>{activeSession.objective}</Text>
-                      </Paper>
-                    ) : null}
+                    {parsed.rounds.map((round: ResearchRound, roundIdx: number) => {
+                      const isLastRound = roundIdx === parsed.rounds.length - 1;
+                      const roundHasReport = !!round.report;
 
-                    <Box className="iteration-timeline">
-                      {parsed.iterations.map((iteration, i) => (
-                        <Box key={iteration.number} className="iteration-timeline-item">
-                          {i > 0 && <Box className="iteration-connector" />}
-                          <IterationCard iteration={iteration} />
-                        </Box>
-                      ))}
-                    </Box>
+                      return (
+                        <Fragment key={roundIdx}>
+                          {roundIdx === 0 && activeSession?.objective ? (
+                            <Paper p="md" radius="md" withBorder={false} bg="dark.6">
+                              <Text>{activeSession.objective}</Text>
+                            </Paper>
+                          ) : null}
 
-                    {isActiveRunning && !parsed.report ? (
-                      <Group gap="xs">
-                        <Loader size="xs" type="dots" />
-                        <Text size="sm" c="dimmed">
-                          {t("analyzing")}
-                        </Text>
-                      </Group>
-                    ) : null}
+                          {round.followUpMessage ? (
+                            <Paper p="md" radius="md" withBorder={false} bg="dark.6" mt="md">
+                              <Text>{round.followUpMessage}</Text>
+                            </Paper>
+                          ) : null}
 
-                    {parsed.report ? (
-                      <Box className="report-container" style={{ borderLeftColor: reportBorderColor }}>
-                        {showVerdictBanner ? (
-                          <Alert
-                            variant="light"
-                            color={entityVerdict === "nonexistent" ? "red" : "orange"}
-                            icon={<AlertTriangle size={16} />}
-                            mb="md"
-                          >
-                            <Text size="sm" fw={500}>
-                              {t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict!]) })}
-                              {parsed.reflection?.entity_reasoning
-                                ? ` — ${parsed.reflection.entity_reasoning}`
-                                : ""}
-                            </Text>
-                          </Alert>
-                        ) : null}
-                        <Text size="sm" fw={600} mb="sm">
-                          {t("answer")}
-                        </Text>
-                        <MarkdownContent content={parsed.report} />
-                      </Box>
-                    ) : null}
+                          {round.iterations.length > 0 ? (
+                            <Box className="iteration-timeline">
+                              {round.iterations.map((iteration, i) => (
+                                <Box key={iteration.number} className="iteration-timeline-item">
+                                  {i > 0 && <Box className="iteration-connector" />}
+                                  <IterationCard iteration={iteration} />
+                                </Box>
+                              ))}
+                            </Box>
+                          ) : null}
+
+                          {isLastRound && isActiveRunning && !roundHasReport ? (
+                            <Group gap="xs">
+                              <Loader size="xs" type="dots" />
+                              <Text size="sm" c="dimmed">
+                                {t("analyzing")}
+                              </Text>
+                            </Group>
+                          ) : null}
+
+                          {roundHasReport ? (
+                            <Box className="report-container" style={{ borderLeftColor: reportBorderColor }}>
+                              {isLastRound && showVerdictBanner ? (
+                                <Alert
+                                  variant="light"
+                                  color={entityVerdict === "nonexistent" ? "red" : "orange"}
+                                  icon={<AlertTriangle size={16} />}
+                                  mb="md"
+                                >
+                                  <Text size="sm" fw={500}>
+                                    {t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict!]) })}
+                                    {parsed.reflection?.entity_reasoning
+                                      ? ` — ${parsed.reflection.entity_reasoning}`
+                                      : ""}
+                                  </Text>
+                                </Alert>
+                              ) : null}
+                              <Text size="sm" fw={600} mb="sm">
+                                {t("answer")}
+                              </Text>
+                              <MarkdownContent content={round.report} />
+                            </Box>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
 
                     {activeSession?.error ? (
                       <Text c="red" size="sm">

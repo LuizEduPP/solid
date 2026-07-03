@@ -52,6 +52,12 @@ export interface ReflectionSnapshot {
   should_continue: boolean;
 }
 
+export interface ResearchRound {
+  followUpMessage?: string;
+  iterations: IterationSnapshot[];
+  report: string;
+}
+
 interface ParsedStream {
   confidence: number;
   iterations: IterationSnapshot[];
@@ -60,9 +66,10 @@ interface ParsedStream {
   iteration: number | null;
   rubric: ScoreRubric | null;
   reflection: ReflectionSnapshot | null;
+  rounds: ResearchRound[];
 }
 
-const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC|REFLECTION)@@\n/;
+const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC|REFLECTION|FOLLOWUP)@@\n/;
 
 function sectionBody(output: string, start: number): string {
   const tail = output.slice(start);
@@ -167,6 +174,49 @@ function parseLatestRubric(output: string): ScoreRubric | null {
   }
 }
 
+const FOLLOWUP_TOKEN = "@@FOLLOWUP@@\n";
+
+function parseRounds(output: string): ResearchRound[] {
+  const parts: { followUpMessage?: string; raw: string }[] = [];
+  let pos = 0;
+
+  while (pos < output.length) {
+    const nextFollowUp = output.indexOf(FOLLOWUP_TOKEN, pos);
+    if (nextFollowUp < 0) {
+      parts.push({ raw: output.slice(pos) });
+      break;
+    }
+
+    const beforeChunk = output.slice(pos, nextFollowUp);
+    if (beforeChunk.trim()) {
+      parts.push({ raw: beforeChunk });
+    }
+
+    const msgStart = nextFollowUp + FOLLOWUP_TOKEN.length;
+    const msgBody = sectionBody(output, msgStart);
+
+    const chunkStart = msgStart + msgBody.length;
+    const nextFollowUp2 = output.indexOf(FOLLOWUP_TOKEN, chunkStart);
+    const chunkEnd = nextFollowUp2 >= 0 ? nextFollowUp2 : output.length;
+
+    parts.push({
+      followUpMessage: msgBody,
+      raw: output.slice(chunkStart, chunkEnd),
+    });
+    pos = chunkEnd;
+  }
+
+  if (parts.length === 0) {
+    parts.push({ raw: output });
+  }
+
+  return parts.map((part) => ({
+    followUpMessage: part.followUpMessage,
+    iterations: parseIterations(part.raw),
+    report: extractTailSection(part.raw, "REPORT"),
+  }));
+}
+
 export function parseStream(output: string): ParsedStream {
   const iterations = parseIterations(output);
   const report = extractTailSection(output, "REPORT");
@@ -185,6 +235,7 @@ export function parseStream(output: string): ParsedStream {
     parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;
 
   const reflection = parseReflectionSnapshot(output);
+  const rounds = parseRounds(output);
 
   return {
     confidence,
@@ -194,6 +245,7 @@ export function parseStream(output: string): ParsedStream {
     iteration,
     rubric,
     reflection,
+    rounds,
   };
 }
 
