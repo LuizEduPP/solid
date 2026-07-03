@@ -420,12 +420,14 @@ export default function App() {
     if (sessionId || running || suggestions.length > 0) return;
     if (!settings.model.trim()) return;
 
-    let cancelled = false;
-    void fetchSuggestions(settings).then((result) => {
-      if (!cancelled && result.length > 0) setSuggestions(result);
-    });
-    return () => { cancelled = true; };
-  }, [sessionId, running, settings.apiKey, settings.baseUrl, settings.model]);
+    const ac = new AbortController();
+    void fetchSuggestions(settings, ac.signal)
+      .then((result) => {
+        if (!ac.signal.aborted && result.length > 0) setSuggestions(result);
+      })
+      .catch(() => {});
+    return () => ac.abort();
+  }, [sessionId, running, settings.apiKey, settings.baseUrl, settings.model, settings.locale]);
 
   useEffect(() => {
     if (!running) return;

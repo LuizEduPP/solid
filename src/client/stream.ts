@@ -233,7 +233,7 @@ export async function fetchTitle(
   }
 }
 
-export async function fetchSuggestions(settings: WebSettings): Promise<string[]> {
+export async function fetchSuggestions(settings: WebSettings, signal?: AbortSignal): Promise<string[]> {
   if (!settings.apiKey.trim() && !settings.baseUrl.includes("localhost") && !settings.baseUrl.includes("127.0.0.1")) {
     return [];
   }
@@ -248,6 +248,7 @@ export async function fetchSuggestions(settings: WebSettings): Promise<string[]>
       llm_model: settings.model,
       locale: settings.locale,
     }),
+    signal,
   });
 
   if (!response.ok) return [];

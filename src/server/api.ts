@@ -1,3 +1,4 @@
+import { loads } from "ai-json-repair";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
@@ -21,6 +22,30 @@ function languageInstruction(locale: string | undefined): string {
   const name = LOCALE_NAMES[locale];
   if (!name) return "";
   return ` You MUST respond in ${name}.`;
+}
+
+interface LlmChoice {
+  message?: {
+    content?: string;
+    reasoning_content?: string;
+  };
+}
+
+function extractLlmContent(choices?: LlmChoice[]): string {
+  const msg = choices?.[0]?.message;
+  const content = msg?.content?.trim();
+  if (content) return content;
+
+  const reasoning = msg?.reasoning_content?.trim();
+  if (!reasoning) return "";
+
+  const jsonArray = reasoning.match(/\[[\s\S]*\]/);
+  if (jsonArray) return jsonArray[0];
+  const jsonObj = reasoning.match(/\{[\s\S]*\}/);
+  if (jsonObj) return jsonObj[0];
+
+  const lastLine = reasoning.split("\n").filter((l) => l.trim()).pop()?.trim();
+  return lastLine ?? "";
 }
 
 const messageSchema = z.object({
@@ -186,7 +211,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
         body: JSON.stringify({
           model: llm_model,
           temperature: 0.9,
-          max_tokens: 300,
+          max_tokens: 1024,
           messages: [
             {
               role: "system",
@@ -209,17 +234,18 @@ export function createOpenAiRouter(): Hono<AppEnv> {
         return c.json({ error: `LLM returned ${response.status}` }, 502);
       }
 
-      const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const content = payload.choices?.[0]?.message?.content?.trim() ?? "[]";
+      const payload = (await response.json()) as { choices?: LlmChoice[] };
+      const content = extractLlmContent(payload.choices) || "[]";
 
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        return c.json({ suggestions: [] });
+      let suggestions: unknown;
+      try {
+        suggestions = loads(content);
+      } catch {
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) return c.json({ suggestions: [] });
+        try { suggestions = loads(jsonMatch[0]); } catch { return c.json({ suggestions: [] }); }
       }
 
-      const suggestions = JSON.parse(jsonMatch[0]) as unknown;
       if (!Array.isArray(suggestions)) {
         return c.json({ suggestions: [] });
       }
@@ -266,7 +292,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
         body: JSON.stringify({
           model: llm_model,
           temperature: 0.3,
-          max_tokens: 40,
+          max_tokens: 256,
           messages: [
             {
               role: "system",
@@ -284,10 +310,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
         return c.json({ error: `LLM returned ${response.status}` }, 502);
       }
 
-      const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-      };
-      const raw = payload.choices?.[0]?.message?.content?.trim() ?? "";
+      const payload = (await response.json()) as { choices?: LlmChoice[] };
+      const raw = extractLlmContent(payload.choices);
       const title = raw.replace(/^["']|["']$/g, "").replace(/\.+$/, "").trim();
 
       return c.json({ title: title || null });
