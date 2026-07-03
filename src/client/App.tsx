@@ -1010,12 +1010,14 @@ export default function App() {
                                   icon={<AlertTriangle size={16} />}
                                   mb="md"
                                 >
-                                  <Text size="sm" fw={500}>
-                                    {t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict!]) })}
-                                    {parsed.reflection?.entity_reasoning
-                                      ? ` — ${parsed.reflection.entity_reasoning}`
-                                      : ""}
-                                  </Text>
+                                  <MarkdownContent
+                                    content={
+                                      `**${t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict!]) })}**` +
+                                      (parsed.reflection?.entity_reasoning
+                                        ? ` — ${parsed.reflection.entity_reasoning}`
+                                        : "")
+                                    }
+                                  />
                                 </Alert>
                               ) : null}
                               <Text size="sm" fw={600} mb="sm">
