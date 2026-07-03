@@ -68,7 +68,15 @@ import {
   pickDefaultModel,
   streamResearch,
 } from "./stream";
-import { MODE_THRESHOLDS } from "../shared";
+import { MODE_THRESHOLDS, type EntityVerdict } from "../shared";
+
+const VERDICT_I18N: Record<EntityVerdict, string> = {
+  confirmed: "verdictConfirmed",
+  likely: "verdictLikely",
+  uncertain: "verdictUncertain",
+  unlikely: "verdictUnlikely",
+  nonexistent: "verdictNonexistent",
+};
 
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";
@@ -985,7 +993,7 @@ export default function App() {
                             mb="md"
                           >
                             <Text size="sm" fw={500}>
-                              {t("entityVerdictBanner", { verdict: entityVerdict })}
+                              {t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict!]) })}
                               {parsed.reflection?.entity_reasoning
                                 ? ` — ${parsed.reflection.entity_reasoning}`
                                 : ""}
