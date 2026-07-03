@@ -23,19 +23,15 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   PanelLeft,
   PanelLeftClose,
-  PanelRight,
   Plus,
   Search,
   Settings,
   Square,
   X,
-  Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -77,16 +73,14 @@ import { MODE_THRESHOLDS } from "../shared";
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";
 
-export function chatPath(sessionId: string): string {
+function chatPath(sessionId: string): string {
   return `/c/${sessionId}`;
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 64;
 const SIDEBAR_WIDTH = 280;
 const SIDEBAR_COLLAPSED_WIDTH = 56;
-const DATA_PANEL_WIDTH = 300;
-const DATA_PANEL_COLLAPSED_WIDTH = 24;
-const ASIDE_BREAKPOINT = "48.625em"; // ~778px
+const DATA_PANEL_WIDTH = 320;
 const SIDEBAR_COLLAPSED_KEY = "solid-sidebar-collapsed";
 const ASIDE_COLLAPSED_KEY = "solid-aside-collapsed";
 
@@ -333,7 +327,6 @@ export default function App() {
   const autoScrollRef = useRef(true);
   const ignoreScrollPauseRef = useRef(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   const activeSession = useMemo(
     () =>
@@ -349,7 +342,6 @@ export default function App() {
   );
 
   const isDesktop = useMediaQuery("(min-width: 48em)");
-  const canShowAside = useMediaQuery(`(min-width: ${ASIDE_BREAKPOINT})`);
   const navbarCollapsedDesktop = isDesktop === true && sidebarCollapsed;
   const navbarWidth = navbarCollapsedDesktop ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   const showMobileChrome = isDesktop !== true;
@@ -360,8 +352,7 @@ export default function App() {
   );
 
   const hasSessionData = parsed.iterations.length > 0 || running;
-  const showAside = canShowAside === true && hasSessionData;
-  const showMobilePanel = canShowAside !== true && hasSessionData;
+  const showDataPanel = hasSessionData && !asideCollapsed;
 
   useEffect(() => {
     if (isDesktop) closeMobile();
@@ -717,20 +708,10 @@ export default function App() {
         breakpoint: "sm",
         collapsed: { mobile: !mobileOpened, desktop: false },
       }}
-      aside={
-        showAside
-          ? {
-              width: asideCollapsed ? DATA_PANEL_COLLAPSED_WIDTH : DATA_PANEL_WIDTH,
-              breakpoint: "sm",
-              collapsed: { mobile: true },
-            }
-          : undefined
-      }
       padding={0}
       styles={{
         main: { display: "flex", flexDirection: "column", height: "100dvh", position: "relative", minHeight: 0 },
         navbar: { transition: "width 200ms ease" },
-        aside: { transition: "width 200ms ease" },
       }}
     >
       {showMobileChrome ? (
@@ -920,37 +901,8 @@ export default function App() {
         />
       </Modal>
 
-      {/* ─── DATA PANEL (aside) ─── */}
-      {showAside ? (
-        <AppShell.Aside
-          className={`data-panel-aside${asideCollapsed ? " data-panel-aside--collapsed" : ""}`}
-          withBorder={false}
-          p={0}
-        >
-          {!asideCollapsed ? (
-            <DataPanel
-              confidence={confidence}
-              targetScore={targetScore}
-              iterations={parsed.iterations}
-              reflection={parsed.reflection}
-              rubric={parsed.rubric}
-              running={running}
-            />
-          ) : null}
-        </AppShell.Aside>
-      ) : null}
-
       {/* ─── MAIN CONTENT ─── */}
       <AppShell.Main>
-        {showAside ? (
-          <UnstyledButton
-            className="aside-collapse-toggle"
-            onClick={() => setAsideCollapsed((v) => !v)}
-            aria-label={asideCollapsed ? "Expand data panel" : "Collapse data panel"}
-          >
-            {asideCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </UnstyledButton>
-        ) : null}
         <Box className="chat-main">
           {!hasContent ? (
             <Box className="chat-empty">
@@ -1051,41 +1003,6 @@ export default function App() {
                       </Text>
                     ) : null}
 
-                    {showMobilePanel ? (
-                      <Box className="mobile-data-panel">
-                        <UnstyledButton
-                          className="mobile-data-panel-toggle"
-                          onClick={() => setMobilePanelOpen((v) => !v)}
-                        >
-                          <Group justify="space-between" wrap="nowrap">
-                            <Group gap={6} wrap="nowrap">
-                              <PanelRight size={14} />
-                              <Text size="sm" fw={600}>
-                                {t("investigationData")}
-                              </Text>
-                              {confidence > 0 ? (
-                                <Badge size="xs" variant="light" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
-                                  {confidence.toFixed(0)}%
-                                </Badge>
-                              ) : null}
-                            </Group>
-                            {mobilePanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          </Group>
-                        </UnstyledButton>
-                        {mobilePanelOpen ? (
-                          <Box className="mobile-data-panel-body">
-                            <DataPanel
-                              confidence={confidence}
-                              targetScore={targetScore}
-                              iterations={parsed.iterations}
-                              reflection={parsed.reflection}
-                              rubric={parsed.rubric}
-                              running={running}
-                            />
-                          </Box>
-                        ) : null}
-                      </Box>
-                    ) : null}
                   </Stack>
                 </ChatColumn>
               </ScrollArea>
@@ -1126,6 +1043,30 @@ export default function App() {
             </Box>
           )}
         </Box>
+
+        {/* ─── FLOATING DATA PANEL ─── */}
+        {hasSessionData ? (
+          <UnstyledButton
+            className="data-panel-toggle"
+            onClick={() => setAsideCollapsed((v) => !v)}
+            aria-label={asideCollapsed ? "Show data panel" : "Hide data panel"}
+          >
+            {asideCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </UnstyledButton>
+        ) : null}
+
+        {showDataPanel ? (
+          <Box className="data-panel-float" style={{ width: DATA_PANEL_WIDTH }}>
+            <DataPanel
+              confidence={confidence}
+              targetScore={targetScore}
+              iterations={parsed.iterations}
+              reflection={parsed.reflection}
+              rubric={parsed.rubric}
+              running={running}
+            />
+          </Box>
+        ) : null}
       </AppShell.Main>
     </AppShell>
   );

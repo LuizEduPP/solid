@@ -5,10 +5,14 @@ import type { WebSettings } from "./types";
 import {
   countUniqueHostnames,
   MODE_THRESHOLDS,
+  type EntityVerdict,
   type EvidenceType,
+  type InvestigationQuality,
   type PriorResearchContext,
   type ScoreRubric,
 } from "../shared";
+
+export type { EntityVerdict, InvestigationQuality } from "../shared";
 
 export interface SourceSnapshot {
   title: string;
@@ -35,9 +39,6 @@ export interface IterationSnapshot {
   disambiguationNotes?: string;
 }
 
-export type EntityVerdict = "confirmed" | "likely" | "uncertain" | "unlikely" | "nonexistent";
-export type InvestigationQuality = "progressing" | "stagnating" | "circular" | "exhausted";
-
 export interface ReflectionSnapshot {
   entity_verdict: EntityVerdict;
   entity_confidence: number;
@@ -51,7 +52,7 @@ export interface ReflectionSnapshot {
   should_continue: boolean;
 }
 
-export interface ParsedStream {
+interface ParsedStream {
   confidence: number;
   iterations: IterationSnapshot[];
   report: string;

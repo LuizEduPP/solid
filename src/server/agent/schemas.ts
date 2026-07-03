@@ -2,7 +2,7 @@ import { loads } from "ai-json-repair";
 import { z } from "zod";
 
 import { extractCitedUrls, normalizeRubric } from "./scoring.js";
-import type { EvidenceType, ScoreRubric } from "../../shared.js";
+import type { EntityVerdict, EvidenceType, InvestigationQuality, ScoreRubric } from "../../shared.js";
 
 export interface PlanPayload {
   queries: string[];
@@ -155,7 +155,7 @@ function isValidCitationUrl(url: string): boolean {
   }
 }
 
-export function parseLlmJson(raw: string): unknown {
+function parseLlmJson(raw: string): unknown {
   return normalizeLlmKeys(loads(raw));
 }
 
@@ -176,9 +176,7 @@ export function parseAnalysisPayload(raw: string, knownUrls: string[]): Analysis
   return { ...parsed, cited_urls };
 }
 
-export type EntityVerdict = "confirmed" | "likely" | "uncertain" | "unlikely" | "nonexistent";
-export type InvestigationQuality = "progressing" | "stagnating" | "circular" | "exhausted";
-export type ReflectionRecommendation = "continue" | "pivot" | "stop";
+type ReflectionRecommendation = "continue" | "pivot" | "stop";
 
 export interface ReflectionPayload {
   entity_verdict: EntityVerdict;

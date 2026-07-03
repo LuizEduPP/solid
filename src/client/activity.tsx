@@ -1,5 +1,3 @@
-import { Text } from "@mantine/core";
-
 import i18n from "./i18n";
 
 const PAGE_READ_RE = /^Page read: (https?:\/\/\S+)$/i;
@@ -94,18 +92,3 @@ export function compressStepsActivity(lines: string[]): string[] {
   return out;
 }
 
-interface ActivityLineProps {
-  line: string;
-  active?: boolean;
-}
-
-export default function ActivityLine({ line, active = false }: ActivityLineProps) {
-  const text = translateActivityLine(line);
-  if (!text) return null;
-
-  return (
-    <Text component="li" size="xs" c={active ? "indigo.3" : "dimmed"}>
-      {text}
-    </Text>
-  );
-}

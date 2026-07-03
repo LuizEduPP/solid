@@ -5,7 +5,7 @@ import { Hono } from "hono";
 
 import { tryHostname } from "../shared.js";
 
-export function getFaviconCacheDir(): string {
+function getFaviconCacheDir(): string {
   const fromEnv = process.env.FAVICON_CACHE_DIR?.trim();
   if (fromEnv) {
     return path.isAbsolute(fromEnv) ? fromEnv : path.resolve(process.cwd(), fromEnv);
@@ -125,7 +125,7 @@ function contentTypeForFaviconPath(filePath: string): string {
   return TYPE_BY_EXT[ext] ?? "application/octet-stream";
 }
 
-export async function resolveFaviconFile(hostname: string): Promise<string | null> {
+async function resolveFaviconFile(hostname: string): Promise<string | null> {
   const safe = safeHostname(hostname);
   if (!safe) return null;
 

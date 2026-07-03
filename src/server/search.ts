@@ -6,7 +6,7 @@ export interface SearchHit {
   snippet: string;
 }
 
-export interface SearchWebResult {
+interface SearchWebResult {
   hits: SearchHit[];
   error?: string;
 }
@@ -39,7 +39,7 @@ function isRateLimitError(error: Error): boolean {
   return /\bratelimit\b|\b202\b|\b403\b/i.test(error.message);
 }
 
-export function simplifyQuery(query: string): string {
+function simplifyQuery(query: string): string {
   const normalized = query
     .trim()
     .replace(/[?!.;,:]+$/g, "")
@@ -162,7 +162,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-export async function fetchPageText(url: string): Promise<string | null> {
+async function fetchPageText(url: string): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 

@@ -375,42 +375,51 @@ body {
   transition: border-color 300ms ease;
 }
 
-/* ─── DATA PANEL (ASIDE) ─── */
+/* ─── FLOATING DATA PANEL ─── */
 
-.data-panel-aside {
-  background: var(--solid-surface) !important;
-  border-left: 1px solid var(--solid-border);
-  transition: width 200ms ease;
-}
-
-.data-panel-aside--collapsed {
-  background: transparent !important;
-  border-left: none;
-}
-
-.aside-collapse-toggle {
+.data-panel-float {
   position: absolute;
-  right: 0;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20;
+  background: var(--solid-surface);
+  border: 1px solid var(--solid-border);
+  border-radius: var(--mantine-radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  animation: panel-slide-in 200ms ease;
+}
+
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.data-panel-toggle {
+  position: absolute;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 20px;
+  width: 24px;
   height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--solid-surface);
   border: 1px solid var(--solid-border);
-  border-right: none;
-  border-radius: 6px 0 0 6px;
+  border-radius: 8px;
   color: var(--solid-text-muted);
   cursor: pointer;
-  z-index: 25;
-  transition: color 120ms ease, background 120ms ease;
+  z-index: 21;
+  transition: color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.aside-collapse-toggle:hover {
+.data-panel-toggle:hover {
   color: var(--solid-text);
   background: var(--solid-elevated);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .dp-viewport {
@@ -501,33 +510,6 @@ body {
 
 /* ─── MOBILE DATA PANEL ─── */
 
-.mobile-data-panel {
-  border: 1px solid var(--solid-border);
-  border-radius: var(--mantine-radius-md);
-  background: var(--solid-surface);
-  overflow: hidden;
-}
-
-.mobile-data-panel-toggle {
-  width: 100%;
-  padding: 10px 14px;
-  color: var(--solid-text);
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  transition: background 120ms ease;
-}
-
-.mobile-data-panel-toggle:hover {
-  background: var(--solid-elevated);
-}
-
-.mobile-data-panel-body {
-  border-top: 1px solid var(--solid-border);
-  max-height: 60vh;
-  overflow-y: auto;
-}
 
 /* ─── MARKDOWN ─── */
 

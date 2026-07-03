@@ -1,12 +1,33 @@
 import {
   countUniqueHostnames,
+  RUBRIC_MAX,
   rubricTotal,
   type ModeThresholds,
   type ScoreRubric,
 } from "../../shared.js";
 
-export const HIGH_SCORE_MIN_CITED_DOMAINS = 3;
-export const HIGH_SCORE_CAP_WITHOUT_DOMAINS = 90;
+const HIGH_SCORE_MIN_CITED_DOMAINS = 3;
+const HIGH_SCORE_CAP_WITHOUT_DOMAINS = 90;
+
+const PROPOSED_WEIGHT = 0.55;
+const RUBRIC_WEIGHT = 0.45;
+const MAX_DROP_WITH_CONTRADICTION = 15;
+const MAX_DROP_WITHOUT_CONTRADICTION = 5;
+
+const DOMAIN_WEIGHT = 5;
+const DOMAIN_CAP = 35;
+const CITATION_WEIGHT = 4;
+const CITATION_CAP = 25;
+const ITERATION_WEIGHT = 3;
+const ITERATION_CAP = 20;
+const GAP_PENALTY_WEIGHT = 8;
+const GAP_PENALTY_CAP = 40;
+
+const ENTITY_CONFIDENCE_THRESHOLD = 50;
+const ENTITY_CONFIDENCE_FLOOR = 20;
+
+export const EVIDENCE_SCORE_HEADROOM = 8;
+export const OPEN_GAP_SCORE_CAP = 94;
 
 export function capScoreForCitedDomains(
   score: number,
@@ -21,7 +42,7 @@ export function capScoreForCitedDomains(
 
 export function normalizeRubric(raw: Partial<ScoreRubric> | undefined): ScoreRubric {
   const clamp = (value: unknown) =>
-    Math.max(0, Math.min(25, Number(value) || 0));
+    Math.max(0, Math.min(RUBRIC_MAX, Number(value) || 0));
 
   return {
     direct_evidence: clamp(raw?.direct_evidence),
@@ -31,7 +52,7 @@ export function normalizeRubric(raw: Partial<ScoreRubric> | undefined): ScoreRub
   };
 }
 
-export function clampScore(value: number, minScore: number): number {
+function clampScore(value: number, minScore: number): number {
   return Math.max(minScore, Math.min(100, value));
 }
 
@@ -48,7 +69,7 @@ export function applyCumulativeScore(
   },
 ): number {
   const rubricScore = rubricTotal(rubric);
-  const blended = previous === null ? proposed : proposed * 0.55 + rubricScore * 0.45;
+  const blended = previous === null ? proposed : proposed * PROPOSED_WEIGHT + rubricScore * RUBRIC_WEIGHT;
   let next = clampScore(blended, options.minScore);
 
   if (options.isFirstIteration) {
@@ -60,7 +81,7 @@ export function applyCumulativeScore(
   if (next > previous) {
     next = Math.min(next, previous + options.maxDelta);
   } else if (next < previous) {
-    const maxDrop = options.contradictionFound ? 15 : 5;
+    const maxDrop = options.contradictionFound ? MAX_DROP_WITH_CONTRADICTION : MAX_DROP_WITHOUT_CONTRADICTION;
     next = Math.max(next, previous - maxDrop);
   }
 
@@ -73,10 +94,10 @@ export function computeEvidenceScore(
   iterationCount: number,
   openGapCount: number,
 ): number {
-  const domainPart = Math.min(35, uniqueDomainCount * 5);
-  const citationPart = Math.min(25, citedUrlCount * 4);
-  const iterationPart = Math.min(20, iterationCount * 3);
-  const gapPenalty = Math.min(40, openGapCount * 8);
+  const domainPart = Math.min(DOMAIN_CAP, uniqueDomainCount * DOMAIN_WEIGHT);
+  const citationPart = Math.min(CITATION_CAP, citedUrlCount * CITATION_WEIGHT);
+  const iterationPart = Math.min(ITERATION_CAP, iterationCount * ITERATION_WEIGHT);
+  const gapPenalty = Math.min(GAP_PENALTY_CAP, openGapCount * GAP_PENALTY_WEIGHT);
   return clampScore(domainPart + citationPart + iterationPart - gapPenalty, 0);
 }
 
@@ -145,7 +166,7 @@ export function capScoreForEntityConfidence(
   score: number,
   entityConfidence: number,
 ): number {
-  if (entityConfidence >= 50) return score;
-  const cap = Math.max(20, entityConfidence);
+  if (entityConfidence >= ENTITY_CONFIDENCE_THRESHOLD) return score;
+  const cap = Math.max(ENTITY_CONFIDENCE_FLOOR, entityConfidence);
   return Math.min(score, cap);
 }

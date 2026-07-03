@@ -14,7 +14,6 @@ export interface ModeThresholds {
   maxScoreDelta: number;
   firstIterationCap: number;
   disconfirmThreshold: number;
-  weakEvidenceBelow: number;
 }
 
 export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
@@ -25,7 +24,6 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
     maxScoreDelta: 6,
     firstIterationCap: 40,
     disconfirmThreshold: 70,
-    weakEvidenceBelow: 60,
   },
   fast: {
     targetScore: 85,
@@ -34,11 +32,24 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
     maxScoreDelta: 12,
     firstIterationCap: 55,
     disconfirmThreshold: 80,
-    weakEvidenceBelow: 45,
   },
 };
 
 export type EvidenceType = "direct" | "contextual" | "none";
+export type EntityVerdict = "confirmed" | "likely" | "uncertain" | "unlikely" | "nonexistent";
+export type InvestigationQuality = "progressing" | "stagnating" | "circular" | "exhausted";
+
+export const EVIDENCE_COLORS: Record<EvidenceType, string> = {
+  direct: "green",
+  contextual: "yellow",
+  none: "gray",
+};
+
+export const EVIDENCE_I18N: Record<EvidenceType, string> = {
+  direct: "evidenceDirect",
+  contextual: "evidenceContextual",
+  none: "evidenceNone",
+};
 
 export const RUBRIC_MAX = 25;
 
@@ -58,18 +69,6 @@ export function rubricTotal(rubric: ScoreRubric): number {
   );
 }
 
-export function weakestRubricKey(rubric: ScoreRubric): keyof ScoreRubric {
-  let weakest: keyof ScoreRubric = RUBRIC_DIMENSIONS[0].key;
-
-  for (const dimension of RUBRIC_DIMENSIONS) {
-    if (rubric[dimension.key] < rubric[weakest]) {
-      weakest = dimension.key;
-    }
-  }
-
-  return weakest;
-}
-
 export function tryHostname(url: string): string | null {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -82,7 +81,7 @@ export function hostnameFromUrl(url: string): string {
   return tryHostname(url) ?? url;
 }
 
-export function uniqueHostnamesFromUrls(urls: string[]): string[] {
+function uniqueHostnamesFromUrls(urls: string[]): string[] {
   const domains = new Set<string>();
   for (const url of urls) {
     const domain = tryHostname(url);

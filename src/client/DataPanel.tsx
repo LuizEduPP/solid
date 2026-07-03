@@ -21,7 +21,7 @@ import { useTranslation } from "react-i18next";
 
 import FaviconImg from "./FaviconImg";
 import type { IterationSnapshot, ReflectionSnapshot, EntityVerdict, InvestigationQuality } from "./stream";
-import { hostnameFromUrl, uniqueUrlsByHostname, RUBRIC_DIMENSIONS, RUBRIC_MAX, type ScoreRubric } from "../shared";
+import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniqueUrlsByHostname, RUBRIC_DIMENSIONS, RUBRIC_MAX, type ScoreRubric } from "../shared";
 
 const VERDICT_CONFIG: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2 }> = {
   confirmed: { color: "green", icon: CheckCircle2 },
@@ -36,18 +36,6 @@ const QUALITY_CONFIG: Record<InvestigationQuality, { color: string }> = {
   stagnating: { color: "yellow" },
   circular: { color: "orange" },
   exhausted: { color: "red" },
-};
-
-const EVIDENCE_COLORS: Record<string, string> = {
-  direct: "green",
-  contextual: "yellow",
-  none: "gray",
-};
-
-const EVIDENCE_I18N: Record<string, string> = {
-  direct: "evidenceDirect",
-  contextual: "evidenceContextual",
-  none: "evidenceNone",
 };
 
 const RUBRIC_COLORS: Record<keyof ScoreRubric, string> = {

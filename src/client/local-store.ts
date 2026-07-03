@@ -8,7 +8,6 @@ import type { PriorResearchContext } from "../shared";
 import type { ResearchSession, WebSettings } from "./types";
 
 export type { ResearchSession, WebSettings } from "./types";
-export type { ResearchMode } from "../shared";
 
 function readLocalStorageJson<T>(
   key: string,
@@ -162,7 +161,7 @@ export function buildPriorContext(
   };
 }
 
-export interface HistoryGroup {
+interface HistoryGroup {
   key: HistoryGroupKey;
   sessions: ResearchSession[];
 }

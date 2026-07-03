@@ -16,6 +16,8 @@ import {
   capScoreForCitedDomains,
   capScoreForEntityConfidence,
   computeEvidenceScore,
+  EVIDENCE_SCORE_HEADROOM,
+  OPEN_GAP_SCORE_CAP,
 } from "./scoring.js";
 import {
   countUniqueHostnames,
@@ -33,7 +35,7 @@ import {
   type SearchHit,
 } from "../search.js";
 
-export interface IterationRecord {
+interface IterationRecord {
   number: number;
   angle: string;
   queries: string[];
@@ -55,7 +57,7 @@ export interface IterationRecord {
   disambiguationNotes: string;
 }
 
-export interface AgentRun {
+interface AgentRun {
   objective: string;
   targetScore: number;
   cumulativeSynthesis: string;
@@ -177,10 +179,10 @@ function finalizeScore(
     analysis.open_gaps?.length ?? 0,
   );
 
-  score = Math.min(score, evidenceScore + 8);
+  score = Math.min(score, evidenceScore + EVIDENCE_SCORE_HEADROOM);
 
   if ((analysis.open_gaps?.length ?? 0) > 0) {
-    score = Math.min(score, 94);
+    score = Math.min(score, OPEN_GAP_SCORE_CAP);
   }
 
   const cumulativeCitedUrls = [

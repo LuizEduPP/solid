@@ -6,23 +6,11 @@ import { useTranslation } from "react-i18next";
 import MarkdownContent from "./MarkdownContent";
 import FaviconImg from "./FaviconImg";
 import type { IterationSnapshot, SourceSnapshot } from "./stream";
-import { hostnameFromUrl, uniqueUrlsByHostname } from "../shared";
+import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniqueUrlsByHostname } from "../shared";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;
 }
-
-const EVIDENCE_COLORS: Record<string, string> = {
-  direct: "green",
-  contextual: "yellow",
-  none: "gray",
-};
-
-const EVIDENCE_I18N: Record<string, string> = {
-  direct: "evidenceDirect",
-  contextual: "evidenceContextual",
-  none: "evidenceNone",
-};
 
 function mergedPageUrls(readUrls: string[], sources: SourceSnapshot[]): string[] {
   return uniqueUrlsByHostname([
