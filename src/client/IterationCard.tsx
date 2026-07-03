@@ -127,13 +127,13 @@ export default function IterationCard({ iteration }: IterationCardProps) {
           py={8}
           styles={{ message: { fontSize: "var(--mantine-font-size-xs)" } }}
         >
-          {iteration.disambiguationNotes}
+          <MarkdownContent content={iteration.disambiguationNotes} />
         </Alert>
       ) : null}
 
       {iteration.scoreReasoning ? (
-        <Text size="sm" c="dimmed" mt="sm">
-          {iteration.scoreReasoning}
+        <Text size="sm" c="dimmed" mt="sm" component="div">
+          <MarkdownContent content={iteration.scoreReasoning} />
         </Text>
       ) : null}
 
