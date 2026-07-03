@@ -1,5 +1,5 @@
 {
-  "newResearch": "+ Neue Recherche",
+  "newResearch": "Neue Recherche",
   "noResearchYet": "Noch keine Recherche",
   "delete": "Löschen",
   "weakEvidence": "Schwache Evidenz",
@@ -88,5 +88,7 @@
   "gateDisconfirmation": "Widerlegungsrunde fehlt",
   "scrollToBottom": "Nach unten scrollen",
   "expandSolidness": "Soliditäts-Panel erweitern",
-  "collapseSolidness": "Soliditäts-Panel einklappen"
+  "collapseSolidness": "Soliditäts-Panel einklappen",
+  "collapseSidebar": "Seitenleiste einklappen",
+  "expandSidebar": "Seitenleiste ausklappen"
 }

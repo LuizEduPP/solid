@@ -1,5 +1,5 @@
 {
-  "newResearch": "+ Nova pesquisa",
+  "newResearch": "Nova pesquisa",
   "noResearchYet": "Nenhuma pesquisa ainda",
   "delete": "Excluir",
   "weakEvidence": "Evidência fraca",
@@ -88,5 +88,7 @@
   "gateDisconfirmation": "falta rodada de desconfirmação",
   "scrollToBottom": "Ir para o fim",
   "expandSolidness": "Expandir painel de solidez",
-  "collapseSolidness": "Recolher painel de solidez"
+  "collapseSolidness": "Recolher painel de solidez",
+  "collapseSidebar": "Recolher barra lateral",
+  "expandSidebar": "Expandir barra lateral"
 }

@@ -1,5 +1,5 @@
 {
-  "newResearch": "+ New research",
+  "newResearch": "New research",
   "noResearchYet": "No research yet",
   "delete": "Delete",
   "weakEvidence": "Weak evidence",
@@ -88,5 +88,7 @@
   "gateDisconfirmation": "missing disconfirmation round",
   "scrollToBottom": "Scroll to latest",
   "expandSolidness": "Expand solidness panel",
-  "collapseSolidness": "Collapse solidness panel"
+  "collapseSolidness": "Collapse solidness panel",
+  "collapseSidebar": "Collapse sidebar",
+  "expandSidebar": "Expand sidebar"
 }
