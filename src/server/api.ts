@@ -6,6 +6,23 @@ import { SolidAgent, extractObjective } from "./agent/loop.js";
 import { MODE_THRESHOLDS, type PriorResearchContext } from "../shared.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
 
+const LOCALE_NAMES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  "pt-BR": "Brazilian Portuguese",
+  "pt-PT": "European Portuguese",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+};
+
+function languageInstruction(locale: string | undefined): string {
+  if (!locale) return "";
+  const name = LOCALE_NAMES[locale];
+  if (!name) return "";
+  return ` You MUST respond in ${name}.`;
+}
+
 const messageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),
   content: z.union([z.string(), z.array(z.record(z.string(), z.unknown())), z.null()]).optional(),
@@ -145,13 +162,14 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       llm_api_key: z.string().optional().default(""),
       llm_base_url: z.string().min(1),
       llm_model: z.string().min(1),
+      locale: z.string().optional(),
     });
     const parsed = schema.safeParse(await c.req.json());
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
 
-    const { llm_api_key, llm_base_url, llm_model } = parsed.data;
+    const { llm_api_key, llm_base_url, llm_model, locale } = parsed.data;
 
     try {
       const root = llm_base_url.replace(/\/+$/, "");
@@ -176,7 +194,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
                 "Generate exactly 5 diverse, interesting research questions that a user might want to investigate. " +
                 "Cover different domains: technology, science, health, society, economics. " +
                 "Each question should be specific enough to research but broad enough to be interesting. " +
-                "Return ONLY a JSON array of strings, no other text. Example: [\"question 1\", \"question 2\"]",
+                "Return ONLY a JSON array of strings, no other text. Example: [\"question 1\", \"question 2\"]" +
+                languageInstruction(locale),
             },
             {
               role: "user",
@@ -223,13 +242,14 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       llm_base_url: z.string().min(1),
       llm_model: z.string().min(1),
       objective: z.string().min(1),
+      locale: z.string().optional(),
     });
     const parsed = schema.safeParse(await c.req.json());
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
 
-    const { llm_api_key, llm_base_url, llm_model, objective } = parsed.data;
+    const { llm_api_key, llm_base_url, llm_model, objective, locale } = parsed.data;
 
     try {
       const root = llm_base_url.replace(/\/+$/, "");
@@ -252,7 +272,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
               role: "system",
               content:
                 "Generate a short title (3-7 words) for this research query. " +
-                "Return ONLY the title text, no quotes, no punctuation at the end, no explanation.",
+                "Return ONLY the title text, no quotes, no punctuation at the end, no explanation." +
+                languageInstruction(locale),
             },
             { role: "user", content: objective },
           ],

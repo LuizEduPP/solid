@@ -217,6 +217,7 @@ export async function fetchTitle(
         llm_base_url: settings.baseUrl,
         llm_model: settings.model,
         objective,
+        locale: settings.locale,
       }),
     });
 
@@ -245,6 +246,7 @@ export async function fetchSuggestions(settings: WebSettings): Promise<string[]>
       llm_api_key: settings.apiKey,
       llm_base_url: settings.baseUrl,
       llm_model: settings.model,
+      locale: settings.locale,
     }),
   });
 
