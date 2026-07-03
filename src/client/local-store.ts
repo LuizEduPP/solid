@@ -131,6 +131,7 @@ export function deleteSession(
 }
 
 export function sessionPreview(session: ResearchSession, untitled: string): string {
+  if (session.title) return session.title;
   const parsed = parseStream(session.rawStream);
   const text =
     session.objective.trim() ||

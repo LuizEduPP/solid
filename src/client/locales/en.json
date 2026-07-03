@@ -92,5 +92,18 @@
   "expandSolidness": "Expand solidness panel",
   "collapseSolidness": "Collapse solidness panel",
   "collapseSidebar": "Collapse sidebar",
-  "expandSidebar": "Expand sidebar"
+  "expandSidebar": "Expand sidebar",
+  "tagline": "Research with evidence you can trust",
+  "investigationData": "Investigation Data",
+  "entityVerdict": "Entity Verdict",
+  "entityVerdictBanner": "Entity verdict: {{verdict}}",
+  "investigationQuality": "Investigation Quality",
+  "rubric": "Rubric",
+  "keyObservations": "Key Observations",
+  "dpSources": "Sources ({{count}})",
+  "timeline": "Timeline",
+  "openGaps": "Open Gaps",
+  "evidenceDirect": "Direct",
+  "evidenceContextual": "Contextual",
+  "evidenceNone": "None"
 }

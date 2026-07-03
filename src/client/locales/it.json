@@ -92,5 +92,18 @@
   "expandSolidness": "Espandi pannello solidità",
   "collapseSolidness": "Comprimi pannello solidità",
   "collapseSidebar": "Comprimi barra laterale",
-  "expandSidebar": "Espandi barra laterale"
+  "expandSidebar": "Espandi barra laterale",
+  "tagline": "Ricerca con evidenze di cui puoi fidarti",
+  "investigationData": "Dati dell'indagine",
+  "entityVerdict": "Verdetto entità",
+  "entityVerdictBanner": "Verdetto entità: {{verdict}}",
+  "investigationQuality": "Qualità dell'indagine",
+  "rubric": "Rubrica",
+  "keyObservations": "Osservazioni chiave",
+  "dpSources": "Fonti ({{count}})",
+  "timeline": "Cronologia",
+  "openGaps": "Lacune aperte",
+  "evidenceDirect": "Diretta",
+  "evidenceContextual": "Contestuale",
+  "evidenceNone": "Nessuna"
 }

@@ -92,5 +92,18 @@
   "expandSolidness": "Expandir panel de solidez",
   "collapseSolidness": "Contraer panel de solidez",
   "collapseSidebar": "Contraer barra lateral",
-  "expandSidebar": "Expandir barra lateral"
+  "expandSidebar": "Expandir barra lateral",
+  "tagline": "Investiga con evidencia en la que puedes confiar",
+  "investigationData": "Datos de Investigación",
+  "entityVerdict": "Veredicto de Entidad",
+  "entityVerdictBanner": "Veredicto de entidad: {{verdict}}",
+  "investigationQuality": "Calidad de Investigación",
+  "rubric": "Rúbrica",
+  "keyObservations": "Observaciones Clave",
+  "dpSources": "Fuentes ({{count}})",
+  "timeline": "Línea de Tiempo",
+  "openGaps": "Lagunas Abiertas",
+  "evidenceDirect": "Directa",
+  "evidenceContextual": "Contextual",
+  "evidenceNone": "Ninguna"
 }

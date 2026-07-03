@@ -1,11 +1,11 @@
 import {
   ActionIcon,
+  Alert,
   AppShell,
   Badge,
   Box,
   Burger,
   Button,
-  Drawer,
   Group,
   Loader,
   Modal,
@@ -19,12 +19,29 @@ import {
   type BoxProps,
 } from "@mantine/core";
 import { useDisclosure, useLocalStorage, useMediaQuery } from "@mantine/hooks";
-import { ArrowDown, ArrowUp, PanelLeft, PanelLeftClose, Plus, Settings, Square, X, Zap } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  PanelLeft,
+  PanelLeftClose,
+  PanelRight,
+  Plus,
+  Search,
+  Settings,
+  Square,
+  X,
+  Zap,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
-import ActivityLine, { compressStepsActivity } from "./activity";
+import DataPanel from "./DataPanel";
 import SolidLogo from "./SolidLogo";
 import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
 import {
@@ -46,14 +63,14 @@ import {
 } from "./local-store";
 import MarkdownContent from "./MarkdownContent";
 import IterationCard from "./IterationCard";
-import SolidnessPanel from "./SolidnessPanel";
 import SettingsForm from "./SettingsForm";
 import {
   fetchLlmModels,
+  fetchSuggestions,
+  fetchTitle,
   parseStream,
   pickDefaultModel,
   streamResearch,
-  uniqueSourceCount,
 } from "./stream";
 import { MODE_THRESHOLDS } from "../shared";
 
@@ -64,11 +81,14 @@ export function chatPath(sessionId: string): string {
   return `/c/${sessionId}`;
 }
 
-
 const SCROLL_BOTTOM_TOLERANCE = 64;
 const SIDEBAR_WIDTH = 280;
 const SIDEBAR_COLLAPSED_WIDTH = 56;
+const DATA_PANEL_WIDTH = 300;
+const DATA_PANEL_COLLAPSED_WIDTH = 24;
+const ASIDE_BREAKPOINT = "48.625em"; // ~778px
 const SIDEBAR_COLLAPSED_KEY = "solid-sidebar-collapsed";
+const ASIDE_COLLAPSED_KEY = "solid-aside-collapsed";
 
 function ChatColumn({ children, className, ...props }: BoxProps & { children: ReactNode }) {
   return (
@@ -78,27 +98,64 @@ function ChatColumn({ children, className, ...props }: BoxProps & { children: Re
   );
 }
 
+function statusDotColor(status: ResearchSession["status"]): string {
+  switch (status) {
+    case "running": return "var(--mantine-color-yellow-5)";
+    case "completed": return "var(--mantine-color-green-5)";
+    case "error": return "var(--mantine-color-red-5)";
+    case "cancelled": return "var(--mantine-color-gray-5)";
+    default: return "var(--mantine-color-gray-6)";
+  }
+}
+
 function SidebarSessionRow({
   active,
   label,
-  running,
+  session,
   deleteLabel,
   onSelect,
   onDelete,
 }: {
   active: boolean;
   label: string;
-  running: boolean;
+  session: ResearchSession;
   deleteLabel: string;
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const parsed = useMemo(() => parseStream(session.rawStream), [session.rawStream]);
+  const score = parsed.confidence;
+  const running = session.status === "running";
+
   return (
     <Box className={`sidebar-session-row${active ? " sidebar-session-row--active" : ""}`}>
-      <UnstyledButton className="sidebar-session-button" onClick={onSelect}>
-        {label}
-        {running ? " ·" : ""}
-      </UnstyledButton>
+      <Tooltip label={session.objective} multiline maw={280} withArrow openDelay={400}>
+        <UnstyledButton className="sidebar-session-button" onClick={onSelect}>
+          <Group gap={6} wrap="nowrap" style={{ width: "100%" }}>
+            <Box
+              className="sidebar-status-dot"
+              style={{ background: statusDotColor(session.status) }}
+            />
+            <Text
+              size="sm"
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {label}
+            </Text>
+            {score > 0 && !running ? (
+              <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                {score.toFixed(0)}%
+              </Badge>
+            ) : null}
+            {running ? <Loader size={10} type="dots" /> : null}
+          </Group>
+        </UnstyledButton>
+      </Tooltip>
       <ActionIcon
         className="sidebar-session-delete"
         variant="subtle"
@@ -123,16 +180,11 @@ type ChatComposerProps = {
   running: boolean;
   isActiveRunning: boolean;
   settings: WebSettings;
-  showToolbar: boolean;
-  showLogSidebar: boolean;
-  stepsOpened: boolean;
-  stepsCount: number;
   activeSession: ResearchSession | null;
   onObjectiveChange: (value: string) => void;
   onSubmit: (event: React.FormEvent) => void;
   onStop: (event: React.MouseEvent) => void;
   onToggleMode: () => void;
-  onToggleSteps: () => void;
   onDownload: () => void;
   placeholder: string;
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -144,16 +196,11 @@ function ChatComposer({
   running,
   isActiveRunning,
   settings,
-  showToolbar,
-  showLogSidebar,
-  stepsOpened,
-  stepsCount,
   activeSession,
   onObjectiveChange,
   onSubmit,
   onStop,
   onToggleMode,
-  onToggleSteps,
   onDownload,
   placeholder,
   t,
@@ -165,88 +212,84 @@ function ChatComposer({
           {error}
         </Text>
       ) : null}
-      {showToolbar ? (
-        <Group justify="flex-end" gap="xs" mb="xs">
-          {showLogSidebar ? (
-            <Button variant={stepsOpened ? "light" : "subtle"} size="compact-sm" onClick={onToggleSteps}>
-              {t("steps")} ({stepsCount})
-            </Button>
-          ) : null}
-          {activeSession && !running ? (
-            <Button variant="subtle" size="compact-sm" onClick={onDownload}>
-              {t("export")}
-            </Button>
-          ) : null}
-        </Group>
-      ) : null}
-      <Box className={`chat-input-rgb-wrap${isActiveRunning ? " chat-input-rgb-wrap--active" : ""}`}>
+      <Box className={`chat-input-wrap${isActiveRunning ? " chat-input-wrap--active" : ""}`}>
         <Paper
           component="form"
           onSubmit={onSubmit}
-          radius="xl"
+          radius="lg"
           p="xs"
           withBorder={false}
           className="chat-input-form"
-          style={{ display: "flex", alignItems: "flex-end", gap: "0.35rem" }}
         >
-          <ActionIcon
-            variant={settings.mode === "fast" ? "light" : "subtle"}
-            color={settings.mode === "fast" ? "yellow" : "gray"}
-            size="lg"
-            radius="xl"
-            disabled={running}
-            aria-label={settings.mode === "fast" ? t("modeFast") : t("modeRigorous")}
-            title={settings.mode === "fast" ? t("modeFast") : t("modeRigorous")}
-            onClick={onToggleMode}
-          >
-            <Zap size={18} fill={settings.mode === "fast" ? "currentColor" : "none"} />
-          </ActionIcon>
-          <Textarea
-            flex={1}
-            variant="unstyled"
-            placeholder={placeholder}
-            value={objective}
-            disabled={running}
-            autosize
-            minRows={1}
-            maxRows={6}
-            styles={{ input: { paddingTop: 8, paddingBottom: 8 } }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-            onChange={(event) => onObjectiveChange(event.currentTarget.value)}
-          />
-          {isActiveRunning ? (
-            <ActionIcon
-              type="button"
-              size="lg"
-              radius="xl"
-              variant="filled"
-              color="red"
-              aria-label={t("stop")}
-              title={t("stop")}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onStop}
+          <Group gap={6} mb={6} px={4}>
+            <Badge
+              size="sm"
+              variant={settings.mode === "fast" ? "filled" : "light"}
+              color={settings.mode === "fast" ? "yellow" : "indigo"}
+              style={{ cursor: running ? "default" : "pointer", textTransform: "capitalize" }}
+              onClick={running ? undefined : onToggleMode}
             >
-              <Square size={16} fill="currentColor" />
-            </ActionIcon>
-          ) : (
-            <ActionIcon
-              type="submit"
-              size="lg"
-              radius="xl"
-              variant="filled"
-              color="gray.0"
-              c="dark.9"
-              disabled={!objective.trim()}
-              aria-label={t("research")}
-            >
-              <ArrowUp size={18} />
-            </ActionIcon>
-          )}
+              {settings.mode === "fast" ? t("modeFast") : t("modeRigorous")}
+            </Badge>
+            {activeSession && !running ? (
+              <Badge
+                size="sm"
+                variant="subtle"
+                color="gray"
+                style={{ cursor: "pointer" }}
+                onClick={onDownload}
+              >
+                {t("export")}
+              </Badge>
+            ) : null}
+          </Group>
+          <Group gap={6} align="flex-end" wrap="nowrap">
+            <Textarea
+              flex={1}
+              variant="unstyled"
+              placeholder={placeholder}
+              value={objective}
+              disabled={running}
+              autosize
+              minRows={1}
+              maxRows={6}
+              styles={{ input: { paddingTop: 6, paddingBottom: 6, paddingLeft: 4 } }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              onChange={(event) => onObjectiveChange(event.currentTarget.value)}
+            />
+            {isActiveRunning ? (
+              <ActionIcon
+                type="button"
+                size="lg"
+                radius="xl"
+                variant="filled"
+                color="red"
+                aria-label={t("stop")}
+                title={t("stop")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onStop}
+              >
+                <Square size={16} fill="currentColor" />
+              </ActionIcon>
+            ) : (
+              <ActionIcon
+                type="submit"
+                size="lg"
+                radius="xl"
+                variant="filled"
+                color="indigo"
+                disabled={!objective.trim()}
+                aria-label={t("research")}
+              >
+                <ArrowUp size={18} />
+              </ActionIcon>
+            )}
+          </Group>
         </Paper>
       </Box>
     </>
@@ -274,22 +317,23 @@ export default function App() {
     key: SIDEBAR_COLLAPSED_KEY,
     defaultValue: false,
   });
-  const [stepsOpened, { close: closeSteps, toggle: toggleSteps }] = useDisclosure(false);
+  const [asideCollapsed, setAsideCollapsed] = useLocalStorage<boolean>({
+    key: ASIDE_COLLAPSED_KEY,
+    defaultValue: false,
+  });
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [controller, setController] = useState<AbortController | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const inFlightRef = useRef<{ session: ResearchSession; rawStream: string } | null>(null);
   const stopRequestedRef = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
-  const solidnessSentinelRef = useRef<HTMLDivElement>(null);
-  const logRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
   const ignoreScrollPauseRef = useRef(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [scrollPinned, setScrollPinned] = useState(false);
-  const [solidnessExpanded, setSolidnessExpanded] = useState(false);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   const activeSession = useMemo(
     () =>
@@ -304,12 +348,8 @@ export default function App() {
     [activeSession?.rawStream],
   );
 
-  const stepsActivity = useMemo(
-    () => compressStepsActivity(parsed.activity),
-    [parsed.activity],
-  );
-
   const isDesktop = useMediaQuery("(min-width: 48em)");
+  const canShowAside = useMediaQuery(`(min-width: ${ASIDE_BREAKPOINT})`);
   const navbarCollapsedDesktop = isDesktop === true && sidebarCollapsed;
   const navbarWidth = navbarCollapsedDesktop ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   const showMobileChrome = isDesktop !== true;
@@ -318,6 +358,10 @@ export default function App() {
     () => groupSessionsByDate(sessions),
     [sessions],
   );
+
+  const hasSessionData = parsed.iterations.length > 0 || running;
+  const showAside = canShowAside === true && hasSessionData;
+  const showMobilePanel = canShowAside !== true && hasSessionData;
 
   useEffect(() => {
     if (isDesktop) closeMobile();
@@ -382,6 +426,17 @@ export default function App() {
   }, [configOpened, settings.baseUrl, settings.apiKey, t]);
 
   useEffect(() => {
+    if (sessionId || running || suggestions.length > 0) return;
+    if (!settings.model.trim()) return;
+
+    let cancelled = false;
+    void fetchSuggestions(settings).then((result) => {
+      if (!cancelled && result.length > 0) setSuggestions(result);
+    });
+    return () => { cancelled = true; };
+  }, [sessionId, running, settings.apiKey, settings.baseUrl, settings.model]);
+
+  useEffect(() => {
     if (!running) return;
     autoScrollRef.current = true;
     setAutoScroll(true);
@@ -398,12 +453,6 @@ export default function App() {
     parsed.activity.length,
     running,
   ]);
-
-  useEffect(() => {
-    if (!running || !stepsOpened) return;
-    const viewport = logRef.current;
-    if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  }, [stepsActivity.length, running, stepsOpened]);
 
   function handleThreadScroll() {
     const viewport = threadRef.current;
@@ -478,7 +527,6 @@ export default function App() {
     navigate(HOME_PATH);
     setObjective("");
     setError(null);
-    closeSteps();
     closeMobile();
   }
 
@@ -504,7 +552,6 @@ export default function App() {
     setController(nextController);
     setRunning(true);
     setError(null);
-    closeSteps();
     stopRequestedRef.current = false;
 
     const followUpSession =
@@ -531,6 +578,15 @@ export default function App() {
       session = createSession(objective.trim());
       syncSession(session);
       navigate(chatPath(session.id), { replace: true });
+
+      const newId = session.id;
+      void fetchTitle(settings, objective.trim()).then((title) => {
+        if (title) {
+          setSessions((current) =>
+            current.map((s) => (s.id === newId ? { ...s, title } : s)),
+          );
+        }
+      });
     }
 
     inFlightRef.current = { session, rawStream };
@@ -608,18 +664,18 @@ export default function App() {
     }
   }
 
+  function handleSuggestionClick(text: string) {
+    setObjective(text);
+  }
+
   const isActiveRunning = running;
   const confidence = parsed.confidence;
   const targetScore = MODE_THRESHOLDS[settings.mode].targetScore;
-  const sourceCount = uniqueSourceCount(parsed.iterations);
-  const modeThresholds = MODE_THRESHOLDS[settings.mode];
   const hasContent =
     parsed.iterations.length > 0 ||
     Boolean(parsed.report) ||
     running ||
     Boolean(activeSession);
-  const showLogSidebar = stepsActivity.length > 0 || running;
-  const showSolidness = running || confidence > 0;
 
   const composerProps: ChatComposerProps = {
     error,
@@ -627,16 +683,11 @@ export default function App() {
     running,
     isActiveRunning,
     settings,
-    showToolbar: hasContent && (showLogSidebar || (activeSession !== null && !running)),
-    showLogSidebar,
-    stepsOpened,
-    stepsCount: stepsActivity.length,
     activeSession,
     onObjectiveChange: setObjective,
     onSubmit: handleSubmit,
     onStop: handleStop,
     onToggleMode: handleToggleMode,
-    onToggleSteps: toggleSteps,
     onDownload: () => activeSession && downloadSession(activeSession),
     placeholder:
       activeSession &&
@@ -647,28 +698,16 @@ export default function App() {
     t,
   };
 
-  useEffect(() => {
-    if (!showSolidness) {
-      setScrollPinned(false);
-      return;
-    }
+  const entityVerdict = parsed.reflection?.entity_verdict;
+  const showVerdictBanner =
+    entityVerdict === "unlikely" || entityVerdict === "nonexistent";
 
-    const root = threadRef.current;
-    const sentinel = solidnessSentinelRef.current;
-    if (!root || !sentinel) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        const pinned = !entry.isIntersecting;
-        setScrollPinned(pinned);
-        if (!pinned) setSolidnessExpanded(false);
-      },
-      { root, threshold: 0 },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [showSolidness, sessionId]);
+  const reportBorderColor =
+    confidence >= 70
+      ? "var(--mantine-color-teal-7)"
+      : confidence >= 40
+        ? "var(--mantine-color-yellow-7)"
+        : "var(--mantine-color-red-7)";
 
   return (
     <AppShell
@@ -678,10 +717,20 @@ export default function App() {
         breakpoint: "sm",
         collapsed: { mobile: !mobileOpened, desktop: false },
       }}
+      aside={
+        showAside
+          ? {
+              width: asideCollapsed ? DATA_PANEL_COLLAPSED_WIDTH : DATA_PANEL_WIDTH,
+              breakpoint: "sm",
+              collapsed: { mobile: true },
+            }
+          : undefined
+      }
       padding={0}
       styles={{
         main: { display: "flex", flexDirection: "column", height: "100dvh", position: "relative", minHeight: 0 },
         navbar: { transition: "width 200ms ease" },
+        aside: { transition: "width 200ms ease" },
       }}
     >
       {showMobileChrome ? (
@@ -697,6 +746,7 @@ export default function App() {
         </AppShell.Header>
       ) : null}
 
+      {/* ─── SIDEBAR ─── */}
       <AppShell.Navbar
         className={`app-sidebar${navbarCollapsedDesktop ? " app-sidebar--collapsed" : ""}`}
         withBorder={false}
@@ -804,7 +854,7 @@ export default function App() {
                             key={session.id}
                             active={session.id === sessionId}
                             label={sessionPreview(session, t("untitledResearch"))}
-                            running={session.status === "running"}
+                            session={session}
                             deleteLabel={t("delete")}
                             onSelect={() => handleSelectSession(session.id)}
                             onDelete={() => handleDeleteSession(session.id)}
@@ -870,68 +920,72 @@ export default function App() {
         />
       </Modal>
 
-      <Drawer
-        opened={stepsOpened}
-        onClose={closeSteps}
-        position="right"
-        size="md"
-        classNames={{ content: "steps-drawer-content" }}
-        title={
-          <Group gap="xs">
-            <Text fw={600}>{t("steps")}</Text>
-            <Badge size="sm" variant="light">
-              {stepsActivity.length}
-            </Badge>
-          </Group>
-        }
-        overlayProps={{ backgroundOpacity: 0.35, blur: 2 }}
-      >
-        <ScrollArea h="calc(100dvh - 80px)" viewportRef={logRef}>
-          <Stack component="ol" gap={6} style={{ listStyle: "decimal", paddingLeft: "1.1rem" }}>
-            {stepsActivity.map((line, index) => (
-              <ActivityLine
-                key={`${index}-${line.slice(0, 24)}`}
-                line={line}
-                active={isActiveRunning && index === stepsActivity.length - 1}
-              />
-            ))}
-          </Stack>
-        </ScrollArea>
-      </Drawer>
+      {/* ─── DATA PANEL (aside) ─── */}
+      {showAside ? (
+        <AppShell.Aside
+          className={`data-panel-aside${asideCollapsed ? " data-panel-aside--collapsed" : ""}`}
+          withBorder={false}
+          p={0}
+        >
+          {!asideCollapsed ? (
+            <DataPanel
+              confidence={confidence}
+              targetScore={targetScore}
+              iterations={parsed.iterations}
+              reflection={parsed.reflection}
+              rubric={parsed.rubric}
+              running={running}
+            />
+          ) : null}
+        </AppShell.Aside>
+      ) : null}
 
+      {/* ─── MAIN CONTENT ─── */}
       <AppShell.Main>
+        {showAside ? (
+          <UnstyledButton
+            className="aside-collapse-toggle"
+            onClick={() => setAsideCollapsed((v) => !v)}
+            aria-label={asideCollapsed ? "Expand data panel" : "Collapse data panel"}
+          >
+            {asideCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </UnstyledButton>
+        ) : null}
         <Box className="chat-main">
           {!hasContent ? (
             <Box className="chat-empty">
               <ChatColumn className="chat-empty-column">
                 <Stack align="center" gap="xl" w="100%">
-                  <SolidLogo wordmarkSize="lg" gap="sm" />
+                  <Stack align="center" gap="sm">
+                    <SolidLogo wordmarkSize="lg" gap="sm" />
+                    <Text c="dimmed" size="md" ta="center">
+                      {t("tagline")}
+                    </Text>
+                  </Stack>
                   <Box className="chat-empty-composer" w="100%">
                     <ChatComposer {...composerProps} />
                   </Box>
+                  {suggestions.length > 0 ? (
+                    <Group gap="xs" justify="center" wrap="wrap" maw={520}>
+                      {suggestions.map((chip) => (
+                        <UnstyledButton
+                          key={chip}
+                          className="suggestion-chip"
+                          onClick={() => handleSuggestionClick(chip)}
+                        >
+                          <Group gap={6} wrap="nowrap">
+                            <Search size={12} style={{ flexShrink: 0, opacity: 0.5 }} />
+                            <Text size="xs">{chip}</Text>
+                          </Group>
+                        </UnstyledButton>
+                      ))}
+                    </Group>
+                  ) : null}
                 </Stack>
               </ChatColumn>
             </Box>
           ) : (
             <Box className="chat-main-body">
-              {scrollPinned && showSolidness ? (
-                <Box className="solidness-sticky">
-                  <ChatColumn>
-                    <SolidnessPanel
-                      confidence={confidence}
-                      iteration={parsed.iteration}
-                      rubric={parsed.rubric}
-                      sourceCount={sourceCount}
-                      targetScore={targetScore}
-                      thresholds={modeThresholds}
-                      running={running}
-                      compact
-                      expanded={solidnessExpanded}
-                      onToggleExpand={() => setSolidnessExpanded((value) => !value)}
-                    />
-                  </ChatColumn>
-                </Box>
-              ) : null}
               <ScrollArea
                 flex={1}
                 viewportRef={threadRef}
@@ -943,30 +997,20 @@ export default function App() {
               >
                 <ChatColumn pb={160}>
                   <Stack gap="lg">
-                    {showSolidness ? (
-                      <>
-                        <Box ref={solidnessSentinelRef} h={1} aria-hidden style={{ pointerEvents: "none" }} />
-                        <SolidnessPanel
-                          confidence={confidence}
-                          iteration={parsed.iteration}
-                          rubric={parsed.rubric}
-                          sourceCount={sourceCount}
-                          targetScore={targetScore}
-                          thresholds={modeThresholds}
-                          running={running}
-                        />
-                      </>
-                    ) : null}
-
                     {activeSession?.objective ? (
                       <Paper p="md" radius="md" withBorder={false} bg="dark.6">
                         <Text>{activeSession.objective}</Text>
                       </Paper>
                     ) : null}
 
-                    {parsed.iterations.map((iteration) => (
-                      <IterationCard key={iteration.number} iteration={iteration} />
-                    ))}
+                    <Box className="iteration-timeline">
+                      {parsed.iterations.map((iteration, i) => (
+                        <Box key={iteration.number} className="iteration-timeline-item">
+                          {i > 0 && <Box className="iteration-connector" />}
+                          <IterationCard iteration={iteration} />
+                        </Box>
+                      ))}
+                    </Box>
 
                     {isActiveRunning && !parsed.report ? (
                       <Group gap="xs">
@@ -978,18 +1022,69 @@ export default function App() {
                     ) : null}
 
                     {parsed.report ? (
-                      <Paper p="md" radius="md" withBorder={false} bg="dark.6">
+                      <Box className="report-container" style={{ borderLeftColor: reportBorderColor }}>
+                        {showVerdictBanner ? (
+                          <Alert
+                            variant="light"
+                            color={entityVerdict === "nonexistent" ? "red" : "orange"}
+                            icon={<AlertTriangle size={16} />}
+                            mb="md"
+                          >
+                            <Text size="sm" fw={500}>
+                              {t("entityVerdictBanner", { verdict: entityVerdict })}
+                              {parsed.reflection?.entity_reasoning
+                                ? ` — ${parsed.reflection.entity_reasoning}`
+                                : ""}
+                            </Text>
+                          </Alert>
+                        ) : null}
                         <Text size="sm" fw={600} mb="sm">
                           {t("answer")}
                         </Text>
                         <MarkdownContent content={parsed.report} />
-                      </Paper>
+                      </Box>
                     ) : null}
 
                     {activeSession?.error ? (
                       <Text c="red" size="sm">
                         {activeSession.error}
                       </Text>
+                    ) : null}
+
+                    {showMobilePanel ? (
+                      <Box className="mobile-data-panel">
+                        <UnstyledButton
+                          className="mobile-data-panel-toggle"
+                          onClick={() => setMobilePanelOpen((v) => !v)}
+                        >
+                          <Group justify="space-between" wrap="nowrap">
+                            <Group gap={6} wrap="nowrap">
+                              <PanelRight size={14} />
+                              <Text size="sm" fw={600}>
+                                {t("investigationData")}
+                              </Text>
+                              {confidence > 0 ? (
+                                <Badge size="xs" variant="light" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
+                                  {confidence.toFixed(0)}%
+                                </Badge>
+                              ) : null}
+                            </Group>
+                            {mobilePanelOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </Group>
+                        </UnstyledButton>
+                        {mobilePanelOpen ? (
+                          <Box className="mobile-data-panel-body">
+                            <DataPanel
+                              confidence={confidence}
+                              targetScore={targetScore}
+                              iterations={parsed.iterations}
+                              reflection={parsed.reflection}
+                              rubric={parsed.rubric}
+                              running={running}
+                            />
+                          </Box>
+                        ) : null}
+                      </Box>
                     ) : null}
                   </Stack>
                 </ChatColumn>

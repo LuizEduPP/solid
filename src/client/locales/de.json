@@ -92,5 +92,18 @@
   "expandSolidness": "Soliditäts-Panel erweitern",
   "collapseSolidness": "Soliditäts-Panel einklappen",
   "collapseSidebar": "Seitenleiste einklappen",
-  "expandSidebar": "Seitenleiste ausklappen"
+  "expandSidebar": "Seitenleiste ausklappen",
+  "tagline": "Recherche mit vertrauenswürdiger Evidenz",
+  "investigationData": "Untersuchungsdaten",
+  "entityVerdict": "Entitätsurteil",
+  "entityVerdictBanner": "Entitätsurteil: {{verdict}}",
+  "investigationQuality": "Untersuchungsqualität",
+  "rubric": "Rubrik",
+  "keyObservations": "Wichtige Beobachtungen",
+  "dpSources": "Quellen ({{count}})",
+  "timeline": "Zeitachse",
+  "openGaps": "Offene Lücken",
+  "evidenceDirect": "Direkt",
+  "evidenceContextual": "Kontextuell",
+  "evidenceNone": "Keine"
 }

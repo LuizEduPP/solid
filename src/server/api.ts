@@ -140,6 +140,143 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     }
   });
 
+  router.post("/suggestions", async (c) => {
+    const schema = z.object({
+      llm_api_key: z.string().optional().default(""),
+      llm_base_url: z.string().min(1),
+      llm_model: z.string().min(1),
+    });
+    const parsed = schema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+
+    const { llm_api_key, llm_base_url, llm_model } = parsed.data;
+
+    try {
+      const root = llm_base_url.replace(/\/+$/, "");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (llm_api_key.trim()) {
+        headers.Authorization = `Bearer ${llm_api_key.trim()}`;
+      }
+
+      const response = await fetch(`${root}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: llm_model,
+          temperature: 0.9,
+          max_tokens: 300,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Generate exactly 5 diverse, interesting research questions that a user might want to investigate. " +
+                "Cover different domains: technology, science, health, society, economics. " +
+                "Each question should be specific enough to research but broad enough to be interesting. " +
+                "Return ONLY a JSON array of strings, no other text. Example: [\"question 1\", \"question 2\"]",
+            },
+            {
+              role: "user",
+              content: "Generate 5 research suggestions for today.",
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        return c.json({ error: `LLM returned ${response.status}` }, 502);
+      }
+
+      const payload = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const content = payload.choices?.[0]?.message?.content?.trim() ?? "[]";
+
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        return c.json({ suggestions: [] });
+      }
+
+      const suggestions = JSON.parse(jsonMatch[0]) as unknown;
+      if (!Array.isArray(suggestions)) {
+        return c.json({ suggestions: [] });
+      }
+
+      return c.json({
+        suggestions: suggestions
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+          .slice(0, 6),
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate suggestions";
+      return c.json({ error: message }, 502);
+    }
+  });
+
+  router.post("/title", async (c) => {
+    const schema = z.object({
+      llm_api_key: z.string().optional().default(""),
+      llm_base_url: z.string().min(1),
+      llm_model: z.string().min(1),
+      objective: z.string().min(1),
+    });
+    const parsed = schema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+
+    const { llm_api_key, llm_base_url, llm_model, objective } = parsed.data;
+
+    try {
+      const root = llm_base_url.replace(/\/+$/, "");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (llm_api_key.trim()) {
+        headers.Authorization = `Bearer ${llm_api_key.trim()}`;
+      }
+
+      const response = await fetch(`${root}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: llm_model,
+          temperature: 0.3,
+          max_tokens: 40,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Generate a short title (3-7 words) for this research query. " +
+                "Return ONLY the title text, no quotes, no punctuation at the end, no explanation.",
+            },
+            { role: "user", content: objective },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        return c.json({ error: `LLM returned ${response.status}` }, 502);
+      }
+
+      const payload = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const raw = payload.choices?.[0]?.message?.content?.trim() ?? "";
+      const title = raw.replace(/^["']|["']$/g, "").replace(/\.+$/, "").trim();
+
+      return c.json({ title: title || null });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to generate title";
+      return c.json({ error: message }, 502);
+    }
+  });
+
   router.get("/models", (c) =>
     c.json({
       object: "list",

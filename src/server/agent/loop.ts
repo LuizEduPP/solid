@@ -104,7 +104,7 @@ function totalUniqueDomainCount(run: AgentRun): number {
   return countUniqueHostnames(urls);
 }
 
-function event(kind: "status" | "score" | "report" | "iter" | "rubric", content: string): string {
+function event(kind: "status" | "score" | "report" | "iter" | "rubric" | "reflection", content: string): string {
   return `@@${kind.toUpperCase()}@@\n${content}\n\n`;
 }
 
@@ -122,6 +122,9 @@ function eventIteration(record: {
   sources: SearchHit[];
   disconfirming: boolean;
   gaps?: string[];
+  evidenceType?: EvidenceType;
+  directEntityEvidence?: boolean;
+  disambiguationNotes?: string;
 }): string {
   return event("iter", JSON.stringify(record));
 }
@@ -581,6 +584,9 @@ export class SolidAgent {
         sources: hits.slice(0, 6),
         disconfirming: plan.disconfirming,
         gaps: (analysis.open_gaps ?? []).map(String),
+        evidenceType: analysis.evidence_type,
+        directEntityEvidence: analysis.direct_entity_evidence,
+        disambiguationNotes: analysis.disambiguation_notes,
       });
       yield event("rubric", JSON.stringify({ iteration, rubric, total: rubricTotal(rubric) }));
       yield event("score", score.toFixed(2));
@@ -595,6 +601,7 @@ export class SolidAgent {
       const reflection = await this.reflect(rootObjective, agentRun);
       throwIfAborted();
       agentRun.lastReflection = reflection;
+      yield event("reflection", JSON.stringify(reflection));
 
       if (reflection.entity_confidence < 50) {
         score = capScoreForEntityConfidence(score, reflection.entity_confidence);

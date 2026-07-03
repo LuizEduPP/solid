@@ -5,6 +5,7 @@ import type { WebSettings } from "./types";
 import {
   countUniqueHostnames,
   MODE_THRESHOLDS,
+  type EvidenceType,
   type PriorResearchContext,
   type ScoreRubric,
 } from "../shared";
@@ -29,6 +30,25 @@ export interface IterationSnapshot {
   sources?: SourceSnapshot[];
   gaps?: string[];
   disconfirming?: boolean;
+  evidenceType?: EvidenceType;
+  directEntityEvidence?: boolean;
+  disambiguationNotes?: string;
+}
+
+export type EntityVerdict = "confirmed" | "likely" | "uncertain" | "unlikely" | "nonexistent";
+export type InvestigationQuality = "progressing" | "stagnating" | "circular" | "exhausted";
+
+export interface ReflectionSnapshot {
+  entity_verdict: EntityVerdict;
+  entity_confidence: number;
+  entity_reasoning: string;
+  investigation_quality: InvestigationQuality;
+  quality_reasoning: string;
+  recommendation: "continue" | "pivot" | "stop";
+  recommendation_reasoning: string;
+  pivot_suggestion: string;
+  key_observations: string[];
+  should_continue: boolean;
 }
 
 export interface ParsedStream {
@@ -38,9 +58,10 @@ export interface ParsedStream {
   activity: string[];
   iteration: number | null;
   rubric: ScoreRubric | null;
+  reflection: ReflectionSnapshot | null;
 }
 
-const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC)@@\n/;
+const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC|REFLECTION)@@\n/;
 
 function sectionBody(output: string, start: number): string {
   const tail = output.slice(start);
@@ -94,6 +115,34 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
       sources: payload.sources,
       disconfirming: Boolean(payload.disconfirming),
       gaps: payload.gaps?.map(String),
+      evidenceType: payload.evidenceType as EvidenceType | undefined,
+      directEntityEvidence: payload.directEntityEvidence,
+      disambiguationNotes: payload.disambiguationNotes,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseReflectionSnapshot(output: string): ReflectionSnapshot | null {
+  const raw = extractTailSection(output, "REFLECTION");
+  if (!raw) return null;
+  try {
+    const payload = JSON.parse(raw) as Partial<ReflectionSnapshot>;
+    if (!payload.entity_verdict) return null;
+    return {
+      entity_verdict: payload.entity_verdict ?? "uncertain",
+      entity_confidence: Number(payload.entity_confidence ?? 50),
+      entity_reasoning: String(payload.entity_reasoning ?? ""),
+      investigation_quality: payload.investigation_quality ?? "progressing",
+      quality_reasoning: String(payload.quality_reasoning ?? ""),
+      recommendation: payload.recommendation ?? "continue",
+      recommendation_reasoning: String(payload.recommendation_reasoning ?? ""),
+      pivot_suggestion: String(payload.pivot_suggestion ?? ""),
+      key_observations: Array.isArray(payload.key_observations)
+        ? payload.key_observations.map(String)
+        : [],
+      should_continue: payload.should_continue ?? true,
     };
   } catch {
     return null;
@@ -134,6 +183,8 @@ export function parseStream(output: string): ParsedStream {
   const rubric =
     parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;
 
+  const reflection = parseReflectionSnapshot(output);
+
   return {
     confidence,
     iterations,
@@ -141,12 +192,68 @@ export function parseStream(output: string): ParsedStream {
     activity,
     iteration,
     rubric,
+    reflection,
   };
 }
 
 export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
   const urls = iterations.flatMap((iteration) => iteration.citedUrls ?? []);
   return countUniqueHostnames(urls);
+}
+
+export async function fetchTitle(
+  settings: WebSettings,
+  objective: string,
+): Promise<string | null> {
+  if (!settings.model.trim()) return null;
+
+  try {
+    const response = await fetch("/v1/title", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        llm_api_key: settings.apiKey,
+        llm_base_url: settings.baseUrl,
+        llm_model: settings.model,
+        objective,
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json().catch(() => null)) as {
+      title?: string | null;
+    } | null;
+
+    return payload?.title ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchSuggestions(settings: WebSettings): Promise<string[]> {
+  if (!settings.apiKey.trim() && !settings.baseUrl.includes("localhost") && !settings.baseUrl.includes("127.0.0.1")) {
+    return [];
+  }
+  if (!settings.model.trim()) return [];
+
+  const response = await fetch("/v1/suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      llm_api_key: settings.apiKey,
+      llm_base_url: settings.baseUrl,
+      llm_model: settings.model,
+    }),
+  });
+
+  if (!response.ok) return [];
+
+  const payload = (await response.json().catch(() => null)) as {
+    suggestions?: string[];
+  } | null;
+
+  return Array.isArray(payload?.suggestions) ? payload.suggestions : [];
 }
 
 export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {

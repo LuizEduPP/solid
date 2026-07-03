@@ -14,6 +14,7 @@ export interface WebSettings {
 export interface ResearchSession {
   id: string;
   objective: string;
+  title?: string;
   createdAt: number;
   updatedAt: number;
   status: "running" | "completed" | "cancelled" | "error";
