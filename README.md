@@ -22,6 +22,10 @@
 </p>
 
 <p align="center">
+  <img src="preview.png" alt="Solid preview" width="920" />
+</p>
+
+<p align="center">
   Created by <a href="https://github.com/LuizEduPP"><strong>Luiz Eduardo</strong></a> (<a href="https://github.com/LuizEduPP">@LuizEduPP</a>)
 </p>
 
