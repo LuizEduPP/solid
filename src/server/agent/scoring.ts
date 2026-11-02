@@ -3,48 +3,6 @@ import { RUBRIC_MAX, rubricTotal, type ScoreRubric } from "../../shared.js";
 const PROPOSED_WEIGHT = 0.55;
 const RUBRIC_WEIGHT = 0.45;
 
-const STOPWORDS = new Set([
-  "about",
-  "after",
-  "also",
-  "and",
-  "are",
-  "been",
-  "como",
-  "com",
-  "das",
-  "dos",
-  "does",
-  "for",
-  "from",
-  "have",
-  "how",
-  "into",
-  "para",
-  "por",
-  "quais",
-  "qual",
-  "que",
-  "that",
-  "the",
-  "this",
-  "uma",
-  "uns",
-  "what",
-  "when",
-  "which",
-  "with",
-  "une",
-  "des",
-  "les",
-  "und",
-  "der",
-  "die",
-  "das",
-  "con",
-  "una",
-]);
-
 export function normalizeRubric(
   raw: Partial<ScoreRubric> | undefined,
 ): ScoreRubric {
@@ -93,7 +51,7 @@ export function distinctiveTerms(text: string): string[] {
   const seen = new Set<string>();
   const terms: string[] = [];
   for (const raw of text.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
-    if (raw.length < 4 || STOPWORDS.has(raw) || seen.has(raw)) continue;
+    if (raw.length < 4 || seen.has(raw)) continue;
     seen.add(raw);
     terms.push(raw);
   }
