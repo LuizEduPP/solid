@@ -165,8 +165,8 @@ function ObservationsSection({ observations }: { observations: string[] }) {
     <Box className="dp-section">
       <Text className="dp-section-title">{t("keyObservations")}</Text>
       <Stack gap={4}>
-        {observations.map((obs, i) => (
-          <Text key={i} size="xs" c="dimmed" lh={1.4}>
+        {observations.map((obs) => (
+          <Text key={obs} size="xs" c="dimmed" lh={1.4}>
             • {obs}
           </Text>
         ))}
@@ -186,7 +186,8 @@ function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
       <Text className="dp-section-title">{t("dpSources", { count: byHost.length })}</Text>
       <Stack gap={4}>
         {byHost.map(([host, urls]) => {
-          const primary = urls[0]!;
+          const [primary] = urls;
+          if (!primary) return null;
           const extra = urls.length - 1;
           const label = extra > 0 ? `${host} (+${extra})` : host;
           return (
@@ -272,8 +273,8 @@ function GapsSection({ iterations }: { iterations: IterationSnapshot[] }) {
     <Box className="dp-section">
       <Text className="dp-section-title">{t("openGaps")}</Text>
       <Stack gap={4}>
-        {lastGaps.map((gap, i) => (
-          <Group key={i} gap={6} wrap="nowrap" align="flex-start">
+        {lastGaps.map((gap) => (
+          <Group key={gap} gap={6} wrap="nowrap" align="flex-start">
             <CircleDashed
               size={12}
               style={{ flexShrink: 0, marginTop: 3 }}

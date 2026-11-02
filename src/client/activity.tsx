@@ -48,8 +48,9 @@ export function translateActivityLine(line: string): string {
   }
 
   match = trimmed.match(/^Iteration (\d+) · (.+)$/);
-  if (match) {
-    let angle = match[2]!;
+  const angleMatch = match?.[2];
+  if (match && angleMatch) {
+    let angle = angleMatch;
     let suffix = "";
     if (angle.endsWith(DISCONFIRM_TAG)) {
       angle = angle.slice(0, -DISCONFIRM_TAG.length);

@@ -64,7 +64,10 @@ const theme = createTheme({
 
 void i18n.changeLanguage(normalizeLocale(loadWebSettings().locale));
 
-createRoot(document.getElementById("root")!).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("Missing #root");
+
+createRoot(root).render(
   <StrictMode>
     <I18nextProvider i18n={i18n}>
       <MantineProvider theme={theme} defaultColorScheme="dark">

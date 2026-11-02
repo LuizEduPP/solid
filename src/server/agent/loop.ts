@@ -200,7 +200,9 @@ export class SolidAgent {
 
     try {
       const response = await this.client.chat.completions.create(request, options);
-      return extractMessageContent(response.choices[0]!.message);
+      const message = response.choices[0]?.message;
+      if (!message) throw new Error("LLM returned no choices");
+      return extractMessageContent(message);
     } catch (error) {
       if (this.runSignal?.aborted) {
         throw new DOMException("Aborted", "AbortError");
@@ -217,7 +219,9 @@ export class SolidAgent {
         },
         options,
       );
-      return extractMessageContent(response.choices[0]!.message);
+      const retryMessage = response.choices[0]?.message;
+      if (!retryMessage) throw new Error("LLM returned no choices");
+      return extractMessageContent(retryMessage);
     }
   }
 
@@ -246,25 +250,21 @@ export class SolidAgent {
   private formatReflectionContext(reflection: ReflectionPayload | null): string {
     if (!reflection) return "SUPERVISOR REFLECTION: Not available yet (first iteration).\n";
 
-    return (
-      [
-        `SUPERVISOR REFLECTION:`,
-        `- Entity verdict: ${reflection.entity_verdict} (confidence: ${reflection.entity_confidence}%)`,
-        `- Entity reasoning: ${reflection.entity_reasoning}`,
-        `- Investigation quality: ${reflection.investigation_quality}`,
-        `- Quality reasoning: ${reflection.quality_reasoning}`,
-        `- Recommendation: ${reflection.recommendation}`,
-        `- Recommendation reasoning: ${reflection.recommendation_reasoning}`,
-        ...(reflection.pivot_suggestion
-          ? [`- Pivot suggestion: ${reflection.pivot_suggestion}`]
-          : []),
-        ...(reflection.key_observations.length
-          ? [
-              `- Key observations:\n${reflection.key_observations.map((o) => `  • ${o}`).join("\n")}`,
-            ]
-          : []),
-      ].join("\n") + "\n"
-    );
+    return `${[
+      "SUPERVISOR REFLECTION:",
+      `- Entity verdict: ${reflection.entity_verdict} (confidence: ${reflection.entity_confidence}%)`,
+      `- Entity reasoning: ${reflection.entity_reasoning}`,
+      `- Investigation quality: ${reflection.investigation_quality}`,
+      `- Quality reasoning: ${reflection.quality_reasoning}`,
+      `- Recommendation: ${reflection.recommendation}`,
+      `- Recommendation reasoning: ${reflection.recommendation_reasoning}`,
+      ...(reflection.pivot_suggestion
+        ? [`- Pivot suggestion: ${reflection.pivot_suggestion}`]
+        : []),
+      ...(reflection.key_observations.length
+        ? [`- Key observations:\n${reflection.key_observations.map((o) => `  • ${o}`).join("\n")}`]
+        : []),
+    ].join("\n")}\n`;
   }
 
   private async reflect(objective: string, run: AgentRun): Promise<ReflectionPayload> {

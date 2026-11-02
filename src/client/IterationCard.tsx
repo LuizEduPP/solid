@@ -45,7 +45,7 @@ function PageReadBadge({ url }: { url: string }) {
 
 function ScoreDeltaIndicator({ delta }: { delta: string }) {
   const numDelta = parseFloat(delta);
-  if (isNaN(numDelta) || numDelta === 0) {
+  if (Number.isNaN(numDelta) || numDelta === 0) {
     return (
       <Group gap={2} wrap="nowrap">
         <Minus size={12} color="var(--solid-text-muted)" />

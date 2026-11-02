@@ -172,7 +172,10 @@ export function groupSessionsByDate(sessions: ResearchSession[]): HistoryGroup[]
   }
 
   const order: HistoryGroupKey[] = ["today", "yesterday", "last7", "earlier"];
-  return order.filter((key) => groups.has(key)).map((key) => ({ key, sessions: groups.get(key)! }));
+  return order.flatMap((key) => {
+    const grouped = groups.get(key);
+    return grouped ? [{ key, sessions: grouped }] : [];
+  });
 }
 
 function exportSessionMarkdown(session: ResearchSession): string {

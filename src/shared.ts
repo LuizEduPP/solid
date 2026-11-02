@@ -449,9 +449,10 @@ export function normalizeIntegrationRecord(
   fallback: IntegrationRecord,
 ): IntegrationRecord {
   const value = raw && typeof raw === "object" ? (raw as Partial<IntegrationRecord>) : {};
-  return integrationRecord((field) =>
-    typeof value[field] === "string" ? value[field]!.trim() : fallback[field],
-  );
+  return integrationRecord((field) => {
+    const raw = value[field];
+    return typeof raw === "string" ? raw.trim() : fallback[field];
+  });
 }
 
 export function normalizeIntegrationKeys(raw: unknown): IntegrationKeys {

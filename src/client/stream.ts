@@ -210,7 +210,7 @@ export function parseStream(output: string): ParsedStream {
   let confidence = scoreText ? Number(scoreText.split(/\s/)[0]) : 0;
 
   if (confidence === 0 && iterations.length > 0) {
-    confidence = iterations.at(-1)!.score;
+    confidence = iterations.at(-1)?.score ?? 0;
   }
 
   const iteration = iterations.at(-1)?.number ?? null;

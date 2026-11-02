@@ -63,10 +63,10 @@ function pickSearchParams(
   attempt: number,
 ): { keywords: string; region: string; backend: (typeof BACKENDS)[number] } {
   const variants = queryVariants(query);
-  const keywords = variants[Math.min(attempt, variants.length - 1)]!;
+  const keywords = variants.at(Math.min(attempt, variants.length - 1)) ?? query;
   const primaryRegion = searchRegion(query);
   const region = attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
-  const backend = BACKENDS[attempt % BACKENDS.length]!;
+  const backend = BACKENDS[attempt % BACKENDS.length] ?? "lite";
 
   return { keywords, region, backend };
 }

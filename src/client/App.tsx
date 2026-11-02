@@ -510,6 +510,7 @@ export default function App() {
     }
   }, [sessionId, sessions, activeSession, running, navigate]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refetch models only when the LLM endpoint or key changes
   useEffect(() => {
     if (!configOpened || !settings.baseUrl.trim()) return;
 
@@ -542,6 +543,7 @@ export default function App() {
     };
   }, [configOpened, settings.baseUrl, settings.apiKey, t]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: suggestions depend on the LLM identity, not every settings field
   useEffect(() => {
     if (sessionId || running || suggestions.length > 0) return;
     if (!settings.model.trim()) return;
@@ -555,12 +557,14 @@ export default function App() {
     return () => ac.abort();
   }, [sessionId, running, settings.apiKey, settings.baseUrl, settings.model, settings.locale]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId resets auto-scroll when switching chats
   useEffect(() => {
     if (!running) return;
     autoScrollRef.current = true;
     setAutoScroll(true);
   }, [running, sessionId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll when the stream grows, not on every parsed object identity
   useEffect(() => {
     if (!autoScrollRef.current) return;
     const viewport = threadRef.current;
@@ -1124,9 +1128,10 @@ export default function App() {
                     {parsed.rounds.map((round: ResearchRound, roundIdx: number) => {
                       const isLastRound = roundIdx === parsed.rounds.length - 1;
                       const roundHasReport = !!round.report;
+                      const roundKey = round.followUpMessage ?? "root";
 
                       return (
-                        <Fragment key={roundIdx}>
+                        <Fragment key={roundKey}>
                           {roundIdx === 0 && activeSession?.objective ? (
                             <QueryTurn label={t("queryLabel")} text={activeSession.objective} />
                           ) : null}
@@ -1139,7 +1144,7 @@ export default function App() {
                             <Box className="iteration-timeline">
                               {round.iterations.map((iteration) => (
                                 <IterationCard
-                                  key={`${roundIdx}-${iteration.number}`}
+                                  key={`${roundKey}-${iteration.number}`}
                                   iteration={iteration}
                                 />
                               ))}
@@ -1160,7 +1165,7 @@ export default function App() {
                               className="report-container"
                               style={{ "--report-accent": reportAccent } as CSSProperties}
                             >
-                              {isLastRound && showVerdictBanner ? (
+                              {isLastRound && showVerdictBanner && entityVerdict ? (
                                 <Alert
                                   variant="light"
                                   color={entityVerdict === "nonexistent" ? "red" : "orange"}
@@ -1169,7 +1174,7 @@ export default function App() {
                                 >
                                   <MarkdownContent
                                     content={
-                                      `**${t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict!]) })}**` +
+                                      `**${t("entityVerdictBanner", { verdict: t(VERDICT_I18N[entityVerdict]) })}**` +
                                       (parsed.reflection?.entity_reasoning
                                         ? ` — ${parsed.reflection.entity_reasoning}`
                                         : "")
