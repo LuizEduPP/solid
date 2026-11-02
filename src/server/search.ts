@@ -1,3 +1,4 @@
+import "./silence-ddgs-logs.js";
 import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
 import {
