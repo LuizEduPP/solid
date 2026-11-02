@@ -32,6 +32,7 @@ export interface IterationSnapshot {
   citedUrls?: string[];
   readUrls?: string[];
   sources?: SourceSnapshot[];
+  queries?: string[];
   gaps?: string[];
   disconfirming?: boolean;
   evidenceType?: EvidenceType;
@@ -106,6 +107,7 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
       citedUrls: payload.citedUrls,
       readUrls: payload.readUrls,
       sources: payload.sources,
+      queries: payload.queries?.map(String),
       disconfirming: Boolean(payload.disconfirming),
       gaps: payload.gaps?.map(String),
       evidenceType: payload.evidenceType as EvidenceType | undefined,
@@ -161,6 +163,12 @@ function parseLatestRubric(output: string): ScoreRubric | null {
 
 const FOLLOWUP_TOKEN = streamToken("FOLLOWUP");
 
+function sectionEnd(output: string, start: number): number {
+  const tail = output.slice(start);
+  const nextIdx = tail.search(STREAM_MARKER_RE);
+  return start + (nextIdx >= 0 ? nextIdx : tail.length);
+}
+
 function parseRounds(output: string): ResearchRound[] {
   const parts: { followUpMessage?: string; raw: string }[] = [];
   let pos = 0;
@@ -179,8 +187,7 @@ function parseRounds(output: string): ResearchRound[] {
 
     const msgStart = nextFollowUp + FOLLOWUP_TOKEN.length;
     const msgBody = sectionBody(output, msgStart);
-
-    const chunkStart = msgStart + msgBody.length;
+    const chunkStart = sectionEnd(output, msgStart);
     const nextFollowUp2 = output.indexOf(FOLLOWUP_TOKEN, chunkStart);
     const chunkEnd = nextFollowUp2 >= 0 ? nextFollowUp2 : output.length;
 
@@ -232,6 +239,14 @@ export function parseStream(output: string): ParsedStream {
     reflection,
     rounds,
   };
+}
+
+export function iterationSourceUrls(iteration: IterationSnapshot): string[] {
+  return [
+    ...(iteration.citedUrls ?? []),
+    ...(iteration.readUrls ?? []),
+    ...(iteration.sources ?? []).map((source) => source.url),
+  ];
 }
 
 export function uniqueSourceCount(iterations: IterationSnapshot[]): number {

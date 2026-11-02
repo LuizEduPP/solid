@@ -125,6 +125,7 @@ function eventIteration(record: {
   rubric: ScoreRubric;
   citedUrls: string[];
   readUrls?: string[];
+  queries?: string[];
   sources: SearchHit[];
   disconfirming: boolean;
   gaps?: string[];
@@ -615,6 +616,7 @@ export class SolidAgent {
           rubric,
           citedUrls: analysis.cited_urls ?? [],
           readUrls: fetchedPages.map((page) => page.url),
+          queries,
           sources: hits.slice(0, 6),
           disconfirming: plan.disconfirming,
           gaps: (analysis.open_gaps ?? []).map(String),

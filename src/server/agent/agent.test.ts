@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   MODE_THRESHOLDS,
   appendStreamChunks,
+  groupUrlsByHostname,
   llmRequiresApiKey,
   mapSearchHits,
   rubricTotal,
@@ -231,6 +232,20 @@ describe("agent", () => {
         appendStreamChunks("raw", [["FOLLOWUP", "more"], ["STATUS", "go"]]),
         "raw\n\n@@FOLLOWUP@@\nmore\n\n@@STATUS@@\ngo\n\n",
       );
+    });
+
+    it("counts extra pages from the same host without collapsing them", () => {
+      const grouped = groupUrlsByHostname([
+        "https://www.example.com/a",
+        "https://example.com/a/",
+        "https://example.com/a#top",
+        "https://example.com/b",
+        "https://other.test/x",
+      ]);
+      const example = grouped.find(([host]) => host === "example.com");
+      const other = grouped.find(([host]) => host === "other.test");
+      assert.equal(example?.[1].length, 2);
+      assert.equal(other?.[1].length, 1);
     });
 
     it("maps search hits and requires a cloud LLM key", () => {

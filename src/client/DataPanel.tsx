@@ -18,7 +18,13 @@ import {
 import { useTranslation } from "react-i18next";
 
 import FaviconImg from "./FaviconImg";
-import type { IterationSnapshot, ReflectionSnapshot, EntityVerdict, InvestigationQuality } from "./stream";
+import {
+  iterationSourceUrls,
+  type IterationSnapshot,
+  type ReflectionSnapshot,
+  type EntityVerdict,
+  type InvestigationQuality,
+} from "./stream";
 import {
   EVIDENCE_COLORS,
   EVIDENCE_I18N,
@@ -178,12 +184,7 @@ function ObservationsSection({ observations }: { observations: string[] }) {
 
 function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
   const { t } = useTranslation();
-  const byHost = groupUrlsByHostname(
-    iterations.flatMap((it) => [
-      ...(it.citedUrls ?? []),
-      ...(it.readUrls ?? []),
-    ]),
-  );
+  const byHost = groupUrlsByHostname(iterations.flatMap(iterationSourceUrls));
 
   if (byHost.length === 0) return null;
 
@@ -191,24 +192,36 @@ function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
     <Box className="dp-section">
       <Text className="dp-section-title">{t("dpSources", { count: byHost.length })}</Text>
       <Stack gap={4}>
-        {byHost.map(([host, urls]) => (
-          <Group key={host} gap={6} wrap="nowrap">
-            <FaviconImg url={urls[0]} size={14} style={{ borderRadius: 2, flexShrink: 0 }} />
-            <Text
-              component="a"
-              href={urls[0]}
-              target="_blank"
-              rel="noreferrer"
-              size="xs"
-              c="dimmed"
-              style={{ textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-              className="dp-source-link"
-            >
-              {host}
-              {urls.length > 1 ? ` (+${urls.length - 1})` : ""}
-            </Text>
-          </Group>
-        ))}
+        {byHost.map(([host, urls]) => {
+          const primary = urls[0]!;
+          const extra = urls.length - 1;
+          const label = extra > 0 ? `${host} (+${extra})` : host;
+          return (
+            <Group key={host} gap={6} wrap="nowrap">
+              <FaviconImg url={primary} size={14} style={{ borderRadius: 2, flexShrink: 0 }} />
+              <Tooltip
+                label={urls.join("\n")}
+                multiline
+                maw={360}
+                withArrow
+                disabled={extra === 0}
+              >
+                <Text
+                  component="a"
+                  href={primary}
+                  target="_blank"
+                  rel="noreferrer"
+                  size="xs"
+                  c="dimmed"
+                  style={{ textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  className="dp-source-link"
+                >
+                  {label}
+                </Text>
+              </Tooltip>
+            </Group>
+          );
+        })}
       </Stack>
     </Box>
   );

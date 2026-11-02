@@ -183,7 +183,13 @@ export function buildPriorContext(
     currentScore: parsed.confidence,
     report: parsed.report,
     openGaps: lastIteration?.gaps ?? [],
-    priorQueries: parsed.iterations.map((iteration) => iteration.angle).filter(Boolean),
+    priorQueries: parsed.iterations.flatMap((iteration) =>
+      iteration.queries?.length
+        ? iteration.queries
+        : iteration.angle
+          ? [iteration.angle]
+          : [],
+    ),
     citedUrls: parsed.iterations.flatMap((iteration) => iteration.citedUrls ?? []),
     uniqueDomainCount: uniqueSourceCount(parsed.iterations),
     iterationCount: parsed.iterations.length,

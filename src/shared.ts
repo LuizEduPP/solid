@@ -225,6 +225,21 @@ export function hostnameFromUrl(url: string): string {
   return tryHostname(url) ?? url;
 }
 
+export function canonicalPageUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    parsed.hash = "";
+    parsed.hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (parsed.pathname.length > 1 && parsed.pathname.endsWith("/")) {
+      parsed.pathname = parsed.pathname.slice(0, -1);
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 function uniqueHostnamesFromUrls(urls: string[]): string[] {
   const domains = new Set<string>();
   for (const url of urls) {
@@ -258,16 +273,19 @@ export function uniqueUrlsByHostname(urls: string[]): string[] {
 
 export function groupUrlsByHostname(urls: string[]): Array<[string, string[]]> {
   const byHost = new Map<string, string[]>();
+  const seenPages = new Set<string>();
+
   for (const url of urls) {
-    const host = tryHostname(url);
+    const page = canonicalPageUrl(url);
+    if (!page || seenPages.has(page)) continue;
+    seenPages.add(page);
+    const host = tryHostname(page);
     if (!host) continue;
     const list = byHost.get(host);
-    if (list) {
-      if (!list.includes(url)) list.push(url);
-    } else {
-      byHost.set(host, [url]);
-    }
+    if (list) list.push(page);
+    else byHost.set(host, [page]);
   }
+
   return [...byHost.entries()];
 }
 

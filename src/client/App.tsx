@@ -1123,7 +1123,10 @@ export default function App() {
                           {round.iterations.length > 0 ? (
                             <Box className="iteration-timeline">
                               {round.iterations.map((iteration) => (
-                                <IterationCard key={iteration.number} iteration={iteration} />
+                                <IterationCard
+                                  key={`${roundIdx}-${iteration.number}`}
+                                  iteration={iteration}
+                                />
                               ))}
                             </Box>
                           ) : null}
