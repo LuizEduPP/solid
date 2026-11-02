@@ -253,7 +253,7 @@ export function canFollowUp(
   );
 }
 
-function llmFields(settings: WebSettings): Record<string, string> {
+function llmFields(settings: Pick<WebSettings, "apiKey" | "baseUrl">): Record<string, string> {
   return {
     llm_api_key: settings.apiKey,
     llm_base_url: settings.baseUrl,
@@ -301,7 +301,7 @@ export async function fetchTitle(settings: WebSettings, objective: string): Prom
 }
 
 export async function fetchSuggestions(
-  settings: WebSettings,
+  settings: Pick<WebSettings, "apiKey" | "baseUrl" | "model" | "locale">,
   signal?: AbortSignal,
 ): Promise<string[]> {
   if (llmRequiresApiKey(settings.apiKey, settings.baseUrl)) {
@@ -322,7 +322,9 @@ export async function fetchSuggestions(
   return ok && Array.isArray(payload?.suggestions) ? payload.suggestions : [];
 }
 
-export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
+export async function fetchLlmModels(
+  settings: Pick<WebSettings, "apiKey" | "baseUrl">,
+): Promise<string[]> {
   const { ok, status, payload } = await postJson<{
     models?: string[];
     error?: string;

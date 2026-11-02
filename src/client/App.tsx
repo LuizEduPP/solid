@@ -39,6 +39,7 @@ import {
   Fragment,
   type ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -510,17 +511,17 @@ export default function App() {
     }
   }, [sessionId, sessions, activeSession, running, navigate]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refetch models only when the LLM endpoint or key changes
   useEffect(() => {
     if (!configOpened || !settings.baseUrl.trim()) return;
 
+    const llm = { apiKey: settings.apiKey, baseUrl: settings.baseUrl };
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setModelsLoading(true);
       setModelsError(null);
 
       try {
-        const nextModels = await fetchLlmModels(settings);
+        const nextModels = await fetchLlmModels(llm);
         if (cancelled) return;
 
         setModels(nextModels);
@@ -541,15 +542,22 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [configOpened, settings.baseUrl, settings.apiKey, t]);
+  }, [configOpened, settings.baseUrl, settings.apiKey, t, setSettings]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: suggestions depend on the LLM identity, not every settings field
   useEffect(() => {
-    if (sessionId || running || suggestions.length > 0) return;
+    if (sessionId || running) return;
     if (!settings.model.trim()) return;
 
     const ac = new AbortController();
-    void fetchSuggestions(settings, ac.signal)
+    void fetchSuggestions(
+      {
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        model: settings.model,
+        locale: settings.locale,
+      },
+      ac.signal,
+    )
       .then((result) => {
         if (!ac.signal.aborted && result.length > 0) setSuggestions(result);
       })
@@ -557,19 +565,28 @@ export default function App() {
     return () => ac.abort();
   }, [sessionId, running, settings.apiKey, settings.baseUrl, settings.model, settings.locale]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: sessionId resets auto-scroll when switching chats
-  useEffect(() => {
-    if (!running) return;
+  useLayoutEffect(() => {
+    if (!sessionId) return;
     autoScrollRef.current = true;
     setAutoScroll(true);
-  }, [running, sessionId]);
+  }, [sessionId]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-scroll when the stream grows, not on every parsed object identity
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (running) {
+      autoScrollRef.current = true;
+      setAutoScroll(true);
+    }
     if (!autoScrollRef.current) return;
+    const hasThread =
+      running ||
+      parsed.iterations.length > 0 ||
+      parsed.activity.length > 0 ||
+      parsed.confidence > 0 ||
+      Boolean(parsed.report);
+    if (!hasThread) return;
     const viewport = threadRef.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  }, [parsed.iterations.length, parsed.report, parsed.confidence, parsed.activity.length, running]);
+  }, [running, parsed.iterations.length, parsed.activity.length, parsed.confidence, parsed.report]);
 
   function handleThreadScroll() {
     const viewport = threadRef.current;

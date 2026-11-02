@@ -168,9 +168,12 @@ body,
   transition: opacity 180ms ease;
 }
 
-.sidebar-session-row:hover .sidebar-session-delete,
-.sidebar-session-row--active .sidebar-session-delete,
-.sidebar-session-delete:focus-visible {
+.sidebar-session-delete:focus-visible,
+.sidebar-session-row--active .sidebar-session-delete {
+  opacity: 1;
+}
+
+.sidebar-session-row:hover .sidebar-session-delete {
   opacity: 1;
 }
 

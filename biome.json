@@ -24,13 +24,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended",
-      "complexity": {
-        "noImportantStyles": "off"
-      },
-      "style": {
-        "noDescendingSpecificity": "off"
-      }
+      "preset": "recommended"
     }
   },
   "overrides": [
