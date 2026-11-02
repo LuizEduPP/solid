@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   MODE_THRESHOLDS,
   rubricTotal,
+  scoreTone,
   uniqueHostnamesFromHits,
 } from "../../shared.js";
 import {
@@ -211,6 +212,13 @@ describe("agent", () => {
       assert.ok(
         MODE_THRESHOLDS.fast.maxLlmCalls < MODE_THRESHOLDS.rigorous.maxLlmCalls,
       );
+    });
+
+    it("maps scores to the same color tones used in the UI", () => {
+      assert.equal(scoreTone(0), "gray");
+      assert.equal(scoreTone(39), "red");
+      assert.equal(scoreTone(40), "yellow");
+      assert.equal(scoreTone(70), "teal");
     });
 
     it("sums rubric to 100 max", () => {

@@ -71,7 +71,7 @@ import {
   streamResearch,
   type ResearchRound,
 } from "./stream";
-import { MODE_THRESHOLDS, VERDICT_I18N } from "../shared";
+import { MODE_THRESHOLDS, VERDICT_I18N, scoreTone } from "../shared";
 
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";
@@ -134,12 +134,14 @@ function RailIcon({
   onClick,
   disabled,
   variant = "subtle",
+  color = "gray",
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
-  variant?: "subtle" | "default";
+  variant?: "subtle" | "default" | "filled";
+  color?: string;
   children: ReactNode;
 }) {
   return (
@@ -147,7 +149,7 @@ function RailIcon({
       <Tooltip label={label} position="right" withArrow>
         <ActionIcon
           variant={variant}
-          color="gray"
+          color={color}
           size="md"
           radius="md"
           aria-label={label}
@@ -211,7 +213,7 @@ function SidebarSessionRow({
               {label}
             </Text>
             {score > 0 && !running ? (
-              <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+              <Badge size="xs" variant="light" color={scoreTone(score)} style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                 {score.toFixed(0)}%
               </Badge>
             ) : null}
@@ -803,12 +805,12 @@ export default function App() {
   const showVerdictBanner =
     entityVerdict === "unlikely" || entityVerdict === "nonexistent";
 
-  const reportBorderColor =
-    confidence >= 70
-      ? "var(--mantine-color-teal-7)"
-      : confidence >= 40
-        ? "var(--mantine-color-yellow-7)"
-        : "var(--mantine-color-red-7)";
+  const reportAccent = {
+    teal: "var(--mantine-color-teal-6)",
+    yellow: "var(--mantine-color-yellow-6)",
+    red: "var(--mantine-color-red-6)",
+    gray: "var(--mantine-color-indigo-6)",
+  }[scoreTone(confidence)];
 
   return (
     <AppShell
@@ -923,7 +925,8 @@ export default function App() {
           {navbarCollapsedDesktop ? (
             <RailIcon
               label={t("newResearch")}
-              variant="default"
+              variant="filled"
+              color="indigo"
               disabled={running}
               onClick={handleNewResearch}
             >
@@ -933,7 +936,8 @@ export default function App() {
             <Button
               fullWidth
               className="sidebar-new-btn"
-              variant="default"
+              variant="filled"
+              color="indigo"
               radius="md"
               size="sm"
               leftSection={<Plus size={15} strokeWidth={2} />}
@@ -1033,7 +1037,7 @@ export default function App() {
                 {activeSession?.title || activeSession?.objective || t("untitledResearch")}
               </Text>
               {confidence > 0 ? (
-                <Badge variant="light" color="gray" size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>
+                <Badge variant="light" color={scoreTone(confidence)} size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>
                   {confidence.toFixed(0)}%
                 </Badge>
               ) : null}
@@ -1124,7 +1128,7 @@ export default function App() {
                           ) : null}
 
                           {roundHasReport ? (
-                            <Box className="report-container" style={{ "--report-accent": reportBorderColor } as CSSProperties}>
+                            <Box className="report-container" style={{ "--report-accent": reportAccent } as CSSProperties}>
                               {isLastRound && showVerdictBanner ? (
                                 <Alert
                                   variant="light"

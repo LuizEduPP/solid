@@ -36,6 +36,15 @@ export const EVIDENCE_COLORS: Record<EvidenceType, string> = {
   none: "gray",
 };
 
+export type ScoreTone = "teal" | "yellow" | "red" | "gray";
+
+export function scoreTone(score: number): ScoreTone {
+  if (score <= 0) return "gray";
+  if (score >= 70) return "teal";
+  if (score >= 40) return "yellow";
+  return "red";
+}
+
 export const EVIDENCE_I18N: Record<EvidenceType, string> = {
   direct: "evidenceDirect",
   contextual: "evidenceContextual",

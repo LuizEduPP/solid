@@ -27,6 +27,7 @@ import {
   uniqueUrlsByHostname,
   RUBRIC_DIMENSIONS,
   RUBRIC_MAX,
+  scoreTone,
   VERDICT_I18N,
   type ScoreRubric,
 } from "../shared";
@@ -65,20 +66,20 @@ interface DataPanelProps {
 function ScoreSection({ confidence, targetScore }: { confidence: number; targetScore: number }) {
   const { t } = useTranslation();
   const pct = Math.min(100, confidence);
-  const color = confidence >= targetScore * 0.85 ? "teal" : confidence >= 40 ? "yellow" : "gray";
+  const tone = scoreTone(confidence);
 
   return (
     <Box className="dp-section">
       <Group justify="space-between" align="flex-end" mb={10}>
         <div>
           <Text className="dp-section-title" mb={6}>{t("solidness")}</Text>
-          <Text className="dp-score-value">{confidence.toFixed(0)}%</Text>
+          <Text className="dp-score-value" c={tone}>{confidence.toFixed(0)}%</Text>
         </div>
         <Text c="dimmed" size="xs" style={{ fontVariantNumeric: "tabular-nums" }}>
           {t("solidnessTarget", { target: targetScore })}
         </Text>
       </Group>
-      <Progress value={pct} size="sm" radius="xl" color={color} />
+      <Progress value={pct} size="sm" radius="xl" color={tone === "gray" ? "indigo" : tone} />
     </Box>
   );
 }

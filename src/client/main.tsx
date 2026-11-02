@@ -10,7 +10,6 @@ import i18n, { normalizeLocale } from "./i18n";
 import { loadWebSettings } from "./local-store";
 import "./index.css";
 
-/** Neutral zinc ladder for surfaces; blue only via primaryColor on actions/selection. */
 const theme = createTheme({
   primaryColor: "indigo",
   fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
@@ -22,16 +21,16 @@ const theme = createTheme({
   },
   colors: {
     dark: [
-      "#ececee",
-      "#c8c8ce",
-      "#8b8b93",
-      "#6a6a72",
+      "#ececf1",
+      "#d4d4d8",
+      "#a1a1aa",
+      "#71717a",
+      "#52525b",
       "#3f3f46",
-      "#2a2a30",
-      "#1c1c20",
-      "#161618",
-      "#121214",
-      "#0c0c0e",
+      "#323238",
+      "#25262b",
+      "#1a1b1e",
+      "#111113",
     ],
     indigo: [
       "#f2f4fd",
@@ -47,7 +46,7 @@ const theme = createTheme({
     ],
   },
   other: {
-    bodyBg: "#0c0c0e",
+    bodyBg: "#111113",
   },
 });
 
