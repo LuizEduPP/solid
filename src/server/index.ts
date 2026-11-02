@@ -1,14 +1,13 @@
-import { installOutboundHttp } from "./http.js";
-import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
-import { Hono } from "hono";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { Hono } from "hono";
 import { createOpenAiRouter } from "./api.js";
 import { loadServerConfig } from "./config.js";
 import { createFaviconRouter } from "./favicon.js";
+import { installOutboundHttp } from "./http.js";
 
 installOutboundHttp();
 
@@ -25,18 +24,18 @@ app.route("/v1", createOpenAiRouter());
 const isProduction = process.env.NODE_ENV === "production";
 
 if (isProduction) {
-  app.use("/assets/*", serveStatic({ root: distDir }));
-  app.get("/", (c) => {
-    const html = readFileSync(path.join(distDir, "index.html"), "utf8");
-    return c.html(html);
-  });
-  app.get("*", (c) => {
-    const html = readFileSync(path.join(distDir, "index.html"), "utf8");
-    return c.html(html);
-  });
+	app.use("/assets/*", serveStatic({ root: distDir }));
+	app.get("/", (c) => {
+		const html = readFileSync(path.join(distDir, "index.html"), "utf8");
+		return c.html(html);
+	});
+	app.get("*", (c) => {
+		const html = readFileSync(path.join(distDir, "index.html"), "utf8");
+		return c.html(html);
+	});
 } else {
-  app.get("/", (c) =>
-    c.html(`<!doctype html>
+	app.get("/", (c) =>
+		c.html(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -57,19 +56,19 @@ if (isProduction) {
     </main>
   </body>
 </html>`),
-  );
+	);
 }
 
 serve(
-  {
-    fetch: app.fetch,
-    hostname: server.host,
-    port: server.port,
-  },
-  (info) => {
-    console.log(`Solid API on http://${info.address}:${info.port}`);
-    if (!isProduction) {
-      console.log("Web UI on http://localhost:5173");
-    }
-  },
+	{
+		fetch: app.fetch,
+		hostname: server.host,
+		port: server.port,
+	},
+	(info) => {
+		console.log(`Solid API on http://${info.address}:${info.port}`);
+		if (!isProduction) {
+			console.log("Web UI on http://localhost:5173");
+		}
+	},
 );

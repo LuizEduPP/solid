@@ -10,6 +10,8 @@ export interface ScoreRubric {
 export interface ModeThresholds {
   targetScore: number;
   minIterations: number;
+  maxIterations: number;
+  maxLlmCalls: number;
   minDomainsFor100: number;
   maxScoreDelta: number;
   firstIterationCap: number;
@@ -20,6 +22,8 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
   rigorous: {
     targetScore: 100,
     minIterations: 6,
+    maxIterations: 8,
+    maxLlmCalls: 36,
     minDomainsFor100: 5,
     maxScoreDelta: 6,
     firstIterationCap: 40,
@@ -28,6 +32,8 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
   fast: {
     targetScore: 85,
     minIterations: 3,
+    maxIterations: 4,
+    maxLlmCalls: 18,
     minDomainsFor100: 3,
     maxScoreDelta: 12,
     firstIterationCap: 55,

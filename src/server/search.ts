@@ -1,14 +1,14 @@
 import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
 export interface SearchHit {
-  title: string;
-  url: string;
-  snippet: string;
+	title: string;
+	url: string;
+	snippet: string;
 }
 
 interface SearchWebResult {
-  hits: SearchHit[];
-  error?: string;
+	hits: SearchHit[];
+	error?: string;
 }
 
 const ddgs = new DDGS();
@@ -19,197 +19,207 @@ const FETCH_TIMEOUT_MS = 8_000;
 const MAX_PAGE_CHARS = 3_500;
 
 let lastSearchAt = 0;
+let throttleTail = Promise.resolve();
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function searchRegion(query: string): string {
-  return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query)
-    ? "br-pt"
-    : "wt-wt";
+	return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query)
+		? "br-pt"
+		: "wt-wt";
 }
 
 function isValidUrl(url: string): boolean {
-  return url.startsWith("http://") || url.startsWith("https://");
+	return url.startsWith("http://") || url.startsWith("https://");
 }
 
 function isRateLimitError(error: Error): boolean {
-  if (error instanceof RatelimitError) return true;
-  return /\bratelimit\b|\b202\b|\b403\b/i.test(error.message);
+	if (error instanceof RatelimitError) return true;
+	return /\bratelimit\b|\b202\b|\b403\b/i.test(error.message);
 }
 
 function simplifyQuery(query: string): string {
-  const normalized = query
-    .trim()
-    .replace(/[?!.;,:]+$/g, "")
-    .replace(
-      /^(quais são os|quais são|quais|existem|como|what are the|what is|what|which|how do|how does|how|are there|is there|does|do)\s+/i,
-      "",
-    );
+	const normalized = query
+		.trim()
+		.replace(/[?!.;,:]+$/g, "")
+		.replace(
+			/^(quais são os|quais são|quais|existem|como|what are the|what is|what|which|how do|how does|how|are there|is there|does|do)\s+/i,
+			"",
+		);
 
-  const words = normalized.split(/\s+/).filter(Boolean);
-  if (words.length <= 8) return "";
-  return words.slice(0, 8).join(" ");
+	const words = normalized.split(/\s+/).filter(Boolean);
+	if (words.length <= 8) return "";
+	return words.slice(0, 8).join(" ");
 }
 
 function queryVariants(query: string): string[] {
-  const trimmed = query.trim();
-  const simplified = simplifyQuery(trimmed);
-  return simplified && simplified !== trimmed
-    ? [trimmed, simplified]
-    : [trimmed];
+	const trimmed = query.trim();
+	const simplified = simplifyQuery(trimmed);
+	return simplified && simplified !== trimmed
+		? [trimmed, simplified]
+		: [trimmed];
 }
 
 function pickSearchParams(
-  query: string,
-  attempt: number,
+	query: string,
+	attempt: number,
 ): { keywords: string; region: string; backend: (typeof BACKENDS)[number] } {
-  const variants = queryVariants(query);
-  const keywords = variants[Math.min(attempt, variants.length - 1)]!;
-  const primaryRegion = searchRegion(query);
-  const region =
-    attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
-  const backend = BACKENDS[attempt % BACKENDS.length]!;
+	const variants = queryVariants(query);
+	const keywords = variants[Math.min(attempt, variants.length - 1)]!;
+	const primaryRegion = searchRegion(query);
+	const region =
+		attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
+	const backend = BACKENDS[attempt % BACKENDS.length]!;
 
-  return { keywords, region, backend };
+	return { keywords, region, backend };
 }
 
 async function throttle(): Promise<void> {
-  const wait = lastSearchAt + MIN_GAP_MS - Date.now();
-  if (wait > 0) await sleep(wait);
-  lastSearchAt = Date.now();
+	const run = throttleTail.then(async () => {
+		const wait = lastSearchAt + MIN_GAP_MS - Date.now();
+		if (wait > 0) await sleep(wait);
+		lastSearchAt = Date.now();
+	});
+	throttleTail = run.catch(() => undefined);
+	await run;
 }
 
 function mapHits(
-  results: Array<{ title?: string; href?: string; body?: string }>,
-  maxResults: number,
+	results: Array<{ title?: string; href?: string; body?: string }>,
+	maxResults: number,
 ): SearchHit[] {
-  return results.slice(0, maxResults).flatMap((item) => {
-    const url = item.href?.trim() ?? "";
-    if (!isValidUrl(url)) return [];
-    return [
-      {
-        title: item.title?.trim() ?? "",
-        url,
-        snippet: item.body?.trim() ?? "",
-      },
-    ];
-  });
+	return results.slice(0, maxResults).flatMap((item) => {
+		const url = item.href?.trim() ?? "";
+		if (!isValidUrl(url)) return [];
+		return [
+			{
+				title: item.title?.trim() ?? "",
+				url,
+				snippet: item.body?.trim() ?? "",
+			},
+		];
+	});
 }
 
 function retryDelayMs(error: Error, attempt: number): number {
-  if (isRateLimitError(error)) return 5_000 + attempt * 4_000;
-  return 2_000 + attempt * 1_000;
+	if (isRateLimitError(error)) return 5_000 + attempt * 4_000;
+	return 2_000 + attempt * 1_000;
 }
 
 export async function searchWeb(
-  query: string,
-  maxResults: number,
+	query: string,
+	maxResults: number,
 ): Promise<SearchWebResult> {
-  let lastError: Error | undefined;
+	let lastError: Error | undefined;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
-    await throttle();
+	for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
+		await throttle();
 
-    const { keywords, region, backend } = pickSearchParams(query, attempt);
+		const { keywords, region, backend } = pickSearchParams(query, attempt);
 
-    try {
-      const results = await ddgs.text({
-        keywords,
-        maxResults,
-        region,
-        backend,
-      });
+		try {
+			const results = await ddgs.text({
+				keywords,
+				maxResults,
+				region,
+				backend,
+			});
 
-      const hits = mapHits(results, maxResults);
-      if (hits.length > 0) {
-        return { hits };
-      }
+			const hits = mapHits(results, maxResults);
+			if (hits.length > 0) {
+				return { hits };
+			}
 
-      lastError = new Error("No valid results returned");
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-    }
+			lastError = new Error("No valid results returned");
+		} catch (error) {
+			lastError = error instanceof Error ? error : new Error(String(error));
+		}
 
-    if (attempt === MAX_RETRIES - 1) break;
-    await sleep(retryDelayMs(lastError, attempt));
-  }
+		if (attempt === MAX_RETRIES - 1) break;
+		await sleep(retryDelayMs(lastError, attempt));
+	}
 
-  return {
-    hits: [],
-    error: lastError?.message ?? "Search failed",
-  };
+	return {
+		hits: [],
+		error: lastError?.message ?? "Search failed",
+	};
 }
 
 export function formatHits(hits: SearchHit[]): string {
-  if (hits.length === 0) return "(no results)";
+	if (hits.length === 0) return "(no results)";
 
-  return hits
-    .map(
-      (hit, index) =>
-        `[${index + 1}] ${hit.title}\nURL: ${hit.url}\n${hit.snippet}`.trim(),
-    )
-    .join("\n\n");
+	return hits
+		.map((hit, index) =>
+			`[${index + 1}] ${hit.title}\nURL: ${hit.url}\n${hit.snippet}`.trim(),
+		)
+		.join("\n\n");
 }
 
 function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+	return html
+		.replace(/<script[\s\S]*?<\/script>/gi, " ")
+		.replace(/<style[\s\S]*?<\/style>/gi, " ")
+		.replace(/<[^>]+>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 }
 
 async function fetchPageText(url: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Solid/1.0 (+research)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-      redirect: "follow",
-    });
+	try {
+		const response = await fetch(url, {
+			signal: controller.signal,
+			headers: {
+				"User-Agent": "Solid/1.0 (+research)",
+				Accept: "text/html,application/xhtml+xml",
+			},
+			redirect: "follow",
+		});
 
-    if (!response.ok) return null;
+		if (!response.ok) return null;
 
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
-      return null;
-    }
+		const contentType = response.headers.get("content-type") ?? "";
+		if (
+			!contentType.includes("text/html") &&
+			!contentType.includes("text/plain")
+		) {
+			return null;
+		}
 
-    const html = await response.text();
-    const text = stripHtml(html);
-    return text.length > 0 ? text.slice(0, MAX_PAGE_CHARS) : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+		const html = await response.text();
+		const text = stripHtml(html);
+		return text.length > 0 ? text.slice(0, MAX_PAGE_CHARS) : null;
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 export async function fetchPages(
-  urls: string[],
-  maxPages: number,
-  skipUrls: Set<string>,
+	urls: string[],
+	maxPages: number,
+	skipUrls: Set<string>,
 ): Promise<Array<{ url: string; text: string }>> {
-  const results: Array<{ url: string; text: string }> = [];
+	const candidates = urls.filter((url) => !skipUrls.has(url));
+	const batch = candidates.slice(0, Math.max(maxPages * 2, maxPages));
+	const fetched = await Promise.all(
+		batch.map(async (url) => {
+			const text = await fetchPageText(url);
+			return text ? { url, text } : null;
+		}),
+	);
 
-  for (const url of urls) {
-    if (results.length >= maxPages) break;
-    if (skipUrls.has(url)) continue;
+	const results: Array<{ url: string; text: string }> = [];
+	for (const item of fetched) {
+		if (!item || results.length >= maxPages) continue;
+		skipUrls.add(item.url);
+		results.push(item);
+	}
 
-    const text = await fetchPageText(url);
-    if (text) {
-      skipUrls.add(url);
-      results.push({ url, text });
-    }
-  }
-
-  return results;
+	return results;
 }
