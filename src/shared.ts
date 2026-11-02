@@ -105,10 +105,16 @@ export const EVIDENCE_COLORS: Record<EvidenceType, string> = {
 
 export type ScoreTone = "teal" | "yellow" | "red" | "gray";
 
+export const SCORE_MAX = 100;
+export const DEFAULT_ENTITY_CONFIDENCE = 50;
+export const SCORE_TONE_TEAL_MIN = 70;
+export const SCORE_TONE_YELLOW_MIN = 40;
+export const MAX_PLAN_QUERIES = 3;
+
 export function scoreTone(score: number): ScoreTone {
   if (score <= 0) return "gray";
-  if (score >= 70) return "teal";
-  if (score >= 40) return "yellow";
+  if (score >= SCORE_TONE_TEAL_MIN) return "teal";
+  if (score >= SCORE_TONE_YELLOW_MIN) return "yellow";
   return "red";
 }
 
@@ -240,52 +246,36 @@ export function canonicalPageUrl(url: string): string | null {
   }
 }
 
-function uniqueHostnamesFromUrls(urls: string[]): string[] {
+export function countUniqueHostnames(urls: string[]): number {
   const domains = new Set<string>();
   for (const url of urls) {
     const domain = tryHostname(url);
     if (domain) domains.add(domain);
   }
-  return [...domains];
+  return domains.size;
 }
 
-export function countUniqueHostnames(urls: string[]): number {
-  return uniqueHostnamesFromUrls(urls).length;
-}
-
-export function uniqueHostnamesFromHits(hits: Array<{ url: string }>): string[] {
-  return uniqueHostnamesFromUrls(hits.map((hit) => hit.url));
-}
-
-export function uniqueUrlsByHostname(urls: string[]): string[] {
-  const seenHosts = new Set<string>();
-  const out: string[] = [];
-
+export function uniquePageUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const pages: string[] = [];
   for (const url of urls) {
-    const host = tryHostname(url);
-    if (!host || seenHosts.has(host)) continue;
-    seenHosts.add(host);
-    out.push(url);
+    const page = canonicalPageUrl(url);
+    if (!page || seen.has(page)) continue;
+    seen.add(page);
+    pages.push(page);
   }
-
-  return out;
+  return pages;
 }
 
 export function groupUrlsByHostname(urls: string[]): Array<[string, string[]]> {
   const byHost = new Map<string, string[]>();
-  const seenPages = new Set<string>();
-
-  for (const url of urls) {
-    const page = canonicalPageUrl(url);
-    if (!page || seenPages.has(page)) continue;
-    seenPages.add(page);
+  for (const page of uniquePageUrls(urls)) {
     const host = tryHostname(page);
     if (!host) continue;
     const list = byHost.get(host);
     if (list) list.push(page);
     else byHost.set(host, [page]);
   }
-
   return [...byHost.entries()];
 }
 
@@ -407,10 +397,6 @@ export function usesCloudEndpoint(configured: string, cloudDefault: string): boo
   return resolveProviderUrl(configured, cloudDefault) === stripTrailingSlash(cloudDefault);
 }
 
-function resolvedJoin(base: string, fallback: string, path: string): string {
-  return joinUrl(resolveProviderUrl(base, fallback), path);
-}
-
 export function firecrawlEndpoint(base: string, action: "search" | "scrape"): string {
   const root = resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
   if (root.endsWith(`/v1/${action}`)) return root;
@@ -419,11 +405,17 @@ export function firecrawlEndpoint(base: string, action: "search" | "scrape"): st
 }
 
 export function exaSearchEndpoint(base: string): string {
-  return resolvedJoin(base, DEFAULT_INTEGRATION_ENDPOINTS.exa, "/search");
+  return joinUrl(
+    resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.exa),
+    "/search",
+  );
 }
 
 export function tavilySearchEndpoint(base: string): string {
-  return resolvedJoin(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily, "/search");
+  return joinUrl(
+    resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily),
+    "/search",
+  );
 }
 
 export function braveSearchEndpoint(base: string): string {

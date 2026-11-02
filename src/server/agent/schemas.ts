@@ -1,10 +1,13 @@
 import { loads } from "ai-json-repair";
 import { z } from "zod";
 import {
+  DEFAULT_ENTITY_CONFIDENCE,
   ENTITY_VERDICTS,
   EVIDENCE_TYPES,
   INVESTIGATION_QUALITIES,
+  MAX_PLAN_QUERIES,
   REFLECTION_RECOMMENDATIONS,
+  SCORE_MAX,
   isHttpUrl,
   type EvidenceType,
   type ReflectionSnapshot,
@@ -54,7 +57,7 @@ const planSchema = z
     disconfirming: z.coerce.boolean().optional(),
   })
   .transform((payload) => ({
-    queries: (payload.queries ?? []).filter(Boolean).slice(0, 3),
+    queries: (payload.queries ?? []).filter(Boolean).slice(0, MAX_PLAN_QUERIES),
     angle: payload.angle ?? "",
     disconfirming: payload.disconfirming ?? false,
   }));
@@ -226,7 +229,7 @@ const reflectionSchema = z
       entity_verdict: verdict,
       entity_confidence: Math.max(
         0,
-        Math.min(100, p.entity_confidence ?? p.entityConfidence ?? 50),
+        Math.min(SCORE_MAX, p.entity_confidence ?? p.entityConfidence ?? DEFAULT_ENTITY_CONFIDENCE),
       ),
       entity_reasoning: p.entity_reasoning ?? p.entityReasoning ?? "",
       investigation_quality:

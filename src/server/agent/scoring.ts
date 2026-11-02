@@ -1,4 +1,4 @@
-import { RUBRIC_MAX, rubricTotal, type ScoreRubric } from "../../shared.js";
+import { RUBRIC_MAX, SCORE_MAX, rubricTotal, type ScoreRubric } from "../../shared.js";
 
 const PROPOSED_WEIGHT = 0.55;
 const RUBRIC_WEIGHT = 0.45;
@@ -18,7 +18,7 @@ export function normalizeRubric(
 }
 
 function clampScore(value: number, minScore: number): number {
-  return Math.max(minScore, Math.min(100, value));
+  return Math.max(minScore, Math.min(SCORE_MAX, value));
 }
 
 export function applyCumulativeScore(

@@ -5,18 +5,21 @@ import { useTranslation } from "react-i18next";
 
 import MarkdownContent from "./MarkdownContent";
 import FaviconImg from "./FaviconImg";
-import type { IterationSnapshot, SourceSnapshot } from "./stream";
-import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniqueUrlsByHostname } from "../shared";
+import type { IterationSnapshot } from "./stream";
+import {
+  EVIDENCE_COLORS,
+  EVIDENCE_I18N,
+  hostnameFromUrl,
+  uniquePageUrls,
+  type SearchHit,
+} from "../shared";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;
 }
 
-function mergedPageUrls(readUrls: string[], sources: SourceSnapshot[]): string[] {
-  return uniqueUrlsByHostname([
-    ...readUrls,
-    ...sources.map((source) => source.url),
-  ]);
+function mergedPageUrls(readUrls: string[], sources: SearchHit[]): string[] {
+  return uniquePageUrls([...readUrls, ...sources.map((source) => source.url)]);
 }
 
 function SectionShell({
@@ -96,7 +99,7 @@ export default function IterationCard({ iteration }: IterationCardProps) {
     <Paper p="md" radius="md" withBorder={false} className="iteration-card">
       <Group justify="space-between" mb="sm" wrap="nowrap" align="flex-start">
         <Group gap={10} wrap="nowrap" miw={0}>
-          <BoxStep n={iteration.number} />
+          <span className="iter-step">{iteration.number}</span>
           <Text size="sm" c="dimmed" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {iteration.angle || t("step")}
           </Text>
@@ -157,6 +160,3 @@ export default function IterationCard({ iteration }: IterationCardProps) {
   );
 }
 
-function BoxStep({ n }: { n: number }) {
-  return <span className="iter-step">{n}</span>;
-}

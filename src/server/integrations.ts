@@ -1,6 +1,5 @@
 import {
   braveSearchEndpoint,
-  DEFAULT_INTEGRATION_ENDPOINTS,
   exaSearchEndpoint,
   firecrawlEndpoint,
   jinaReadUrl,
@@ -18,25 +17,16 @@ import {
 } from "../shared.js";
 import { bearerHeaders } from "./http.js";
 
-export type ProviderHit = SearchHit;
-
 const PROVIDER_TIMEOUT_MS = 12_000;
 const MAX_SNIPPET = 500;
 
 export interface ProviderSearchResult {
-  hits: ProviderHit[];
+  hits: SearchHit[];
   provider: SearchProvider;
 }
 
 function snippetOf(...parts: Array<string | undefined>): string {
   return parts.find((part) => part?.trim())?.trim().slice(0, MAX_SNIPPET) ?? "";
-}
-
-export function mapProviderHits(
-  items: Array<{ title?: string; url?: string; snippet?: string }>,
-  maxResults: number,
-): ProviderHit[] {
-  return mapSearchHits(items, maxResults);
 }
 
 async function fetchTimed(
@@ -74,8 +64,8 @@ function hitsFromRows(
   items: unknown[],
   maxResults: number,
   snippet: (row: Record<string, unknown>) => string,
-): ProviderHit[] {
-  return mapProviderHits(
+): SearchHit[] {
+  return mapSearchHits(
     items.map((item) => {
       const row = asRecord(item);
       return {
@@ -88,24 +78,16 @@ function hitsFromRows(
   );
 }
 
-function endpointsOf(runtime: IntegrationRuntime) {
-  return runtime.endpoints ?? DEFAULT_INTEGRATION_ENDPOINTS;
-}
-
-function authHeaders(apiKey: string, extra: Record<string, string> = {}): Record<string, string> {
-  return bearerHeaders(apiKey, extra);
-}
-
 async function searchExa(
   query: string,
   maxResults: number,
   apiKey: string,
   baseUrl: string,
-): Promise<ProviderHit[]> {
+): Promise<SearchHit[]> {
   const payload = asRecord(
     await fetchJson(exaSearchEndpoint(baseUrl), {
       method: "POST",
-      headers: authHeaders(apiKey, { "Content-Type": "application/json" }),
+      headers: bearerHeaders(apiKey, { "Content-Type": "application/json" }),
       body: JSON.stringify({
         query,
         numResults: maxResults,
@@ -128,7 +110,7 @@ async function searchTavily(
   maxResults: number,
   apiKey: string,
   baseUrl: string,
-): Promise<ProviderHit[]> {
+): Promise<SearchHit[]> {
   const payload = asRecord(
     await fetchJson(tavilySearchEndpoint(baseUrl), {
       method: "POST",
@@ -153,7 +135,7 @@ async function searchBrave(
   maxResults: number,
   apiKey: string,
   baseUrl: string,
-): Promise<ProviderHit[]> {
+): Promise<SearchHit[]> {
   const url = new URL(braveSearchEndpoint(baseUrl));
   url.searchParams.set("q", query);
   url.searchParams.set("count", String(maxResults));
@@ -178,10 +160,10 @@ async function searchSearxng(
   maxResults: number,
   apiKey: string,
   baseUrl: string,
-): Promise<ProviderHit[]> {
+): Promise<SearchHit[]> {
   const payload = asRecord(
     await fetchJson(searxngSearchUrl(baseUrl, query), {
-      headers: authHeaders(apiKey, {
+      headers: bearerHeaders(apiKey, {
         Accept: "application/json",
         "User-Agent": "Solid/1.0 (+research)",
       }),
@@ -198,11 +180,11 @@ async function searchFirecrawl(
   maxResults: number,
   apiKey: string,
   baseUrl: string,
-): Promise<ProviderHit[]> {
+): Promise<SearchHit[]> {
   const payload = asRecord(
     await fetchJson(firecrawlEndpoint(baseUrl, "search"), {
       method: "POST",
-      headers: authHeaders(apiKey, { "Content-Type": "application/json" }),
+      headers: bearerHeaders(apiKey, { "Content-Type": "application/json" }),
       body: JSON.stringify({ query, limit: maxResults }),
     }),
   );
@@ -222,14 +204,14 @@ export async function searchWithProvider(
 ): Promise<ProviderSearchResult> {
   const provider = runtime.searchProvider;
   const key = requiredSearchKey(provider, runtime.keys);
-  const endpoints = endpointsOf(runtime);
+  const endpoints = runtime.endpoints;
   const endpoint = searchProviderEndpoint(provider, endpoints);
 
   if (searchProviderNeedsKey(provider, endpoint) && !key) {
     throw new Error(`Missing API key for ${provider}`);
   }
 
-  let hits: ProviderHit[];
+  let hits: SearchHit[];
   if (provider === "exa") hits = await searchExa(query, maxResults, key, endpoints.exa);
   else if (provider === "tavily") hits = await searchTavily(query, maxResults, key, endpoints.tavily);
   else if (provider === "brave") hits = await searchBrave(query, maxResults, key, endpoints.brave);
@@ -256,7 +238,7 @@ async function scrapeFirecrawl(
   const payload = asRecord(
     await fetchJson(firecrawlEndpoint(baseUrl, "scrape"), {
       method: "POST",
-      headers: authHeaders(apiKey, { "Content-Type": "application/json" }),
+      headers: bearerHeaders(apiKey, { "Content-Type": "application/json" }),
       body: JSON.stringify({ url, formats: ["markdown"] }),
     }),
   );
@@ -272,7 +254,7 @@ async function scrapeJina(
 ): Promise<string | null> {
   const text = (
     await fetchText(jinaReadUrl(baseUrl, url), {
-      headers: authHeaders(apiKey, {
+      headers: bearerHeaders(apiKey, {
         Accept: "text/plain",
         "X-Return-Format": "text",
       }),
@@ -286,7 +268,7 @@ export async function scrapeWithProvider(
   provider: ScrapeProvider,
   runtime: IntegrationRuntime,
 ): Promise<string | null> {
-  const endpoints = endpointsOf(runtime);
+  const endpoints = runtime.endpoints;
   if (provider === "firecrawl") {
     const key = runtime.keys.firecrawl.trim();
     if (scrapeProviderNeedsKey(provider, endpoints.firecrawl) && !key) {

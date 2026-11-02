@@ -9,12 +9,8 @@ import {
 } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import {
-  LOCALE_LABEL_KEYS,
-  SUPPORTED_LOCALES,
-  type Locale,
-} from "./i18n";
-import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./local-store";
+import { LOCALE_LABEL_KEYS } from "./i18n";
+import type { WebSettings } from "./types";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   SCRAPE_I18N,
@@ -27,9 +23,11 @@ import {
   scrapeProviderNeedsKey,
   searchProviderEndpoint,
   searchProviderNeedsKey,
+  SUPPORTED_LOCALES,
   type IntegrationEndpoints,
   type IntegrationField,
   type IntegrationKeys,
+  type Locale,
   type ScrapeProvider,
   type SearchProvider,
 } from "../shared";
@@ -65,7 +63,7 @@ export default function SettingsForm({
   onChange,
 }: SettingsFormProps) {
   const { t } = useTranslation();
-  const current = settings ?? DEFAULT_WEB_SETTINGS;
+  const current = settings;
 
   const localeOptions = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,

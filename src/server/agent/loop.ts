@@ -7,17 +7,12 @@ import {
   type PriorResearchContext,
   rubricTotal,
   type ScoreRubric,
+  type SearchHit,
   streamChunk,
-  type StreamMarker,
 } from "../../shared.js";
 import type { AgentConfig } from "../config.js";
 import { cacheFaviconsForUrls } from "../favicon.js";
-import {
-  fetchPages,
-  formatHits,
-  type SearchHit,
-  searchWeb,
-} from "../search.js";
+import { fetchPages, formatHits, searchWeb } from "../search.js";
 import {
   ANALYST_SYSTEM,
   FINAL_SYSTEM,
@@ -33,6 +28,8 @@ import {
   type ReflectionPayload,
 } from "./schemas.js";
 import { anchorQueryToObjective, applyCumulativeScore } from "./scoring.js";
+
+const ITERATION_SOURCE_PREVIEW = 6;
 
 interface IterationRecord {
   number: number;
@@ -71,7 +68,6 @@ interface AgentRun {
   seedOpenGaps?: string[];
   seedQueries?: string[];
   seedCitedUrls?: string[];
-  seedUniqueDomainCount?: number;
 }
 
 export function extractObjective(
@@ -107,13 +103,6 @@ function totalUniqueDomainCount(run: AgentRun): number {
   return countUniqueHostnames(urls);
 }
 
-function event(
-  kind: "status" | "score" | "report" | "iter" | "rubric" | "reflection",
-  content: string,
-): string {
-  return streamChunk(kind.toUpperCase() as StreamMarker, content);
-}
-
 function eventIteration(record: {
   number: number;
   angle: string;
@@ -133,7 +122,7 @@ function eventIteration(record: {
   directEntityEvidence?: boolean;
   disambiguationNotes?: string;
 }): string {
-  return event("iter", JSON.stringify(record));
+  return streamChunk("ITER", JSON.stringify(record));
 }
 
 function extractMessageContent(
@@ -155,19 +144,6 @@ function extractMessageContent(
 
   throw new Error(
     "Model returned empty content — disable reasoning in LM Studio or use another model",
-  );
-}
-
-function finalizeScore(
-  run: AgentRun,
-  analysis: AnalysisPayload,
-  settings: AgentConfig,
-): number {
-  return applyCumulativeScore(
-    run.currentScore,
-    analysis.score,
-    analysis.score_rubric,
-    settings.minScore,
   );
 }
 
@@ -456,21 +432,15 @@ export class SolidAgent {
   ): AsyncGenerator<string> {
     this.runSignal = signal;
     this.llmCalls = 0;
-    const throwIfAborted = () => {
-      if (signal?.aborted) {
-        throw new DOMException("Aborted", "AbortError");
-      }
-    };
 
     try {
       const thresholds = MODE_THRESHOLDS[this.settings.mode];
       let stopReason: StopReason = "analyst";
-      const effectiveTarget = targetScore;
       const rootObjective = prior?.rootObjective ?? objective;
 
       const agentRun: AgentRun = {
         objective: rootObjective,
-        targetScore: effectiveTarget,
+        targetScore,
         cumulativeSynthesis: prior?.cumulativeSynthesis ?? "",
         currentScore: prior?.currentScore ?? null,
         iterations: [],
@@ -483,39 +453,38 @@ export class SolidAgent {
         seedOpenGaps: prior?.openGaps,
         seedQueries: prior?.priorQueries,
         seedCitedUrls: prior?.citedUrls,
-        seedUniqueDomainCount: prior?.uniqueDomainCount ?? 0,
       };
 
-      yield event(
-        "status",
+      yield streamChunk(
+        "STATUS",
         prior ? `Follow-up: ${prior.followUp}` : "Research started",
       );
 
       let iteration = prior?.iterationCount ?? 0;
       while (true) {
-        throwIfAborted();
+        this.throwIfAborted();
         if (agentRun.iterations.length >= thresholds.maxIterations) {
           stopReason = "max_iterations";
-          yield event(
-            "status",
+          yield streamChunk(
+            "STATUS",
             `Circuit breaker: max ${thresholds.maxIterations} iterations`,
           );
           break;
         }
         if (this.llmCalls >= thresholds.maxLlmCalls) {
           stopReason = "max_llm_calls";
-          yield event("status", "Circuit breaker: LLM call budget reached");
+          yield streamChunk("STATUS", "Circuit breaker: LLM call budget reached");
           break;
         }
 
         iteration += 1;
         const plan = await this.plan(rootObjective, agentRun);
-        throwIfAborted();
+        this.throwIfAborted();
         const queries = plan.queries;
         const angle = plan.angle;
 
-        yield event(
-          "status",
+        yield streamChunk(
+          "STATUS",
           `Iteration ${iteration} · ${angle}${plan.disconfirming ? " · disconfirmation" : ""}`,
         );
 
@@ -524,7 +493,7 @@ export class SolidAgent {
 
         const searched = await Promise.all(
           queries.map(async (query) => {
-            throwIfAborted();
+            this.throwIfAborted();
             const result = await searchWeb(
               query,
               this.settings.resultsPerQuery,
@@ -536,7 +505,7 @@ export class SolidAgent {
 
         for (const { query, result } of searched) {
           if (result.error && result.hits.length === 0) {
-            yield event("status", `Search failed: ${query}`);
+            yield streamChunk("STATUS", `Search failed: ${query}`);
           }
           queryResults.push([query, result.hits]);
           totalHits += result.hits.length;
@@ -551,7 +520,7 @@ export class SolidAgent {
           agentRun.fetchedUrlCache,
           this.settings.integrations,
         );
-        throwIfAborted();
+        this.throwIfAborted();
 
         void cacheFaviconsForUrls([
           ...fetchedPages.map((page) => page.url),
@@ -559,10 +528,10 @@ export class SolidAgent {
         ]);
 
         if (fetchedPages.length > 0) {
-          yield event("status", `${fetchedPages.length} page(s) fetched`);
+          yield streamChunk("STATUS", `${fetchedPages.length} page(s) fetched`);
         }
 
-        yield event("status", `${totalHits} results · analyzing`);
+        yield streamChunk("STATUS", `${totalHits} results · analyzing`);
 
         const analysis = await this.analyze(
           rootObjective,
@@ -571,14 +540,19 @@ export class SolidAgent {
           queryResults,
           fetchedPages,
         );
-        throwIfAborted();
+        this.throwIfAborted();
 
         if (plan.disconfirming) {
           agentRun.hadDisconfirmingSearch = true;
         }
 
         const rubric = analysis.score_rubric;
-        const score = finalizeScore(agentRun, analysis, this.settings);
+        const score = applyCumulativeScore(
+          agentRun.currentScore,
+          analysis.score,
+          rubric,
+          this.settings.minScore,
+        );
 
         const record: IterationRecord = {
           number: iteration,
@@ -617,31 +591,30 @@ export class SolidAgent {
           citedUrls: analysis.cited_urls ?? [],
           readUrls: fetchedPages.map((page) => page.url),
           queries,
-          sources: hits.slice(0, 6),
+          sources: hits.slice(0, ITERATION_SOURCE_PREVIEW),
           disconfirming: plan.disconfirming,
           gaps: (analysis.open_gaps ?? []).map(String),
           evidenceType: analysis.evidence_type,
           directEntityEvidence: analysis.direct_entity_evidence,
           disambiguationNotes: analysis.disambiguation_notes,
         });
-        yield event(
-          "rubric",
+        yield streamChunk(
+          "RUBRIC",
           JSON.stringify({ iteration, rubric, total: rubricTotal(rubric) }),
         );
-        yield event("score", score.toFixed(2));
+        yield streamChunk("SCORE", score.toFixed(2));
 
-        if (score >= effectiveTarget) {
+        if (score >= targetScore) {
           stopReason = "target";
-          yield event("status", `Target ${effectiveTarget}% reached`);
+          yield streamChunk("STATUS", `Target ${targetScore}% reached`);
           break;
         }
 
-        // --- Reflection: the LLM reviews the entire investigation and decides ---
-        yield event("status", "Reflecting on investigation...");
+        yield streamChunk("STATUS", "Reflecting on investigation...");
         const reflection = await this.reflect(rootObjective, agentRun);
-        throwIfAborted();
+        this.throwIfAborted();
         agentRun.lastReflection = reflection;
-        yield event("reflection", JSON.stringify(reflection));
+        yield streamChunk("REFLECTION", JSON.stringify(reflection));
 
         if (!reflection.should_continue) {
           stopReason = "supervisor";
@@ -650,26 +623,26 @@ export class SolidAgent {
               ? `${reflection.recommendation_reasoning} (entity: ${reflection.entity_verdict}, confidence: ${reflection.entity_confidence}%)`
               : reflection.recommendation_reasoning ||
                 "Investigation concluded by supervisor";
-          yield event("status", reason);
+          yield streamChunk("STATUS", reason);
           break;
         }
 
         if (reflection.recommendation === "pivot") {
-          yield event(
-            "status",
+          yield streamChunk(
+            "STATUS",
             `Pivoting strategy: ${reflection.pivot_suggestion || reflection.recommendation_reasoning}`,
           );
         }
 
         if (!analysis.should_continue && reflection.should_continue) {
-          yield event(
-            "status",
+          yield streamChunk(
+            "STATUS",
             "Analyst recommended stopping, but supervisor sees value in continuing",
           );
         } else if (!analysis.should_continue) {
           stopReason = "analyst";
-          yield event(
-            "status",
+          yield streamChunk(
+            "STATUS",
             analysis.stop_reason ||
               "Model stopped — diminishing returns from search",
           );
@@ -678,21 +651,21 @@ export class SolidAgent {
       }
 
       if (stopReason !== "target") {
-        yield event(
-          "status",
-          `Partial result: score ${agentRun.currentScore?.toFixed(0) ?? "0"}% (target ${effectiveTarget}%)`,
+        yield streamChunk(
+          "STATUS",
+          `Partial result: score ${agentRun.currentScore?.toFixed(0) ?? "0"}% (target ${targetScore}%)`,
         );
       }
 
-      yield event("status", "Generating final report...");
-      throwIfAborted();
+      yield streamChunk("STATUS", "Generating final report...");
+      this.throwIfAborted();
       const report = await this.finalReport(
         rootObjective,
         agentRun,
         stopReason,
       );
-      throwIfAborted();
-      yield event("report", report);
+      this.throwIfAborted();
+      yield streamChunk("REPORT", report);
     } finally {
       this.runSignal = undefined;
     }

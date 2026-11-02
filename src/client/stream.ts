@@ -9,6 +9,7 @@ import {
   MODE_THRESHOLDS,
   STREAM_MARKER_RE,
   streamToken,
+  DEFAULT_ENTITY_CONFIDENCE,
   type EvidenceType,
   type PriorResearchContext,
   type ReflectionSnapshot,
@@ -16,9 +17,6 @@ import {
   type SearchHit,
   type StreamMarker,
 } from "../shared";
-
-export type { EntityVerdict, InvestigationQuality, ReflectionSnapshot } from "../shared";
-export type SourceSnapshot = SearchHit;
 
 export interface IterationSnapshot {
   number: number;
@@ -31,7 +29,7 @@ export interface IterationSnapshot {
   rubric?: ScoreRubric;
   citedUrls?: string[];
   readUrls?: string[];
-  sources?: SourceSnapshot[];
+  sources?: SearchHit[];
   queries?: string[];
   gaps?: string[];
   disconfirming?: boolean;
@@ -127,7 +125,7 @@ function parseReflectionSnapshot(output: string): ReflectionSnapshot | null {
     if (!payload.entity_verdict) return null;
     return {
       entity_verdict: payload.entity_verdict ?? "uncertain",
-      entity_confidence: Number(payload.entity_confidence ?? 50),
+      entity_confidence: Number(payload.entity_confidence ?? DEFAULT_ENTITY_CONFIDENCE),
       entity_reasoning: String(payload.entity_reasoning ?? ""),
       investigation_quality: payload.investigation_quality ?? "progressing",
       quality_reasoning: String(payload.quality_reasoning ?? ""),
@@ -250,8 +248,7 @@ export function iterationSourceUrls(iteration: IterationSnapshot): string[] {
 }
 
 export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
-  const urls = iterations.flatMap((iteration) => iteration.citedUrls ?? []);
-  return countUniqueHostnames(urls);
+  return countUniqueHostnames(iterations.flatMap(iterationSourceUrls));
 }
 
 export function canFollowUp(
@@ -355,10 +352,7 @@ export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
 
 export function pickDefaultModel(models: string[], current: string): string {
   if (current && models.includes(current)) return current;
-  if (models.length === 0) return current;
-
-  const preferred = models.find((id) => /gemma-4-e4b|gemma.*4b/i.test(id));
-  return preferred ?? models[0]!;
+  return models[0] ?? current;
 }
 
 export async function streamResearch(

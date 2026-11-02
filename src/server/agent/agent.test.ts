@@ -10,7 +10,7 @@ import {
   rubricTotal,
   scoreTone,
   streamChunk,
-  uniqueHostnamesFromHits,
+  countUniqueHostnames,
 } from "../../shared.js";
 import {
   parseAnalysisPayload,
@@ -178,7 +178,7 @@ describe("agent", () => {
         { title: "a", url: "https://a.com/x", snippet: "s" },
         { title: "b", url: "https://b.org/y", snippet: "s" },
       ];
-      assert.equal(uniqueHostnamesFromHits(hits).length, 2);
+      assert.equal(countUniqueHostnames(hits.map((hit) => hit.url)), 2);
     });
 
     it("measures coverage of distinctive objective terms", () => {

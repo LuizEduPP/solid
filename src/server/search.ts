@@ -9,8 +9,6 @@ import {
 } from "../shared.js";
 import { scrapeWithProvider, searchWithProvider } from "./integrations.js";
 
-export type { SearchHit };
-
 interface SearchWebResult {
   hits: SearchHit[];
   error?: string;
@@ -88,19 +86,6 @@ async function throttle(): Promise<void> {
   await run;
 }
 
-function mapHits(
-  results: Array<{ title?: string; href?: string; body?: string }>,
-  maxResults: number,
-): SearchHit[] {
-  return mapSearchHits(
-    results.map((item) => ({
-      title: item.title,
-      url: item.href,
-      snippet: item.body,
-    })),
-    maxResults,
-  );
-}
 
 function retryDelayMs(error: Error, attempt: number): number {
   if (isRateLimitError(error)) return 5_000 + attempt * 4_000;
@@ -126,7 +111,14 @@ async function searchDuckDuckGo(
         backend,
       });
 
-      const hits = mapHits(results, maxResults);
+      const hits = mapSearchHits(
+        results.map((item) => ({
+          title: item.title,
+          url: item.href,
+          snippet: item.body,
+        })),
+        maxResults,
+      );
       if (hits.length > 0) {
         return { hits, provider: "duckduckgo" };
       }

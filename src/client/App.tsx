@@ -55,9 +55,8 @@ import {
   SETTINGS_KEY,
   touchSession,
   upsertSession,
-  type ResearchSession,
-  type WebSettings,
 } from "./local-store";
+import type { ResearchSession, WebSettings } from "./types";
 import MarkdownContent from "./MarkdownContent";
 import IterationCard from "./IterationCard";
 import SettingsForm from "./SettingsForm";

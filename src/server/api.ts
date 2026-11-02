@@ -9,6 +9,7 @@ import {
   INTEGRATION_FIELDS,
   LOCALE_ENGLISH_NAMES,
   MODE_THRESHOLDS,
+  SCORE_MAX,
   normalizeIntegrationEndpoints,
   normalizeIntegrationKeys,
   SCRAPE_PROVIDERS,
@@ -52,10 +53,6 @@ function extractLlmContent(choices?: LlmChoice[]): string {
   return lastLine ?? "";
 }
 
-function llmAuthHeaders(apiKey: string, json = false): Record<string, string> {
-  return bearerHeaders(apiKey, json ? { "Content-Type": "application/json" } : {});
-}
-
 async function completeLlmChat(
   baseUrl: string,
   apiKey: string,
@@ -63,7 +60,7 @@ async function completeLlmChat(
 ): Promise<{ ok: true; choices?: LlmChoice[] } | { ok: false; status: number }> {
   const response = await fetch(`${stripTrailingSlash(baseUrl)}/chat/completions`, {
     method: "POST",
-    headers: llmAuthHeaders(apiKey, true),
+    headers: bearerHeaders(apiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!response.ok) return { ok: false, status: response.status };
@@ -124,8 +121,8 @@ const requestSchema = z.object({
   messages: z.array(messageSchema).min(1),
   stream: z.boolean().default(false),
   temperature: z.number().optional(),
-  target_score: z.number().min(0.01).max(100).optional(),
-  min_score: z.number().min(0.01).max(100).optional(),
+  target_score: z.number().min(0.01).max(SCORE_MAX).optional(),
+  min_score: z.number().min(0.01).max(SCORE_MAX).optional(),
   research_mode: z.enum(["rigorous", "fast"]).optional(),
   llm_api_key: z.string().optional().default(""),
   llm_base_url: z.string().min(1).optional(),
@@ -211,7 +208,7 @@ async function fetchProviderModels(
   baseUrl: string,
 ): Promise<string[]> {
   const response = await fetch(`${stripTrailingSlash(baseUrl)}/models`, {
-    headers: llmAuthHeaders(apiKey),
+    headers: bearerHeaders(apiKey),
   });
   if (!response.ok) {
     throw new Error(`Provider returned ${response.status}`);

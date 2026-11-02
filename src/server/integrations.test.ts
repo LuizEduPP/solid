@@ -14,7 +14,7 @@ import {
   scrapeProviderNeedsKey,
   searchProviderNeedsKey,
 } from "../shared.js";
-import { mapProviderHits } from "./integrations.js";
+import { mapSearchHits } from "../shared.js";
 
 describe("integrations", () => {
   it("normalizes unknown providers to free defaults", () => {
@@ -73,7 +73,7 @@ describe("integrations", () => {
   });
 
   it("drops invalid provider URLs", () => {
-    const hits = mapProviderHits(
+    const hits = mapSearchHits(
       [
         { title: "Good", url: "https://exa.ai/doc", snippet: "ok" },
         { title: "Bad", url: "notaurl", snippet: "no" },

@@ -18,13 +18,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 import FaviconImg from "./FaviconImg";
-import {
-  iterationSourceUrls,
-  type IterationSnapshot,
-  type ReflectionSnapshot,
-  type EntityVerdict,
-  type InvestigationQuality,
-} from "./stream";
+import { iterationSourceUrls, type IterationSnapshot } from "./stream";
 import {
   EVIDENCE_COLORS,
   EVIDENCE_I18N,
@@ -32,8 +26,12 @@ import {
   QUALITY_I18N,
   RUBRIC_DIMENSIONS,
   RUBRIC_MAX,
+  SCORE_MAX,
   scoreTone,
   VERDICT_I18N,
+  type EntityVerdict,
+  type InvestigationQuality,
+  type ReflectionSnapshot,
   type ScoreRubric,
 } from "../shared";
 
@@ -70,7 +68,7 @@ interface DataPanelProps {
 
 function ScoreSection({ confidence, targetScore }: { confidence: number; targetScore: number }) {
   const { t } = useTranslation();
-  const pct = Math.min(100, confidence);
+  const pct = Math.min(SCORE_MAX, confidence);
   const tone = scoreTone(confidence);
 
   return (
@@ -150,7 +148,7 @@ function RubricSection({ rubric }: { rubric: ScoreRubric }) {
                   </Text>
                 </Group>
                 <Progress
-                  value={(value / RUBRIC_MAX) * 100}
+                  value={(value / RUBRIC_MAX) * SCORE_MAX}
                   size="sm"
                   radius="xl"
                   color={RUBRIC_COLORS[key]}

@@ -2,23 +2,20 @@ import { isAfter, isToday, isYesterday, subDays } from "date-fns";
 import { saveAs } from "file-saver";
 
 import { compressStepsActivity, translateActivityLine } from "./activity";
-import i18n, { normalizeLocale, type HistoryGroupKey } from "./i18n";
+import i18n, { type HistoryGroupKey } from "./i18n";
 import { parseStream, uniqueSourceCount } from "./stream";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   DEFAULT_INTEGRATIONS,
   EMPTY_INTEGRATION_KEYS,
-  isLocalLlmBaseUrl,
   normalizeIntegrationEndpoints,
   normalizeIntegrationKeys,
+  normalizeLocale,
   normalizeScrapeProvider,
   normalizeSearchProvider,
-  type IntegrationRuntime,
   type PriorResearchContext,
 } from "../shared";
 import type { ResearchSession, WebSettings } from "./types";
-
-export type { ResearchSession, WebSettings } from "./types";
 
 function readLocalStorageJson<T>(
   key: string,
@@ -68,17 +65,6 @@ export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings 
     integrationEndpoints: normalizeIntegrationEndpoints(parsed.integrationEndpoints),
   };
 }
-
-export function integrationsFromSettings(settings: WebSettings): IntegrationRuntime {
-  return {
-    searchProvider: settings.searchProvider,
-    scrapeProvider: settings.scrapeProvider,
-    keys: settings.integrationKeys,
-    endpoints: settings.integrationEndpoints,
-  };
-}
-
-export { isLocalLlmBaseUrl };
 
 export function loadWebSettings(): WebSettings {
   const parsed = readLocalStorageJson<Partial<WebSettings>>(
