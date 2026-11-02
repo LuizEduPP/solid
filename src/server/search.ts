@@ -16,7 +16,6 @@ interface SearchWebResult {
   hits: SearchHit[];
   error?: string;
   provider?: string;
-  fallback?: boolean;
 }
 
 const ddgs = new DDGS();
@@ -168,14 +167,9 @@ export async function searchWeb(
       const result = await searchWithProvider(query, maxResults, runtime);
       return { hits: result.hits, provider: result.provider };
     } catch (error) {
-      const fallback = await searchDuckDuckGo(query, maxResults);
-      const reason = error instanceof Error ? error.message : "Search failed";
-      if (fallback.hits.length > 0) {
-        return { ...fallback, fallback: true, error: reason };
-      }
       return {
         hits: [],
-        error: reason,
+        error: error instanceof Error ? error.message : "Search failed",
         provider,
       };
     }
@@ -214,9 +208,9 @@ async function fetchPageText(
         runtime.scrapeProvider,
         runtime,
       );
-      if (scraped) return scraped.slice(0, MAX_PAGE_CHARS);
+      return scraped ? scraped.slice(0, MAX_PAGE_CHARS) : null;
     } catch {
-      // fall through to direct fetch
+      return null;
     }
   }
   const controller = new AbortController();

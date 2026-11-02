@@ -30,20 +30,7 @@ import {
   parseReflectionPayload,
   type ReflectionPayload,
 } from "./schemas.js";
-import {
-  anchorQueryToObjective,
-  applyCumulativeScore,
-  canReachTargetScore,
-  capScoreForCitedDomains,
-  capScoreForEntityConfidence,
-  capScoreForIndependentSources,
-  capScoreForObjectiveCoverage,
-  computeEvidenceScore,
-  EVIDENCE_SCORE_HEADROOM,
-  hedgePenalty,
-  OPEN_GAP_SCORE_CAP,
-  objectiveCoverage,
-} from "./scoring.js";
+import { anchorQueryToObjective, applyCumulativeScore } from "./scoring.js";
 
 interface IterationRecord {
   number: number;
@@ -171,57 +158,14 @@ function extractMessageContent(
 function finalizeScore(
   run: AgentRun,
   analysis: AnalysisPayload,
-  iteration: number,
   settings: AgentConfig,
 ): number {
-  const thresholds = MODE_THRESHOLDS[settings.mode];
-  const rubric = analysis.score_rubric;
-  const isFirstIteration = iteration === 1;
-
-  let score = applyCumulativeScore(run.currentScore, analysis.score, rubric, {
-    contradictionFound: Boolean(analysis.contradiction_found),
-    minScore: settings.minScore,
-    maxDelta: thresholds.maxScoreDelta,
-    firstIterationCap: thresholds.firstIterationCap,
-    isFirstIteration,
-  });
-
-  const uniqueDomains = totalUniqueDomainCount(run);
-  const evidenceScore = computeEvidenceScore(
-    uniqueDomains,
-    analysis.cited_urls?.length ?? 0,
-    iteration,
-    analysis.open_gaps?.length ?? 0,
-  );
-
-  score = Math.min(score, evidenceScore + EVIDENCE_SCORE_HEADROOM);
-
-  if ((analysis.open_gaps?.length ?? 0) > 0) {
-    score = Math.min(score, OPEN_GAP_SCORE_CAP);
-  }
-
-  const cumulativeCitedUrls = [
-    ...(run.seedCitedUrls ?? []),
-    ...run.iterations.flatMap((record) => record.citedUrls),
-    ...(analysis.cited_urls ?? []),
-  ];
-  score = capScoreForCitedDomains(score, cumulativeCitedUrls);
-  score = capScoreForIndependentSources(score, cumulativeCitedUrls);
-
-  const coverage = objectiveCoverage(
-    run.objective,
-    `${analysis.cumulative_synthesis}\n${analysis.iteration_findings}`,
-  );
-  score = capScoreForObjectiveCoverage(score, coverage);
-  score = Math.max(
+  return applyCumulativeScore(
+    run.currentScore,
+    analysis.score,
+    analysis.score_rubric,
     settings.minScore,
-    score -
-      hedgePenalty(
-        `${analysis.cumulative_synthesis}\n${analysis.iteration_findings}`,
-      ),
   );
-
-  return score;
 }
 
 /**
@@ -399,13 +343,8 @@ export class SolidAgent {
   }
 
   private async plan(objective: string, run: AgentRun): Promise<PlanPayload> {
-    const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const priorQueries = collectPriorQueries(run);
     const openGaps = collectOpenGaps(run);
-    const requireDisconfirm =
-      (run.currentScore ?? 0) >= thresholds.disconfirmThreshold &&
-      !run.hadDisconfirmingSearch;
-
     const reflectionContext = this.formatReflectionContext(run.lastReflection);
 
     const user =
@@ -414,14 +353,12 @@ export class SolidAgent {
         ? `Follow-up request:\n${run.followUp}\n\nPrior report excerpt:\n${run.priorReport?.slice(0, 4000) || "(none)"}\n\n`
         : "") +
       `Current cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
-      `Disconfirming search REQUIRED this round: ${requireDisconfirm ? "YES — you MUST set disconfirming: true" : "no"}\n\n` +
       `${reflectionContext}\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(first iteration)"}\n\n` +
       `Open gaps:\n${openGaps.length ? openGaps.map((gap) => `- ${gap}`).join("\n") : "(none yet)"}\n\n` +
       `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
 
     const plan = await this.chatJson(PLANNER_SYSTEM, user, parsePlanPayload);
-    if (requireDisconfirm) plan.disconfirming = true;
     plan.queries = plan.queries.map((query) =>
       anchorQueryToObjective(query, objective),
     );
@@ -525,7 +462,7 @@ export class SolidAgent {
     try {
       const thresholds = MODE_THRESHOLDS[this.settings.mode];
       let stopReason: StopReason = "analyst";
-      const effectiveTarget = Math.min(targetScore, thresholds.targetScore);
+      const effectiveTarget = targetScore;
       const rootObjective = prior?.rootObjective ?? objective;
 
       const agentRun: AgentRun = {
@@ -595,12 +532,6 @@ export class SolidAgent {
         );
 
         for (const { query, result } of searched) {
-          if (result.fallback && result.provider) {
-            yield event(
-              "status",
-              `Search fallback: ${this.settings.integrations.searchProvider} → ${result.provider}`,
-            );
-          }
           if (result.error && result.hits.length === 0) {
             yield event("status", `Search failed: ${query}`);
           }
@@ -644,23 +575,7 @@ export class SolidAgent {
         }
 
         const rubric = analysis.score_rubric;
-        let score = finalizeScore(agentRun, analysis, iteration, this.settings);
-
-        const gate = canReachTargetScore({
-          score,
-          targetScore: effectiveTarget,
-          openGaps: analysis.open_gaps ?? [],
-          iteration,
-          thresholds,
-          uniqueDomainCount: totalUniqueDomainCount(agentRun),
-          hadDisconfirmingSearch: agentRun.hadDisconfirmingSearch,
-        });
-
-        if (score >= effectiveTarget && !gate.allowed) {
-          score = Math.min(score, effectiveTarget - 1);
-          yield event("status", `Score capped: ${gate.reason}`);
-          analysis.should_continue = true;
-        }
+        const score = finalizeScore(agentRun, analysis, this.settings);
 
         const record: IterationRecord = {
           number: iteration,
@@ -711,7 +626,7 @@ export class SolidAgent {
         );
         yield event("score", score.toFixed(2));
 
-        if (score >= effectiveTarget && gate.allowed) {
+        if (score >= effectiveTarget) {
           stopReason = "target";
           yield event("status", `Target ${effectiveTarget}% reached`);
           break;
@@ -723,15 +638,6 @@ export class SolidAgent {
         throwIfAborted();
         agentRun.lastReflection = reflection;
         yield event("reflection", JSON.stringify(reflection));
-
-        if (reflection.entity_confidence < 50) {
-          score = capScoreForEntityConfidence(
-            score,
-            reflection.entity_confidence,
-          );
-          agentRun.currentScore = score;
-          yield event("score", score.toFixed(2));
-        }
 
         if (!reflection.should_continue) {
           stopReason = "supervisor";

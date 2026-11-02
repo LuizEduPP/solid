@@ -14,14 +14,7 @@ import {
 import {
   anchorQueryToObjective,
   applyCumulativeScore,
-  canReachTargetScore,
-  capScoreForCitedDomains,
-  capScoreForEntityConfidence,
-  capScoreForIndependentSources,
-  capScoreForObjectiveCoverage,
-  computeEvidenceScore,
   extractCitedUrls,
-  hedgePenalty,
   normalizeRubric,
   objectiveCoverage,
 } from "./scoring.js";
@@ -154,119 +147,47 @@ describe("agent", () => {
       assert.deepEqual(urls, ["https://a.com/x", "https://b.org/y"]);
     });
 
-    it("caps score above 90 without three cited domains", () => {
-      const capped = capScoreForCitedDomains(95, [
-        "https://a.com/1",
-        "https://b.com/2",
-      ]);
-      assert.equal(capped, 90);
-
-      const allowed = capScoreForCitedDomains(95, [
-        "https://a.com/1",
-        "https://b.com/2",
-        "https://c.org/3",
-      ]);
-      assert.equal(allowed, 95);
-    });
-    it("caps first iteration score", () => {
+    it("uses the proposed score on the first iteration", () => {
       const rubric = normalizeRubric({
         direct_evidence: 20,
         source_diversity: 20,
         gap_coverage: 20,
         risk_contradiction: 20,
       });
-      const score = applyCumulativeScore(null, 85, rubric, {
-        contradictionFound: false,
-        minScore: 0,
-        maxDelta: 6,
-        firstIterationCap: 40,
-        isFirstIteration: true,
-      });
-      assert.equal(score, 40);
+      assert.equal(applyCumulativeScore(null, 85, rubric, 0), 85);
     });
 
-    it("limits score increase per iteration", () => {
+    it("blends proposed score with the rubric after the first iteration", () => {
       const rubric = normalizeRubric({
         direct_evidence: 25,
         source_diversity: 25,
         gap_coverage: 25,
         risk_contradiction: 25,
       });
-      const score = applyCumulativeScore(50, 95, rubric, {
-        contradictionFound: false,
-        minScore: 0,
-        maxDelta: 6,
-        firstIterationCap: 40,
-        isFirstIteration: false,
-      });
-      assert.equal(score, 56);
+      assert.equal(applyCumulativeScore(50, 95, rubric, 0), 97.25);
     });
 
-    it("blocks 100 when gaps remain", () => {
-      const gate = canReachTargetScore({
-        score: 100,
-        targetScore: 100,
-        openGaps: ["missing clinical trial"],
-        iteration: 8,
-        thresholds: MODE_THRESHOLDS.rigorous,
-        uniqueDomainCount: 6,
-        hadDisconfirmingSearch: true,
-      });
-      assert.equal(gate.allowed, false);
-    });
-
-    it("blocks 100 without disconfirmation round", () => {
-      const gate = canReachTargetScore({
-        score: 100,
-        targetScore: 100,
-        openGaps: [],
-        iteration: 8,
-        thresholds: MODE_THRESHOLDS.rigorous,
-        uniqueDomainCount: 6,
-        hadDisconfirmingSearch: false,
-      });
-      assert.equal(gate.allowed, false);
-      assert.equal(gate.reason, "missing disconfirmation round");
-    });
-
-    it("computes evidence score from domains", () => {
+    it("counts unique hostnames from hits", () => {
       const hits = [
         { title: "a", url: "https://a.com/x", snippet: "s" },
         { title: "b", url: "https://b.org/y", snippet: "s" },
       ];
       assert.equal(uniqueHostnamesFromHits(hits).length, 2);
-      const evidence = computeEvidenceScore(2, 1, 2, 3);
-      assert.ok(evidence < 50);
     });
 
-    it("caps score without two independent cited domains", () => {
-      assert.equal(capScoreForIndependentSources(88, ["https://a.com/1"]), 70);
-      assert.equal(
-        capScoreForIndependentSources(88, [
-          "https://a.com/1",
-          "https://b.org/2",
-        ]),
-        88,
-      );
-    });
-
-    it("penalizes heavy hedge language and ignores light hedging", () => {
-      assert.equal(hedgePenalty("The study confirms the result."), 0);
-      assert.ok(
-        hedgePenalty(
-          "Maybe unclear and possibly unverified. Talvez inconclusivo e aparentemente incerto.",
-        ) > 0,
-      );
-    });
-
-    it("caps score when synthesis misses the objective terms", () => {
+    it("measures coverage of distinctive objective terms", () => {
       const coverage = objectiveCoverage(
         "NexaRAG Studio latency benchmarks",
         "General notes about search engines",
       );
       assert.ok(coverage < 0.4);
-      assert.equal(capScoreForObjectiveCoverage(90, coverage), 70);
-      assert.equal(capScoreForObjectiveCoverage(90, 0.8), 90);
+      assert.equal(
+        objectiveCoverage(
+          "NexaRAG Studio latency",
+          "NexaRAG Studio latency results",
+        ),
+        1,
+      );
     });
 
     it("re-anchors a drifted query to the root objective", () => {
@@ -283,17 +204,13 @@ describe("agent", () => {
       );
     });
 
-    it("defines a hard iteration ceiling above the minimum", () => {
+    it("gives fast mode a shorter run budget than rigorous", () => {
       assert.ok(
-        MODE_THRESHOLDS.fast.maxIterations >=
-          MODE_THRESHOLDS.fast.minIterations,
+        MODE_THRESHOLDS.fast.maxIterations < MODE_THRESHOLDS.rigorous.maxIterations,
       );
       assert.ok(
-        MODE_THRESHOLDS.rigorous.maxIterations >=
-          MODE_THRESHOLDS.rigorous.minIterations,
+        MODE_THRESHOLDS.fast.maxLlmCalls < MODE_THRESHOLDS.rigorous.maxLlmCalls,
       );
-      assert.equal(MODE_THRESHOLDS.fast.maxIterations, 4);
-      assert.equal(MODE_THRESHOLDS.rigorous.maxIterations, 8);
     });
 
     it("sums rubric to 100 max", () => {
@@ -306,23 +223,6 @@ describe("agent", () => {
         }),
       );
       assert.equal(total, 100);
-    });
-  });
-
-  describe("entity confidence score cap", () => {
-    it("caps score when reflector entity confidence is very low", () => {
-      const capped = capScoreForEntityConfidence(60, 15);
-      assert.equal(capped, 20);
-    });
-
-    it("uses entity confidence as floor for cap", () => {
-      assert.equal(capScoreForEntityConfidence(80, 30), 30);
-      assert.equal(capScoreForEntityConfidence(80, 45), 45);
-    });
-
-    it("does not cap score when entity confidence is adequate", () => {
-      assert.equal(capScoreForEntityConfidence(60, 55), 60);
-      assert.equal(capScoreForEntityConfidence(90, 80), 90);
     });
   });
 

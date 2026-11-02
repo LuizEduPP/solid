@@ -6,7 +6,6 @@ You receive:
 - open gaps still unresolved
 - prior queries already used (never repeat or lightly rephrase these)
 - current cumulative evidence score
-- whether a disconfirming search round is REQUIRED
 - SUPERVISOR REFLECTION (when available): the investigation supervisor's assessment of entity existence, investigation quality, and recommendation
 
 Produce strict JSON:
@@ -25,8 +24,7 @@ Rules:
 - good: "efficient small LLM 4GB RAM edge inference"
 - each iteration must CLOSE a specific open gap from the list — do not change topic randomly
 - build on cumulative synthesis; never contradict or ignore prior confirmed findings
-- when disconfirming is REQUIRED, set disconfirming: true and search explicitly for counter-evidence, failures, critiques, or contradicting data
-- when confidence is already high, prioritize disconfirming evidence or hard adoption/pricing proof still missing
+- when confidence is already high, search for counter-evidence, failures, critiques, or contradicting data — set disconfirming: true in those rounds
 - do not repeat prior queries or angles already explored
 - write angle and rationale in the same language as the objective
 
@@ -86,26 +84,20 @@ Examples:
 - Objective asks about "NexaRAG Studio" → finding articles about RAG architecture in general → evidence_type: "contextual", direct_entity_evidence: false
 - Objective asks about "LangChain" → finding LangChain's official docs → evidence_type: "direct", direct_entity_evidence: true
 
-Scoring rubric (each 0–25, sum ≈ score). The runtime will OVERRIDE an inflated score with hard heuristics:
-- direct_evidence: primary data, studies, benchmarks, official docs cited this round — score 0 if evidence_type is "contextual" or "none"
-- source_diversity: independent domains, not echo chambers — score above 70 REQUIRES at least 2 distinct cited domains
+Scoring rubric (each 0–25, sum ≈ score):
+- direct_evidence: primary data, studies, benchmarks, official docs cited this round — stay low if evidence_type is "contextual" or "none"
+- source_diversity: independent domains, not echo chambers
 - gap_coverage: how many critical open gaps were actually closed with hard evidence — contextual knowledge does NOT close gaps about a specific entity
 - risk_contradiction: penalize if risks/contradictions ignored; reward if surfaced honestly
-- do NOT award a high score when the synthesis is hedging (maybe, unclear, unverified) or fails to cover the distinctive terms of the objective
+- score is CUMULATIVE evidence strength (0.01–100) for the OVERALL objective — judge the evidence, do not target a number
+- do not inflate the score when the synthesis is hedging or misses the distinctive terms of the objective
 
 Continuation rules — YOU decide when to stop:
-- set should_continue: false when you believe further iterations will not yield meaningful new evidence
-- set should_continue: false ONLY when score >= target AND open_gaps is empty AND evidence is strong
+- set should_continue: false when further iterations will not yield meaningful new evidence
 - set should_continue: true when open_gaps remain OR evidence is mostly conceptual/speculative
 - never continue just to hit an iteration count — evaluate evidence quality each round
-- if the supervisor reflection says "stop" or entity is "nonexistent", you should also set should_continue: false with a clear stop_reason
+- if the supervisor reflection says "stop" or entity is "nonexistent", set should_continue: false with a clear stop_reason
 - the supervisor reflection gives you context about the entire investigation — use it to calibrate your assessment
-- score is CUMULATIVE evidence strength (0.01–100) for the OVERALL objective
-- first iteration with only generic web snippets: score MUST stay ≤ 40
-- score > 90 REQUIRES cited_urls with at least 3 distinct domains in cumulative work
-- score of 100 REQUIRES zero open_gaps and no unresolved critical risks
-- weak or generic new results should keep score flat (±3), not cause large jumps
-- score may drop more than 5 points ONLY if contradiction_found is true AND you cite contradicting sources
 
 Cumulative synthesis rules:
 - the cumulative_synthesis MUST build on the prior synthesis — do not rewrite from scratch each iteration
