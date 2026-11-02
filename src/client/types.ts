@@ -1,7 +1,7 @@
-import type { Locale } from "./i18n";
 import type {
   IntegrationEndpoints,
   IntegrationKeys,
+  Locale,
   ResearchMode,
   ScrapeProvider,
   SearchProvider,

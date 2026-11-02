@@ -26,9 +26,76 @@ export const MODE_THRESHOLDS: Record<ResearchMode, ModeThresholds> = {
   },
 };
 
-export type EvidenceType = "direct" | "contextual" | "none";
-export type EntityVerdict = "confirmed" | "likely" | "uncertain" | "unlikely" | "nonexistent";
-export type InvestigationQuality = "progressing" | "stagnating" | "circular" | "exhausted";
+export const EVIDENCE_TYPES = ["direct", "contextual", "none"] as const;
+export const ENTITY_VERDICTS = [
+  "confirmed",
+  "likely",
+  "uncertain",
+  "unlikely",
+  "nonexistent",
+] as const;
+export const INVESTIGATION_QUALITIES = [
+  "progressing",
+  "stagnating",
+  "circular",
+  "exhausted",
+] as const;
+export const REFLECTION_RECOMMENDATIONS = ["continue", "pivot", "stop"] as const;
+
+export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
+export type EntityVerdict = (typeof ENTITY_VERDICTS)[number];
+export type InvestigationQuality = (typeof INVESTIGATION_QUALITIES)[number];
+export type ReflectionRecommendation = (typeof REFLECTION_RECOMMENDATIONS)[number];
+
+export interface SearchHit {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface ReflectionSnapshot {
+  entity_verdict: EntityVerdict;
+  entity_confidence: number;
+  entity_reasoning: string;
+  investigation_quality: InvestigationQuality;
+  quality_reasoning: string;
+  recommendation: ReflectionRecommendation;
+  recommendation_reasoning: string;
+  pivot_suggestion: string;
+  key_observations: string[];
+  should_continue: boolean;
+}
+
+export const STREAM_MARKERS = [
+  "STATUS",
+  "SCORE",
+  "REPORT",
+  "ITER",
+  "RUBRIC",
+  "REFLECTION",
+  "FOLLOWUP",
+] as const;
+
+export type StreamMarker = (typeof STREAM_MARKERS)[number];
+
+export const STREAM_MARKER_RE = new RegExp(
+  `@@(?:${STREAM_MARKERS.join("|")})@@\\n`,
+);
+
+export function streamToken(marker: StreamMarker): string {
+  return `@@${marker}@@\n`;
+}
+
+export function streamChunk(marker: StreamMarker, content: string): string {
+  return `${streamToken(marker)}${content}\n\n`;
+}
+
+export function appendStreamChunks(
+  existing: string,
+  parts: Array<readonly [StreamMarker, string]>,
+): string {
+  return `${existing}\n\n${parts.map(([marker, content]) => streamChunk(marker, content)).join("")}`;
+}
 
 export const EVIDENCE_COLORS: Record<EvidenceType, string> = {
   direct: "green",
@@ -72,6 +139,60 @@ export function isHttpUrl(url: string): boolean {
 
 export function isLocalLlmBaseUrl(baseUrl: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
+}
+
+export function llmRequiresApiKey(apiKey: string, baseUrl: string): boolean {
+  return !apiKey.trim() && !isLocalLlmBaseUrl(baseUrl);
+}
+
+export function mapSearchHits(
+  items: Array<{ title?: string; url?: string; snippet?: string }>,
+  maxResults: number,
+): SearchHit[] {
+  return items.slice(0, maxResults).flatMap((item) => {
+    const url = item.url?.trim() ?? "";
+    if (!isHttpUrl(url)) return [];
+    return [
+      {
+        title: item.title?.trim() ?? "",
+        url,
+        snippet: item.snippet?.trim() ?? "",
+      },
+    ];
+  });
+}
+
+export const SUPPORTED_LOCALES = [
+  "en",
+  "es",
+  "pt-BR",
+  "pt-PT",
+  "fr",
+  "de",
+  "it",
+] as const;
+
+export type Locale = (typeof SUPPORTED_LOCALES)[number];
+
+export const LOCALE_ENGLISH_NAMES: Record<Locale, string> = {
+  en: "English",
+  es: "Spanish",
+  "pt-BR": "Brazilian Portuguese",
+  "pt-PT": "European Portuguese",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+};
+
+export function isLocale(value: unknown): value is Locale {
+  return (
+    typeof value === "string" &&
+    (SUPPORTED_LOCALES as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeLocale(value: unknown): Locale {
+  return isLocale(value) ? value : "en";
 }
 
 export const RUBRIC_MAX = 25;
@@ -133,6 +254,21 @@ export function uniqueUrlsByHostname(urls: string[]): string[] {
   }
 
   return out;
+}
+
+export function groupUrlsByHostname(urls: string[]): Array<[string, string[]]> {
+  const byHost = new Map<string, string[]>();
+  for (const url of urls) {
+    const host = tryHostname(url);
+    if (!host) continue;
+    const list = byHost.get(host);
+    if (list) {
+      if (!list.includes(url)) list.push(url);
+    } else {
+      byHost.set(host, [url]);
+    }
+  }
+  return [...byHost.entries()];
 }
 
 export function faviconUrl(url: string): string {

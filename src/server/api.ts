@@ -7,11 +7,13 @@ import { SolidAgent, extractObjective } from "./agent/loop.js";
 import {
   DEFAULT_INTEGRATIONS,
   INTEGRATION_FIELDS,
+  LOCALE_ENGLISH_NAMES,
   MODE_THRESHOLDS,
   normalizeIntegrationEndpoints,
   normalizeIntegrationKeys,
   SCRAPE_PROVIDERS,
   SEARCH_PROVIDERS,
+  isLocale,
   normalizeScrapeProvider,
   normalizeSearchProvider,
   stripTrailingSlash,
@@ -19,22 +21,11 @@ import {
   type PriorResearchContext,
 } from "../shared.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
-
-const LOCALE_NAMES: Record<string, string> = {
-  en: "English",
-  es: "Spanish",
-  "pt-BR": "Brazilian Portuguese",
-  "pt-PT": "European Portuguese",
-  fr: "French",
-  de: "German",
-  it: "Italian",
-};
+import { bearerHeaders } from "./http.js";
 
 function languageInstruction(locale: string | undefined): string {
-  if (!locale) return "";
-  const name = LOCALE_NAMES[locale];
-  if (!name) return "";
-  return ` You MUST respond in ${name}.`;
+  if (!locale || !isLocale(locale)) return "";
+  return ` You MUST respond in ${LOCALE_ENGLISH_NAMES[locale]}.`;
 }
 
 interface LlmChoice {
@@ -62,10 +53,7 @@ function extractLlmContent(choices?: LlmChoice[]): string {
 }
 
 function llmAuthHeaders(apiKey: string, json = false): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (json) headers["Content-Type"] = "application/json";
-  if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`;
-  return headers;
+  return bearerHeaders(apiKey, json ? { "Content-Type": "application/json" } : {});
 }
 
 async function completeLlmChat(
@@ -117,6 +105,20 @@ const messageSchema = z.object({
   content: z.union([z.string(), z.array(z.record(z.string(), z.unknown())), z.null()]).optional(),
 });
 
+const priorResearchContextSchema: z.ZodType<PriorResearchContext> = z.object({
+  rootObjective: z.string().min(1),
+  followUp: z.string().min(1),
+  cumulativeSynthesis: z.string(),
+  currentScore: z.number(),
+  report: z.string(),
+  openGaps: z.array(z.string()),
+  priorQueries: z.array(z.string()),
+  citedUrls: z.array(z.string()),
+  uniqueDomainCount: z.number().int().nonnegative(),
+  iterationCount: z.number().int().nonnegative(),
+  hadDisconfirmingSearch: z.boolean(),
+});
+
 const requestSchema = z.object({
   model: z.string().default("solid"),
   messages: z.array(messageSchema).min(1),
@@ -131,21 +133,7 @@ const requestSchema = z.object({
   search_provider: z.enum(SEARCH_PROVIDERS).optional(),
   scrape_provider: z.enum(SCRAPE_PROVIDERS).optional(),
   ...integrationRequestFields,
-  prior_context: z
-    .object({
-      rootObjective: z.string().min(1),
-      followUp: z.string().min(1),
-      cumulativeSynthesis: z.string(),
-      currentScore: z.number(),
-      report: z.string(),
-      openGaps: z.array(z.string()),
-      priorQueries: z.array(z.string()),
-      citedUrls: z.array(z.string()),
-      uniqueDomainCount: z.number().int().nonnegative(),
-      iterationCount: z.number().int().nonnegative(),
-      hadDisconfirmingSearch: z.boolean(),
-    })
-    .optional(),
+  prior_context: priorResearchContextSchema.optional(),
 });
 
 type AppEnv = {

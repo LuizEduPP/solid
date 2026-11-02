@@ -5,22 +5,20 @@ import type { WebSettings } from "./types";
 import {
   countUniqueHostnames,
   INTEGRATION_FIELDS,
-  isLocalLlmBaseUrl,
+  llmRequiresApiKey,
   MODE_THRESHOLDS,
-  type EntityVerdict,
+  STREAM_MARKER_RE,
+  streamToken,
   type EvidenceType,
-  type InvestigationQuality,
   type PriorResearchContext,
+  type ReflectionSnapshot,
   type ScoreRubric,
+  type SearchHit,
+  type StreamMarker,
 } from "../shared";
 
-export type { EntityVerdict, InvestigationQuality } from "../shared";
-
-export interface SourceSnapshot {
-  title: string;
-  url: string;
-  snippet: string;
-}
+export type { EntityVerdict, InvestigationQuality, ReflectionSnapshot } from "../shared";
+export type SourceSnapshot = SearchHit;
 
 export interface IterationSnapshot {
   number: number;
@@ -41,19 +39,6 @@ export interface IterationSnapshot {
   disambiguationNotes?: string;
 }
 
-export interface ReflectionSnapshot {
-  entity_verdict: EntityVerdict;
-  entity_confidence: number;
-  entity_reasoning: string;
-  investigation_quality: InvestigationQuality;
-  quality_reasoning: string;
-  recommendation: "continue" | "pivot" | "stop";
-  recommendation_reasoning: string;
-  pivot_suggestion: string;
-  key_observations: string[];
-  should_continue: boolean;
-}
-
 export interface ResearchRound {
   followUpMessage?: string;
   iterations: IterationSnapshot[];
@@ -71,16 +56,14 @@ interface ParsedStream {
   rounds: ResearchRound[];
 }
 
-const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC|REFLECTION|FOLLOWUP)@@\n/;
-
 function sectionBody(output: string, start: number): string {
   const tail = output.slice(start);
-  const nextIdx = tail.search(MARKER_RE);
+  const nextIdx = tail.search(STREAM_MARKER_RE);
   return (nextIdx >= 0 ? tail.slice(0, nextIdx) : tail).trim();
 }
 
-function extractSections(output: string, marker: string): string[] {
-  const token = `@@${marker}@@\n`;
+function extractSections(output: string, marker: StreamMarker): string[] {
+  const token = streamToken(marker);
   const results: string[] = [];
   let start = 0;
 
@@ -92,15 +75,15 @@ function extractSections(output: string, marker: string): string[] {
     if (body) results.push(body);
 
     const tail = output.slice(idx + token.length);
-    const nextIdx = tail.search(MARKER_RE);
+    const nextIdx = tail.search(STREAM_MARKER_RE);
     start = idx + token.length + (nextIdx >= 0 ? nextIdx : tail.length);
   }
 
   return results;
 }
 
-function extractTailSection(output: string, marker: string): string {
-  const token = `@@${marker}@@\n`;
+function extractTailSection(output: string, marker: StreamMarker): string {
+  const token = streamToken(marker);
   const idx = output.lastIndexOf(token);
   if (idx < 0) return "";
   return sectionBody(output, idx + token.length);
@@ -176,7 +159,7 @@ function parseLatestRubric(output: string): ScoreRubric | null {
   }
 }
 
-const FOLLOWUP_TOKEN = "@@FOLLOWUP@@\n";
+const FOLLOWUP_TOKEN = streamToken("FOLLOWUP");
 
 function parseRounds(output: string): ResearchRound[] {
   const parts: { followUpMessage?: string; raw: string }[] = [];
@@ -256,6 +239,19 @@ export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
   return countUniqueHostnames(urls);
 }
 
+export function canFollowUp(
+  session: { id: string; status: string } | null | undefined,
+  sessionId: string | undefined,
+  parsed: Pick<ParsedStream, "report" | "iterations">,
+): boolean {
+  return Boolean(
+    session &&
+      sessionId === session.id &&
+      session.status !== "running" &&
+      (parsed.report || parsed.iterations.length > 0),
+  );
+}
+
 function llmFields(settings: WebSettings): Record<string, string> {
   return {
     llm_api_key: settings.apiKey,
@@ -307,7 +303,7 @@ export async function fetchTitle(
 }
 
 export async function fetchSuggestions(settings: WebSettings, signal?: AbortSignal): Promise<string[]> {
-  if (!settings.apiKey.trim() && !isLocalLlmBaseUrl(settings.baseUrl)) {
+  if (llmRequiresApiKey(settings.apiKey, settings.baseUrl)) {
     return [];
   }
   if (!settings.model.trim()) return [];

@@ -48,7 +48,6 @@ import {
   groupSessionsByDate,
   buildPriorContext,
   HISTORY_KEY,
-  isLocalLlmBaseUrl,
   loadHistory,
   loadWebSettings,
   normalizeWebSettings,
@@ -63,6 +62,7 @@ import MarkdownContent from "./MarkdownContent";
 import IterationCard from "./IterationCard";
 import SettingsForm from "./SettingsForm";
 import {
+  canFollowUp,
   fetchLlmModels,
   fetchSuggestions,
   fetchTitle,
@@ -71,7 +71,13 @@ import {
   streamResearch,
   type ResearchRound,
 } from "./stream";
-import { MODE_THRESHOLDS, VERDICT_I18N, scoreTone } from "../shared";
+import {
+  MODE_THRESHOLDS,
+  VERDICT_I18N,
+  appendStreamChunks,
+  llmRequiresApiKey,
+  scoreTone,
+} from "../shared";
 
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";
@@ -163,6 +169,19 @@ function RailIcon({
   );
 }
 
+function ScoreBadge({ score, size = "xs" }: { score: number; size?: "xs" | "sm" }) {
+  return (
+    <Badge
+      size={size}
+      variant="light"
+      color={scoreTone(score)}
+      style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}
+    >
+      {score.toFixed(0)}%
+    </Badge>
+  );
+}
+
 function statusDotColor(status: ResearchSession["status"]): string {
   switch (status) {
     case "running": return "var(--mantine-color-yellow-5)";
@@ -212,11 +231,7 @@ function SidebarSessionRow({
             >
               {label}
             </Text>
-            {score > 0 && !running ? (
-              <Badge size="xs" variant="light" color={scoreTone(score)} style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                {score.toFixed(0)}%
-              </Badge>
-            ) : null}
+            {score > 0 && !running ? <ScoreBadge score={score} /> : null}
             {running ? <Loader size={10} type="dots" /> : null}
           </Group>
         </UnstyledButton>
@@ -624,7 +639,7 @@ export default function App() {
     event.preventDefault();
     if (!objective.trim() || running || controllerRef.current) return;
 
-    if (!settings.apiKey.trim() && !isLocalLlmBaseUrl(settings.baseUrl)) {
+    if (llmRequiresApiKey(settings.apiKey, settings.baseUrl)) {
       setError(t("errorApiKey"));
       openConfig();
       return;
@@ -644,13 +659,9 @@ export default function App() {
     setError(null);
     stopRequestedRef.current = false;
 
-    const followUpSession =
-      activeSession &&
-      sessionId === activeSession.id &&
-      activeSession.status !== "running" &&
-      (Boolean(parsed.report) || parsed.iterations.length > 0)
-        ? activeSession
-        : null;
+    const followUpSession = canFollowUp(activeSession, sessionId, parsed)
+      ? activeSession
+      : null;
 
     const priorContext = followUpSession
       ? buildPriorContext(followUpSession, objective.trim())
@@ -662,7 +673,10 @@ export default function App() {
     if (followUpSession) {
       session = touchSession(followUpSession, { status: "running", error: undefined });
       rawStream = followUpSession.rawStream;
-      rawStream += `\n\n@@FOLLOWUP@@\n${objective.trim()}\n\n@@STATUS@@\n${t("followUpStarted", { message: objective.trim() })}\n\n`;
+      rawStream = appendStreamChunks(rawStream, [
+        ["FOLLOWUP", objective.trim()],
+        ["STATUS", t("followUpStarted", { message: objective.trim() })],
+      ]);
       syncSession(touchSession(session, { rawStream }));
     } else {
       session = createSession(objective.trim());
@@ -707,7 +721,7 @@ export default function App() {
       const errSession = inFlightRef.current?.session ?? session;
       if (err instanceof DOMException && err.name === "AbortError") {
         if (!stopRequestedRef.current) {
-          rawStream += `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
+          rawStream = appendStreamChunks(rawStream, [["STATUS", t("cancelled")]]);
         }
         syncSession(touchSession(errSession, { rawStream, status: "cancelled" }));
       } else {
@@ -745,8 +759,9 @@ export default function App() {
     controllerRef.current?.abort();
 
     if (inflight) {
-      const cancelledStream =
-        inflight.rawStream + `\n\n@@STATUS@@\n${t("cancelled")}\n\n`;
+      const cancelledStream = appendStreamChunks(inflight.rawStream, [
+        ["STATUS", t("cancelled")],
+      ]);
       inflight.rawStream = cancelledStream;
       syncSession(
         touchSession(inflight.session, {
@@ -792,12 +807,9 @@ export default function App() {
     onStop: handleStop,
     onToggleMode: handleToggleMode,
     onDownload: () => activeSession && downloadSession(activeSession),
-    placeholder:
-      activeSession &&
-      activeSession.status !== "running" &&
-      (Boolean(parsed.report) || parsed.iterations.length > 0)
-        ? t("askFollowUpPlaceholder")
-        : t("askPlaceholder"),
+    placeholder: canFollowUp(activeSession, sessionId, parsed)
+      ? t("askFollowUpPlaceholder")
+      : t("askPlaceholder"),
     t,
   };
 
@@ -1037,9 +1049,7 @@ export default function App() {
                 {activeSession?.title || activeSession?.objective || t("untitledResearch")}
               </Text>
               {confidence > 0 ? (
-                <Badge variant="light" color={scoreTone(confidence)} size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>
-                  {confidence.toFixed(0)}%
-                </Badge>
+                <ScoreBadge score={confidence} size="sm" />
               ) : null}
               {hasSessionData && (isWide || !showMobileChrome) ? (
                 <InspectorToggle

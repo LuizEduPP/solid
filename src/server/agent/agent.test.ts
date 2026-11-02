@@ -3,8 +3,12 @@ import { describe, it } from "node:test";
 
 import {
   MODE_THRESHOLDS,
+  appendStreamChunks,
+  llmRequiresApiKey,
+  mapSearchHits,
   rubricTotal,
   scoreTone,
+  streamChunk,
   uniqueHostnamesFromHits,
 } from "../../shared.js";
 import {
@@ -219,6 +223,29 @@ describe("agent", () => {
       assert.equal(scoreTone(39), "red");
       assert.equal(scoreTone(40), "yellow");
       assert.equal(scoreTone(70), "teal");
+    });
+
+    it("formats stream chunks with a shared marker", () => {
+      assert.equal(streamChunk("STATUS", "cancelled"), "@@STATUS@@\ncancelled\n\n");
+      assert.equal(
+        appendStreamChunks("raw", [["FOLLOWUP", "more"], ["STATUS", "go"]]),
+        "raw\n\n@@FOLLOWUP@@\nmore\n\n@@STATUS@@\ngo\n\n",
+      );
+    });
+
+    it("maps search hits and requires a cloud LLM key", () => {
+      assert.equal(
+        mapSearchHits(
+          [
+            { title: "A", url: "https://ok.test", snippet: "x" },
+            { title: "B", url: "ftp://no", snippet: "y" },
+          ],
+          8,
+        ).length,
+        1,
+      );
+      assert.equal(llmRequiresApiKey("", "https://api.openai.com/v1"), true);
+      assert.equal(llmRequiresApiKey("", "http://127.0.0.1:1234/v1"), false);
     });
 
     it("sums rubric to 100 max", () => {

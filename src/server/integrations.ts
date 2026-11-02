@@ -3,8 +3,8 @@ import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   exaSearchEndpoint,
   firecrawlEndpoint,
-  isHttpUrl,
   jinaReadUrl,
+  mapSearchHits,
   requiredSearchKey,
   scrapeProviderNeedsKey,
   searchProviderEndpoint,
@@ -13,14 +13,12 @@ import {
   tavilySearchEndpoint,
   type IntegrationRuntime,
   type ScrapeProvider,
+  type SearchHit,
   type SearchProvider,
 } from "../shared.js";
+import { bearerHeaders } from "./http.js";
 
-export interface ProviderHit {
-  title: string;
-  url: string;
-  snippet: string;
-}
+export type ProviderHit = SearchHit;
 
 const PROVIDER_TIMEOUT_MS = 12_000;
 const MAX_SNIPPET = 500;
@@ -38,17 +36,7 @@ export function mapProviderHits(
   items: Array<{ title?: string; url?: string; snippet?: string }>,
   maxResults: number,
 ): ProviderHit[] {
-  return items.slice(0, maxResults).flatMap((item) => {
-    const url = item.url?.trim() ?? "";
-    if (!isHttpUrl(url)) return [];
-    return [
-      {
-        title: item.title?.trim() ?? "",
-        url,
-        snippet: item.snippet?.trim() ?? "",
-      },
-    ];
-  });
+  return mapSearchHits(items, maxResults);
 }
 
 async function fetchTimed(
@@ -105,8 +93,7 @@ function endpointsOf(runtime: IntegrationRuntime) {
 }
 
 function authHeaders(apiKey: string, extra: Record<string, string> = {}): Record<string, string> {
-  if (!apiKey) return extra;
-  return { ...extra, Authorization: `Bearer ${apiKey}` };
+  return bearerHeaders(apiKey, extra);
 }
 
 async function searchExa(

@@ -1,10 +1,14 @@
 import { loads } from "ai-json-repair";
 import { z } from "zod";
-import type {
-  EntityVerdict,
-  EvidenceType,
-  InvestigationQuality,
-  ScoreRubric,
+import {
+  ENTITY_VERDICTS,
+  EVIDENCE_TYPES,
+  INVESTIGATION_QUALITIES,
+  REFLECTION_RECOMMENDATIONS,
+  isHttpUrl,
+  type EvidenceType,
+  type ReflectionSnapshot,
+  type ScoreRubric,
 } from "../../shared.js";
 import { extractCitedUrls, normalizeRubric } from "./scoring.js";
 
@@ -55,9 +59,7 @@ const planSchema = z
     disconfirming: payload.disconfirming ?? false,
   }));
 
-const evidenceTypeSchema = z
-  .enum(["direct", "contextual", "none"])
-  .catch("contextual");
+const evidenceTypeSchema = z.enum(EVIDENCE_TYPES).catch("contextual");
 
 const analysisSchema = z
   .object({
@@ -149,11 +151,10 @@ function normalizeLlmKeys(value: unknown): unknown {
 }
 
 function isValidCitationUrl(url: string): boolean {
-  if (!url.trim() || url.includes("...")) return false;
-
+  if (url.includes("...") || !isHttpUrl(url.trim())) return false;
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    new URL(url);
+    return true;
   } catch {
     return false;
   }
@@ -187,34 +188,10 @@ export function parseAnalysisPayload(
   return { ...parsed, cited_urls };
 }
 
-type ReflectionRecommendation = "continue" | "pivot" | "stop";
+export type ReflectionPayload = ReflectionSnapshot;
 
-export interface ReflectionPayload {
-  entity_verdict: EntityVerdict;
-  entity_confidence: number;
-  entity_reasoning: string;
-  investigation_quality: InvestigationQuality;
-  quality_reasoning: string;
-  recommendation: ReflectionRecommendation;
-  recommendation_reasoning: string;
-  pivot_suggestion: string;
-  key_observations: string[];
-  should_continue: boolean;
-}
-
-const entityVerdictEnum = z.enum([
-  "confirmed",
-  "likely",
-  "uncertain",
-  "unlikely",
-  "nonexistent",
-]);
-const investigationQualityEnum = z.enum([
-  "progressing",
-  "stagnating",
-  "circular",
-  "exhausted",
-]);
+const entityVerdictEnum = z.enum(ENTITY_VERDICTS);
+const investigationQualityEnum = z.enum(INVESTIGATION_QUALITIES);
 
 const reflectionSchema = z
   .object({
@@ -228,7 +205,7 @@ const reflectionSchema = z
     investigationQuality: investigationQualityEnum.optional(),
     quality_reasoning: z.coerce.string().optional(),
     qualityReasoning: z.coerce.string().optional(),
-    recommendation: z.enum(["continue", "pivot", "stop"]).catch("continue"),
+    recommendation: z.enum(REFLECTION_RECOMMENDATIONS).catch("continue"),
     recommendation_reasoning: z.coerce.string().optional(),
     recommendationReasoning: z.coerce.string().optional(),
     pivot_suggestion: z.coerce.string().optional(),

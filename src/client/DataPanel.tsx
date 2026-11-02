@@ -22,9 +22,8 @@ import type { IterationSnapshot, ReflectionSnapshot, EntityVerdict, Investigatio
 import {
   EVIDENCE_COLORS,
   EVIDENCE_I18N,
-  hostnameFromUrl,
+  groupUrlsByHostname,
   QUALITY_I18N,
-  uniqueUrlsByHostname,
   RUBRIC_DIMENSIONS,
   RUBRIC_MAX,
   scoreTone,
@@ -179,26 +178,20 @@ function ObservationsSection({ observations }: { observations: string[] }) {
 
 function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
   const { t } = useTranslation();
-  const allUrls = iterations.flatMap((it) => [
-    ...(it.citedUrls ?? []),
-    ...(it.readUrls ?? []),
-  ]);
-  const unique = uniqueUrlsByHostname(allUrls);
+  const byHost = groupUrlsByHostname(
+    iterations.flatMap((it) => [
+      ...(it.citedUrls ?? []),
+      ...(it.readUrls ?? []),
+    ]),
+  );
 
-  if (unique.length === 0) return null;
-
-  const byHost = new Map<string, string[]>();
-  for (const url of unique) {
-    const host = hostnameFromUrl(url);
-    if (!byHost.has(host)) byHost.set(host, []);
-    byHost.get(host)!.push(url);
-  }
+  if (byHost.length === 0) return null;
 
   return (
     <Box className="dp-section">
-      <Text className="dp-section-title">{t("dpSources", { count: byHost.size })}</Text>
+      <Text className="dp-section-title">{t("dpSources", { count: byHost.length })}</Text>
       <Stack gap={4}>
-        {[...byHost.entries()].map(([host, urls]) => (
+        {byHost.map(([host, urls]) => (
           <Group key={host} gap={6} wrap="nowrap">
             <FaviconImg url={urls[0]} size={14} style={{ borderRadius: 2, flexShrink: 0 }} />
             <Text

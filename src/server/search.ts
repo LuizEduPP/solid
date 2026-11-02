@@ -2,16 +2,13 @@ import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
 import {
   DEFAULT_INTEGRATIONS,
-  isHttpUrl,
+  mapSearchHits,
   type IntegrationRuntime,
+  type SearchHit,
 } from "../shared.js";
 import { scrapeWithProvider, searchWithProvider } from "./integrations.js";
 
-export interface SearchHit {
-  title: string;
-  url: string;
-  snippet: string;
-}
+export type { SearchHit };
 
 interface SearchWebResult {
   hits: SearchHit[];
@@ -94,17 +91,14 @@ function mapHits(
   results: Array<{ title?: string; href?: string; body?: string }>,
   maxResults: number,
 ): SearchHit[] {
-  return results.slice(0, maxResults).flatMap((item) => {
-    const url = item.href?.trim() ?? "";
-    if (!isHttpUrl(url)) return [];
-    return [
-      {
-        title: item.title?.trim() ?? "",
-        url,
-        snippet: item.body?.trim() ?? "",
-      },
-    ];
-  });
+  return mapSearchHits(
+    results.map((item) => ({
+      title: item.title,
+      url: item.href,
+      snippet: item.body,
+    })),
+    maxResults,
+  );
 }
 
 function retryDelayMs(error: Error, attempt: number): number {

@@ -7,6 +7,8 @@ import {
   type PriorResearchContext,
   rubricTotal,
   type ScoreRubric,
+  streamChunk,
+  type StreamMarker,
 } from "../../shared.js";
 import type { AgentConfig } from "../config.js";
 import { cacheFaviconsForUrls } from "../favicon.js";
@@ -109,7 +111,7 @@ function event(
   kind: "status" | "score" | "report" | "iter" | "rubric" | "reflection",
   content: string,
 ): string {
-  return `@@${kind.toUpperCase()}@@\n${content}\n\n`;
+  return streamChunk(kind.toUpperCase() as StreamMarker, content);
 }
 
 function eventIteration(record: {

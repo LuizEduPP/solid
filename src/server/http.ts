@@ -10,6 +10,14 @@ const TRANSIENT_SOCKET_CODES = new Set([
   "ERR_HTTP2_SESSION_ERROR",
 ]);
 
+export function bearerHeaders(
+  apiKey: string,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  if (!apiKey.trim()) return extra;
+  return { ...extra, Authorization: `Bearer ${apiKey.trim()}` };
+}
+
 export function isTransientSocketError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
 
