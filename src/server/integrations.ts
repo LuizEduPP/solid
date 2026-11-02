@@ -2,18 +2,18 @@ import {
   braveSearchEndpoint,
   exaSearchEndpoint,
   firecrawlEndpoint,
+  type IntegrationRuntime,
   jinaReadUrl,
   mapSearchHits,
   requiredSearchKey,
+  type ScrapeProvider,
+  type SearchHit,
+  type SearchProvider,
   scrapeProviderNeedsKey,
   searchProviderEndpoint,
   searchProviderNeedsKey,
   searxngSearchUrl,
   tavilySearchEndpoint,
-  type IntegrationRuntime,
-  type ScrapeProvider,
-  type SearchHit,
-  type SearchProvider,
 } from "../shared.js";
 import { bearerHeaders } from "./http.js";
 
@@ -26,13 +26,15 @@ export interface ProviderSearchResult {
 }
 
 function snippetOf(...parts: Array<string | undefined>): string {
-  return parts.find((part) => part?.trim())?.trim().slice(0, MAX_SNIPPET) ?? "";
+  return (
+    parts
+      .find((part) => part?.trim())
+      ?.trim()
+      .slice(0, MAX_SNIPPET) ?? ""
+  );
 }
 
-async function fetchTimed(
-  url: string,
-  init: RequestInit,
-): Promise<Response> {
+async function fetchTimed(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   try {
@@ -213,7 +215,8 @@ export async function searchWithProvider(
 
   let hits: SearchHit[];
   if (provider === "exa") hits = await searchExa(query, maxResults, key, endpoints.exa);
-  else if (provider === "tavily") hits = await searchTavily(query, maxResults, key, endpoints.tavily);
+  else if (provider === "tavily")
+    hits = await searchTavily(query, maxResults, key, endpoints.tavily);
   else if (provider === "brave") hits = await searchBrave(query, maxResults, key, endpoints.brave);
   else if (provider === "firecrawl") {
     hits = await searchFirecrawl(query, maxResults, key, endpoints.firecrawl);
@@ -247,11 +250,7 @@ async function scrapeFirecrawl(
   return markdown.length > 0 ? markdown : null;
 }
 
-async function scrapeJina(
-  url: string,
-  apiKey: string,
-  baseUrl: string,
-): Promise<string | null> {
+async function scrapeJina(url: string, apiKey: string, baseUrl: string): Promise<string | null> {
   const text = (
     await fetchText(jinaReadUrl(baseUrl, url), {
       headers: bearerHeaders(apiKey, {

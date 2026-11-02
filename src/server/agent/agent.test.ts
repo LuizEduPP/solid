@@ -2,21 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
-  MODE_THRESHOLDS,
   appendStreamChunks,
+  countUniqueHostnames,
   groupUrlsByHostname,
   llmRequiresApiKey,
+  MODE_THRESHOLDS,
   mapSearchHits,
   rubricTotal,
   scoreTone,
   streamChunk,
-  countUniqueHostnames,
 } from "../../shared.js";
-import {
-  parseAnalysisPayload,
-  parsePlanPayload,
-  parseReflectionPayload,
-} from "./schemas.js";
+import { parseAnalysisPayload, parsePlanPayload, parseReflectionPayload } from "./schemas.js";
 import {
   anchorQueryToObjective,
   applyCumulativeScore,
@@ -58,10 +54,7 @@ describe("agent", () => {
 }`;
 
       const parsed = parseAnalysisPayload(broken, []);
-      assert.deepEqual(parsed.cited_urls, [
-        "https://example.com/a",
-        "https://example.com/b",
-      ]);
+      assert.deepEqual(parsed.cited_urls, ["https://example.com/a", "https://example.com/b"]);
       assert.equal(parsed.score, 63);
       assert.equal(parsed.score_rubric.direct_evidence, 18);
     });
@@ -121,9 +114,7 @@ describe("agent", () => {
       assert.deepEqual(parsed.open_gaps, ["Latency under edge constraints"]);
       assert.equal(parsed.score_rubric.direct_evidence, 15);
       assert.equal(parsed.score, 57.5);
-      assert.deepEqual(parsed.cited_urls, [
-        "https://cloud.google.com/blog/post",
-      ]);
+      assert.deepEqual(parsed.cited_urls, ["https://cloud.google.com/blog/post"]);
     });
   });
 
@@ -145,10 +136,9 @@ describe("agent", () => {
     });
 
     it("extracts cited urls from text and known list", () => {
-      const urls = extractCitedUrls(
-        "Source https://a.com/x and https://b.org/y.",
-        ["https://a.com/x"],
-      );
+      const urls = extractCitedUrls("Source https://a.com/x and https://b.org/y.", [
+        "https://a.com/x",
+      ]);
 
       assert.deepEqual(urls, ["https://a.com/x", "https://b.org/y"]);
     });
@@ -188,20 +178,14 @@ describe("agent", () => {
       );
       assert.ok(coverage < 0.4);
       assert.equal(
-        objectiveCoverage(
-          "NexaRAG Studio latency",
-          "NexaRAG Studio latency results",
-        ),
+        objectiveCoverage("NexaRAG Studio latency", "NexaRAG Studio latency results"),
         1,
       );
     });
 
     it("re-anchors a drifted query to the root objective", () => {
       assert.equal(
-        anchorQueryToObjective(
-          "latency benchmark edge",
-          "NexaRAG Studio latency",
-        ),
+        anchorQueryToObjective("latency benchmark edge", "NexaRAG Studio latency"),
         "latency benchmark edge",
       );
       assert.equal(
@@ -211,12 +195,8 @@ describe("agent", () => {
     });
 
     it("gives fast mode a shorter run budget than rigorous", () => {
-      assert.ok(
-        MODE_THRESHOLDS.fast.maxIterations < MODE_THRESHOLDS.rigorous.maxIterations,
-      );
-      assert.ok(
-        MODE_THRESHOLDS.fast.maxLlmCalls < MODE_THRESHOLDS.rigorous.maxLlmCalls,
-      );
+      assert.ok(MODE_THRESHOLDS.fast.maxIterations < MODE_THRESHOLDS.rigorous.maxIterations);
+      assert.ok(MODE_THRESHOLDS.fast.maxLlmCalls < MODE_THRESHOLDS.rigorous.maxLlmCalls);
     });
 
     it("maps scores to the same color tones used in the UI", () => {
@@ -229,7 +209,10 @@ describe("agent", () => {
     it("formats stream chunks with a shared marker", () => {
       assert.equal(streamChunk("STATUS", "cancelled"), "@@STATUS@@\ncancelled\n\n");
       assert.equal(
-        appendStreamChunks("raw", [["FOLLOWUP", "more"], ["STATUS", "go"]]),
+        appendStreamChunks("raw", [
+          ["FOLLOWUP", "more"],
+          ["STATUS", "go"],
+        ]),
         "raw\n\n@@FOLLOWUP@@\nmore\n\n@@STATUS@@\ngo\n\n",
       );
     });

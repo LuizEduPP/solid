@@ -1,4 +1,4 @@
-import { Group, Text, type GroupProps } from "@mantine/core";
+import { Group, type GroupProps, Text } from "@mantine/core";
 
 interface SolidLogoProps extends GroupProps {
   size?: number;

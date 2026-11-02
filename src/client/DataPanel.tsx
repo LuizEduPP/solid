@@ -1,39 +1,23 @@
-import {
-  Badge,
-  Box,
-  Group,
-  Progress,
-  ScrollArea,
-  Stack,
-  Text,
-  Tooltip,
-} from "@mantine/core";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleDashed,
-  HelpCircle,
-  XCircle,
-} from "lucide-react";
+import { Badge, Box, Group, Progress, ScrollArea, Stack, Text, Tooltip } from "@mantine/core";
+import { AlertTriangle, CheckCircle2, CircleDashed, HelpCircle, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-
-import FaviconImg from "./FaviconImg";
-import { iterationSourceUrls, type IterationSnapshot } from "./stream";
 import {
+  type EntityVerdict,
   EVIDENCE_COLORS,
   EVIDENCE_I18N,
   groupUrlsByHostname,
+  type InvestigationQuality,
   QUALITY_I18N,
+  type ReflectionSnapshot,
   RUBRIC_DIMENSIONS,
   RUBRIC_MAX,
   SCORE_MAX,
+  type ScoreRubric,
   scoreTone,
   VERDICT_I18N,
-  type EntityVerdict,
-  type InvestigationQuality,
-  type ReflectionSnapshot,
-  type ScoreRubric,
 } from "../shared";
+import FaviconImg from "./FaviconImg";
+import { type IterationSnapshot, iterationSourceUrls } from "./stream";
 
 const VERDICT_STYLE: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2 }> = {
   confirmed: { color: "green", icon: CheckCircle2 },
@@ -75,8 +59,12 @@ function ScoreSection({ confidence, targetScore }: { confidence: number; targetS
     <Box className="dp-section">
       <Group justify="space-between" align="flex-end" mb={10}>
         <div>
-          <Text className="dp-section-title" mb={6}>{t("solidness")}</Text>
-          <Text className="dp-score-value" c={tone}>{confidence.toFixed(0)}%</Text>
+          <Text className="dp-section-title" mb={6}>
+            {t("solidness")}
+          </Text>
+          <Text className="dp-score-value" c={tone}>
+            {confidence.toFixed(0)}%
+          </Text>
         </div>
         <Text c="dimmed" size="xs" style={{ fontVariantNumeric: "tabular-nums" }}>
           {t("solidnessTarget", { target: targetScore })}
@@ -142,8 +130,15 @@ function RubricSection({ rubric }: { rubric: ScoreRubric }) {
             <Tooltip key={key} label={t(hintKey)} multiline maw={260} withArrow>
               <Box>
                 <Group justify="space-between" gap={4} mb={2}>
-                  <Text size="xs" c="dimmed" fw={500}>{t(labelKey)}</Text>
-                  <Text size="xs" c="dimmed" fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
+                  <Text size="xs" c="dimmed" fw={500}>
+                    {t(labelKey)}
+                  </Text>
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    fw={600}
+                    style={{ fontVariantNumeric: "tabular-nums" }}
+                  >
                     {value}/{RUBRIC_MAX}
                   </Text>
                 </Group>
@@ -197,13 +192,7 @@ function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
           return (
             <Group key={host} gap={6} wrap="nowrap">
               <FaviconImg url={primary} size={14} style={{ borderRadius: 2, flexShrink: 0 }} />
-              <Tooltip
-                label={urls.join("\n")}
-                multiline
-                maw={360}
-                withArrow
-                disabled={extra === 0}
-              >
+              <Tooltip label={urls.join("\n")} multiline maw={360} withArrow disabled={extra === 0}>
                 <Text
                   component="a"
                   href={primary}
@@ -211,7 +200,12 @@ function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
                   rel="noreferrer"
                   size="xs"
                   c="dimmed"
-                  style={{ textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  style={{
+                    textDecoration: "none",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
                   className="dp-source-link"
                 >
                   {label}
@@ -238,16 +232,27 @@ function TimelineSection({ iterations }: { iterations: IterationSnapshot[] }) {
             <Box className="dp-timeline-dot-col">
               {i > 0 && <Box className="dp-timeline-line dp-timeline-line--top" />}
               <Box className={`dp-timeline-dot dp-timeline-dot--${it.evidenceType ?? "none"}`} />
-              {i < iterations.length - 1 && <Box className="dp-timeline-line dp-timeline-line--bottom" />}
+              {i < iterations.length - 1 && (
+                <Box className="dp-timeline-line dp-timeline-line--bottom" />
+              )}
             </Box>
             <Group gap={6} flex={1} miw={0} wrap="nowrap">
-              <Text size="xs" fw={600} style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+              <Text
+                size="xs"
+                fw={600}
+                style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}
+              >
                 #{it.number}
               </Text>
               <Badge size="xs" variant="light" color={EVIDENCE_COLORS[it.evidenceType ?? "none"]}>
                 {t(EVIDENCE_I18N[it.evidenceType ?? "none"])}
               </Badge>
-              <Text size="xs" c="dimmed" fw={600} style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+              <Text
+                size="xs"
+                c="dimmed"
+                fw={600}
+                style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}
+              >
                 {it.score.toFixed(0)}%
               </Text>
             </Group>
@@ -269,7 +274,11 @@ function GapsSection({ iterations }: { iterations: IterationSnapshot[] }) {
       <Stack gap={4}>
         {lastGaps.map((gap, i) => (
           <Group key={i} gap={6} wrap="nowrap" align="flex-start">
-            <CircleDashed size={12} style={{ flexShrink: 0, marginTop: 3 }} color="var(--mantine-color-yellow-5)" />
+            <CircleDashed
+              size={12}
+              style={{ flexShrink: 0, marginTop: 3 }}
+              color="var(--mantine-color-yellow-5)"
+            />
             <Text size="xs" c="dimmed" lh={1.4}>
               {gap}
             </Text>
@@ -309,7 +318,9 @@ export default function DataPanel({
 
         {running && iterations.length === 0 && (
           <Box className="dp-section">
-            <Text size="xs" c="dimmed">{t("researching")}…</Text>
+            <Text size="xs" c="dimmed">
+              {t("researching")}…
+            </Text>
           </Box>
         )}
       </Stack>

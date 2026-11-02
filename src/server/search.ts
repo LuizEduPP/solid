@@ -3,8 +3,8 @@ import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
 import {
   DEFAULT_INTEGRATIONS,
-  mapSearchHits,
   type IntegrationRuntime,
+  mapSearchHits,
   type SearchHit,
 } from "../shared.js";
 import { scrapeWithProvider, searchWithProvider } from "./integrations.js";
@@ -30,9 +30,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 function searchRegion(query: string): string {
-  return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query)
-    ? "br-pt"
-    : "wt-wt";
+  return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query) ? "br-pt" : "wt-wt";
 }
 
 function isRateLimitError(error: Error): boolean {
@@ -57,9 +55,7 @@ function simplifyQuery(query: string): string {
 function queryVariants(query: string): string[] {
   const trimmed = query.trim();
   const simplified = simplifyQuery(trimmed);
-  return simplified && simplified !== trimmed
-    ? [trimmed, simplified]
-    : [trimmed];
+  return simplified && simplified !== trimmed ? [trimmed, simplified] : [trimmed];
 }
 
 function pickSearchParams(
@@ -69,8 +65,7 @@ function pickSearchParams(
   const variants = queryVariants(query);
   const keywords = variants[Math.min(attempt, variants.length - 1)]!;
   const primaryRegion = searchRegion(query);
-  const region =
-    attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
+  const region = attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
   const backend = BACKENDS[attempt % BACKENDS.length]!;
 
   return { keywords, region, backend };
@@ -86,16 +81,12 @@ async function throttle(): Promise<void> {
   await run;
 }
 
-
 function retryDelayMs(error: Error, attempt: number): number {
   if (isRateLimitError(error)) return 5_000 + attempt * 4_000;
   return 2_000 + attempt * 1_000;
 }
 
-async function searchDuckDuckGo(
-  query: string,
-  maxResults: number,
-): Promise<SearchWebResult> {
+async function searchDuckDuckGo(query: string, maxResults: number): Promise<SearchWebResult> {
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
@@ -166,9 +157,7 @@ export function formatHits(hits: SearchHit[]): string {
   if (hits.length === 0) return "(no results)";
 
   return hits
-    .map((hit, index) =>
-      `[${index + 1}] ${hit.title}\nURL: ${hit.url}\n${hit.snippet}`.trim(),
-    )
+    .map((hit, index) => `[${index + 1}] ${hit.title}\nURL: ${hit.url}\n${hit.snippet}`.trim())
     .join("\n\n");
 }
 
@@ -187,11 +176,7 @@ async function fetchPageText(
 ): Promise<string | null> {
   if (runtime.scrapeProvider !== "direct") {
     try {
-      const scraped = await scrapeWithProvider(
-        url,
-        runtime.scrapeProvider,
-        runtime,
-      );
+      const scraped = await scrapeWithProvider(url, runtime.scrapeProvider, runtime);
       return scraped ? scraped.slice(0, MAX_PAGE_CHARS) : null;
     } catch {
       return null;
@@ -213,10 +198,7 @@ async function fetchPageText(
     if (!response.ok) return null;
 
     const contentType = response.headers.get("content-type") ?? "";
-    if (
-      !contentType.includes("text/html") &&
-      !contentType.includes("text/plain")
-    ) {
+    if (!contentType.includes("text/html") && !contentType.includes("text/plain")) {
       return null;
     }
 

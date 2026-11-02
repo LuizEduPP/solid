@@ -1,10 +1,6 @@
 import "dotenv/config";
 
-import {
-  DEFAULT_INTEGRATIONS,
-  type IntegrationRuntime,
-  type ResearchMode,
-} from "../shared.js";
+import { DEFAULT_INTEGRATIONS, type IntegrationRuntime, type ResearchMode } from "../shared.js";
 
 export interface ServerConfig {
   host: string;

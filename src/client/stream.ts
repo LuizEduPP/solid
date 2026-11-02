@@ -1,21 +1,20 @@
 import { createParser } from "eventsource-parser";
-
-import i18n from "./i18n";
-import type { WebSettings } from "./types";
 import {
+  DEFAULT_ENTITY_CONFIDENCE,
+  type EvidenceType,
   INTEGRATION_FIELDS,
   llmRequiresApiKey,
   MODE_THRESHOLDS,
-  STREAM_MARKER_RE,
-  streamToken,
-  DEFAULT_ENTITY_CONFIDENCE,
-  type EvidenceType,
   type PriorResearchContext,
   type ReflectionSnapshot,
   type ScoreRubric,
   type SearchHit,
+  STREAM_MARKER_RE,
   type StreamMarker,
+  streamToken,
 } from "../shared";
+import i18n from "./i18n";
+import type { WebSettings } from "./types";
 
 export interface IterationSnapshot {
   number: number;
@@ -216,8 +215,7 @@ export function parseStream(output: string): ParsedStream {
 
   const iteration = iterations.at(-1)?.number ?? null;
 
-  const rubric =
-    parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;
+  const rubric = parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;
 
   const reflection = parseReflectionSnapshot(output);
   const rounds = parseRounds(output);
@@ -286,10 +284,7 @@ async function postJson<T>(
   return { ok: response.ok, status: response.status, payload };
 }
 
-export async function fetchTitle(
-  settings: WebSettings,
-  objective: string,
-): Promise<string | null> {
+export async function fetchTitle(settings: WebSettings, objective: string): Promise<string | null> {
   if (!settings.model.trim()) return null;
 
   try {
@@ -305,7 +300,10 @@ export async function fetchTitle(
   }
 }
 
-export async function fetchSuggestions(settings: WebSettings, signal?: AbortSignal): Promise<string[]> {
+export async function fetchSuggestions(
+  settings: WebSettings,
+  signal?: AbortSignal,
+): Promise<string[]> {
   if (llmRequiresApiKey(settings.apiKey, settings.baseUrl)) {
     return [];
   }
@@ -332,9 +330,7 @@ export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
 
   if (!ok) {
     throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Failed to list models (${status})`,
+      typeof payload?.error === "string" ? payload.error : `Failed to list models (${status})`,
     );
   }
 

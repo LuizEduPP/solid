@@ -11,7 +11,10 @@ describe("http", () => {
         true,
       );
       assert.equal(isTransientSocketError({ code: "ECONNRESET", syscall: "read" }), true);
-      assert.equal(isTransientSocketError({ code: "UND_ERR_INFO", message: "socket idle timeout" }), true);
+      assert.equal(
+        isTransientSocketError({ code: "UND_ERR_INFO", message: "socket idle timeout" }),
+        true,
+      );
     });
 
     it("rejects unrelated errors", () => {

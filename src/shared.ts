@@ -78,9 +78,7 @@ export const STREAM_MARKERS = [
 
 export type StreamMarker = (typeof STREAM_MARKERS)[number];
 
-export const STREAM_MARKER_RE = new RegExp(
-  `@@(?:${STREAM_MARKERS.join("|")})@@\\n`,
-);
+export const STREAM_MARKER_RE = new RegExp(`@@(?:${STREAM_MARKERS.join("|")})@@\\n`);
 
 export function streamToken(marker: StreamMarker): string {
   return `@@${marker}@@\n`;
@@ -168,15 +166,7 @@ export function mapSearchHits(
   });
 }
 
-export const SUPPORTED_LOCALES = [
-  "en",
-  "es",
-  "pt-BR",
-  "pt-PT",
-  "fr",
-  "de",
-  "it",
-] as const;
+export const SUPPORTED_LOCALES = ["en", "es", "pt-BR", "pt-PT", "fr", "de", "it"] as const;
 
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
@@ -191,10 +181,7 @@ export const LOCALE_ENGLISH_NAMES: Record<Locale, string> = {
 };
 
 export function isLocale(value: unknown): value is Locale {
-  return (
-    typeof value === "string" &&
-    (SUPPORTED_LOCALES as readonly string[]).includes(value)
-  );
+  return typeof value === "string" && (SUPPORTED_LOCALES as readonly string[]).includes(value);
 }
 
 export function normalizeLocale(value: unknown): Locale {
@@ -333,9 +320,7 @@ export type IntegrationRecord = Record<IntegrationField, string>;
 export type IntegrationKeys = IntegrationRecord;
 export type IntegrationEndpoints = IntegrationRecord;
 
-export const SEARCH_INTEGRATION_FIELD: Partial<
-  Record<SearchProvider, IntegrationField>
-> = {
+export const SEARCH_INTEGRATION_FIELD: Partial<Record<SearchProvider, IntegrationField>> = {
   exa: "exa",
   tavily: "tavily",
   brave: "brave",
@@ -347,10 +332,7 @@ export function integrationRecord(
   fill: string | ((field: IntegrationField) => string),
 ): IntegrationRecord {
   return Object.fromEntries(
-    INTEGRATION_FIELDS.map((field) => [
-      field,
-      typeof fill === "function" ? fill(field) : fill,
-    ]),
+    INTEGRATION_FIELDS.map((field) => [field, typeof fill === "function" ? fill(field) : fill]),
   ) as IntegrationRecord;
 }
 
@@ -405,17 +387,11 @@ export function firecrawlEndpoint(base: string, action: "search" | "scrape"): st
 }
 
 export function exaSearchEndpoint(base: string): string {
-  return joinUrl(
-    resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.exa),
-    "/search",
-  );
+  return joinUrl(resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.exa), "/search");
 }
 
 export function tavilySearchEndpoint(base: string): string {
-  return joinUrl(
-    resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily),
-    "/search",
-  );
+  return joinUrl(resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily), "/search");
 }
 
 export function braveSearchEndpoint(base: string): string {
@@ -447,26 +423,17 @@ export function searchProviderEndpoint(
   return field ? endpoints[field] : "";
 }
 
-export function requiredSearchKey(
-  provider: SearchProvider,
-  keys: IntegrationKeys,
-): string {
+export function requiredSearchKey(provider: SearchProvider, keys: IntegrationKeys): string {
   const field = SEARCH_INTEGRATION_FIELD[provider];
   return field ? keys[field].trim() : "";
 }
 
 export function isSearchProvider(value: unknown): value is SearchProvider {
-  return (
-    typeof value === "string" &&
-    (SEARCH_PROVIDERS as readonly string[]).includes(value)
-  );
+  return typeof value === "string" && (SEARCH_PROVIDERS as readonly string[]).includes(value);
 }
 
 export function isScrapeProvider(value: unknown): value is ScrapeProvider {
-  return (
-    typeof value === "string" &&
-    (SCRAPE_PROVIDERS as readonly string[]).includes(value)
-  );
+  return typeof value === "string" && (SCRAPE_PROVIDERS as readonly string[]).includes(value);
 }
 
 export function normalizeSearchProvider(value: unknown): SearchProvider {
@@ -495,10 +462,7 @@ export function normalizeIntegrationEndpoints(raw: unknown): IntegrationEndpoint
   return normalizeIntegrationRecord(raw, DEFAULT_INTEGRATION_ENDPOINTS);
 }
 
-export function searchProviderNeedsKey(
-  provider: SearchProvider,
-  endpoint = "",
-): boolean {
+export function searchProviderNeedsKey(provider: SearchProvider, endpoint = ""): boolean {
   if (provider === "duckduckgo" || provider === "searxng") return false;
   if (provider === "firecrawl") {
     return usesCloudEndpoint(endpoint, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
@@ -506,10 +470,7 @@ export function searchProviderNeedsKey(
   return true;
 }
 
-export function scrapeProviderNeedsKey(
-  provider: ScrapeProvider,
-  endpoint = "",
-): boolean {
+export function scrapeProviderNeedsKey(provider: ScrapeProvider, endpoint = ""): boolean {
   if (provider !== "firecrawl") return false;
   return usesCloudEndpoint(endpoint, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
 }

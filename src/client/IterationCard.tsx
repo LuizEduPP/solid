@@ -1,36 +1,19 @@
-import type { ReactNode } from "react";
 import { Accordion, Alert, Badge, Group, Paper, Stack, Text } from "@mantine/core";
 import { AlertTriangle, ArrowDown, ArrowUp, Minus } from "lucide-react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-
-import MarkdownContent from "./MarkdownContent";
+import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniquePageUrls } from "../shared";
 import FaviconImg from "./FaviconImg";
+import MarkdownContent from "./MarkdownContent";
 import type { IterationSnapshot } from "./stream";
-import {
-  EVIDENCE_COLORS,
-  EVIDENCE_I18N,
-  hostnameFromUrl,
-  uniquePageUrls,
-} from "../shared";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;
 }
 
-function SectionShell({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function SectionShell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Stack
-      gap={8}
-      mt="md"
-      pt="sm"
-      style={{ borderTop: "1px solid var(--solid-border)" }}
-    >
+    <Stack gap={8} mt="md" pt="sm" style={{ borderTop: "1px solid var(--solid-border)" }}>
       <Text className="dp-section-title" mb={0}>
         {title}
       </Text>
@@ -66,7 +49,9 @@ function ScoreDeltaIndicator({ delta }: { delta: string }) {
     return (
       <Group gap={2} wrap="nowrap">
         <Minus size={12} color="var(--solid-text-muted)" />
-        <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>0</Text>
+        <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>
+          0
+        </Text>
       </Group>
     );
   }
@@ -79,7 +64,8 @@ function ScoreDeltaIndicator({ delta }: { delta: string }) {
     <Group gap={2} wrap="nowrap">
       <Icon size={12} color={`var(--mantine-color-${color}-5)`} />
       <Text size="xs" c={color} fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
-        {positive ? "+" : ""}{numDelta.toFixed(1)}
+        {positive ? "+" : ""}
+        {numDelta.toFixed(1)}
       </Text>
     </Group>
   );
@@ -98,7 +84,11 @@ export default function IterationCard({ iteration }: IterationCardProps) {
       <Group justify="space-between" mb="sm" wrap="nowrap" align="flex-start">
         <Group gap={10} wrap="nowrap" miw={0}>
           <span className="iter-step">{iteration.number}</span>
-          <Text size="sm" c="dimmed" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <Text
+            size="sm"
+            c="dimmed"
+            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
             {iteration.angle || t("step")}
           </Text>
         </Group>
@@ -157,4 +147,3 @@ export default function IterationCard({ iteration }: IterationCardProps) {
     </Paper>
   );
 }
-

@@ -1,9 +1,5 @@
 import { isAfter, isToday, isYesterday, subDays } from "date-fns";
 import { saveAs } from "file-saver";
-
-import { compressStepsActivity, translateActivityLine } from "./activity";
-import i18n, { type HistoryGroupKey } from "./i18n";
-import { parseStream } from "./stream";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   DEFAULT_INTEGRATIONS,
@@ -15,6 +11,9 @@ import {
   normalizeSearchProvider,
   type PriorResearchContext,
 } from "../shared";
+import { compressStepsActivity, translateActivityLine } from "./activity";
+import i18n, { type HistoryGroupKey } from "./i18n";
+import { parseStream } from "./stream";
 import type { ResearchSession, WebSettings } from "./types";
 
 function readLocalStorageJson<T>(key: string, fallback: T): T {
@@ -56,10 +55,7 @@ export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings 
 }
 
 export function loadWebSettings(): WebSettings {
-  const parsed = readLocalStorageJson<Partial<WebSettings>>(
-    SETTINGS_KEY,
-    DEFAULT_WEB_SETTINGS,
-  );
+  const parsed = readLocalStorageJson<Partial<WebSettings>>(SETTINGS_KEY, DEFAULT_WEB_SETTINGS);
 
   return normalizeWebSettings(parsed);
 }
@@ -115,26 +111,18 @@ export function upsertSession(
 ): ResearchSession[] {
   const index = sessions.findIndex((item) => item.id === session.id);
   const next =
-    index >= 0
-      ? sessions.map((item, i) => (i === index ? session : item))
-      : [session, ...sessions];
+    index >= 0 ? sessions.map((item, i) => (i === index ? session : item)) : [session, ...sessions];
   return next.slice(0, MAX_SESSIONS);
 }
 
-export function deleteSession(
-  sessions: ResearchSession[],
-  id: string,
-): ResearchSession[] {
+export function deleteSession(sessions: ResearchSession[], id: string): ResearchSession[] {
   return sessions.filter((item) => item.id !== id);
 }
 
 export function sessionPreview(session: ResearchSession, untitled: string): string {
   if (session.title) return session.title;
   const parsed = parseStream(session.rawStream);
-  const text =
-    session.objective.trim() ||
-    parsed.iterations[0]?.findings ||
-    untitled;
+  const text = session.objective.trim() || parsed.iterations[0]?.findings || untitled;
   return text.length > 56 ? `${text.slice(0, 56)}…` : text;
 }
 
@@ -153,11 +141,7 @@ export function buildPriorContext(
     report: parsed.report,
     openGaps: lastIteration?.gaps ?? [],
     priorQueries: parsed.iterations.flatMap((iteration) =>
-      iteration.queries?.length
-        ? iteration.queries
-        : iteration.angle
-          ? [iteration.angle]
-          : [],
+      iteration.queries?.length ? iteration.queries : iteration.angle ? [iteration.angle] : [],
     ),
     citedUrls: parsed.iterations.flatMap((iteration) => iteration.citedUrls ?? []),
     iterationCount: parsed.iterations.length,
@@ -177,9 +161,7 @@ function historyBucket(date: Date): HistoryGroupKey {
   return "earlier";
 }
 
-export function groupSessionsByDate(
-  sessions: ResearchSession[],
-): HistoryGroup[] {
+export function groupSessionsByDate(sessions: ResearchSession[]): HistoryGroup[] {
   const groups = new Map<HistoryGroupKey, ResearchSession[]>();
 
   for (const session of sessions) {
@@ -190,9 +172,7 @@ export function groupSessionsByDate(
   }
 
   const order: HistoryGroupKey[] = ["today", "yesterday", "last7", "earlier"];
-  return order
-    .filter((key) => groups.has(key))
-    .map((key) => ({ key, sessions: groups.get(key)! }));
+  return order.filter((key) => groups.has(key)).map((key) => ({ key, sessions: groups.get(key)! }));
 }
 
 function exportSessionMarkdown(session: ResearchSession): string {
@@ -226,9 +206,7 @@ function exportSessionMarkdown(session: ResearchSession): string {
   }
 
   if (parsed.activity.length > 0) {
-    const log = compressStepsActivity(parsed.activity)
-      .map(translateActivityLine)
-      .filter(Boolean);
+    const log = compressStepsActivity(parsed.activity).map(translateActivityLine).filter(Boolean);
     if (log.length > 0) {
       lines.push(`## ${t("exportLog")}`, "", "```", log.join("\n"), "```", "");
     }

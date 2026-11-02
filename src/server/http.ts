@@ -26,13 +26,8 @@ export function isTransientSocketError(error: unknown): boolean {
     return true;
   }
 
-  const message =
-    "message" in error && typeof error.message === "string"
-      ? error.message
-      : "";
-  return /other side closed|socket idle timeout|ECONNRESET|socket hang up/i.test(
-    message,
-  );
+  const message = "message" in error && typeof error.message === "string" ? error.message : "";
+  return /other side closed|socket idle timeout|ECONNRESET|socket hang up/i.test(message);
 }
 
 function formatError(error: unknown): string {
@@ -60,9 +55,7 @@ export function installOutboundHttp(): void {
 
   process.on("unhandledRejection", (reason) => {
     if (isTransientSocketError(reason)) {
-      console.warn(
-        `Ignored transient socket rejection: ${formatError(reason)}`,
-      );
+      console.warn(`Ignored transient socket rejection: ${formatError(reason)}`);
       return;
     }
     console.error(reason);

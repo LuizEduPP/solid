@@ -1,14 +1,13 @@
-import { MantineProvider, createTheme } from "@mantine/core";
+import { createTheme, MantineProvider } from "@mantine/core";
 import "@mantine/core/styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-
+import { normalizeLocale } from "../shared";
 import App, { CHAT_SESSION_PATH, HOME_PATH } from "./App";
 import i18n from "./i18n";
 import { loadWebSettings } from "./local-store";
-import { normalizeLocale } from "../shared";
 import "./index.css";
 
 const theme = createTheme({

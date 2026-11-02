@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { type CSSProperties, useState } from "react";
 
 import { DEFAULT_FAVICON_URL, faviconUrl, isDefaultFaviconSrc } from "../shared";
 

@@ -1,13 +1,10 @@
-import { RUBRIC_MAX, SCORE_MAX, rubricTotal, type ScoreRubric } from "../../shared.js";
+import { RUBRIC_MAX, rubricTotal, SCORE_MAX, type ScoreRubric } from "../../shared.js";
 
 const PROPOSED_WEIGHT = 0.55;
 const RUBRIC_WEIGHT = 0.45;
 
-export function normalizeRubric(
-  raw: Partial<ScoreRubric> | undefined,
-): ScoreRubric {
-  const clamp = (value: unknown) =>
-    Math.max(0, Math.min(RUBRIC_MAX, Number(value) || 0));
+export function normalizeRubric(raw: Partial<ScoreRubric> | undefined): ScoreRubric {
+  const clamp = (value: unknown) => Math.max(0, Math.min(RUBRIC_MAX, Number(value) || 0));
 
   return {
     direct_evidence: clamp(raw?.direct_evidence),
@@ -29,9 +26,7 @@ export function applyCumulativeScore(
 ): number {
   const rubricScore = rubricTotal(rubric);
   const blended =
-    previous === null
-      ? proposed
-      : proposed * PROPOSED_WEIGHT + rubricScore * RUBRIC_WEIGHT;
+    previous === null ? proposed : proposed * PROPOSED_WEIGHT + rubricScore * RUBRIC_WEIGHT;
   return clampScore(blended, minScore);
 }
 
@@ -66,10 +61,7 @@ export function objectiveCoverage(objective: string, text: string): number {
   return hits / terms.length;
 }
 
-export function anchorQueryToObjective(
-  query: string,
-  objective: string,
-): string {
+export function anchorQueryToObjective(query: string, objective: string): string {
   const terms = distinctiveTerms(objective);
   if (terms.length === 0) return query;
   const lower = query.toLowerCase();

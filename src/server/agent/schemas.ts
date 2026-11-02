@@ -4,13 +4,13 @@ import {
   DEFAULT_ENTITY_CONFIDENCE,
   ENTITY_VERDICTS,
   EVIDENCE_TYPES,
+  type EvidenceType,
   INVESTIGATION_QUALITIES,
+  isHttpUrl,
   MAX_PLAN_QUERIES,
   REFLECTION_RECOMMENDATIONS,
-  SCORE_MAX,
-  isHttpUrl,
-  type EvidenceType,
   type ReflectionSnapshot,
+  SCORE_MAX,
   type ScoreRubric,
 } from "../../shared.js";
 import { extractCitedUrls, normalizeRubric } from "./scoring.js";
@@ -99,19 +99,12 @@ const analysisSchema = z
   })
   .transform((payload) => {
     const synthesis =
-      payload.cumulative_synthesis ??
-      payload.cumulativeSynthesis ??
-      payload.findings ??
-      "";
-    const findings =
-      payload.iteration_findings ?? payload.iterationFindings ?? synthesis;
+      payload.cumulative_synthesis ?? payload.cumulativeSynthesis ?? payload.findings ?? "";
+    const findings = payload.iteration_findings ?? payload.iterationFindings ?? synthesis;
 
-    const evidenceType =
-      payload.evidence_type ?? payload.evidenceType ?? "contextual";
+    const evidenceType = payload.evidence_type ?? payload.evidenceType ?? "contextual";
     const directEntity =
-      payload.direct_entity_evidence ??
-      payload.directEntityEvidence ??
-      evidenceType === "direct";
+      payload.direct_entity_evidence ?? payload.directEntityEvidence ?? evidenceType === "direct";
 
     return {
       iteration_findings: findings,
@@ -123,16 +116,13 @@ const analysisSchema = z
       score: payload.score ?? payload.confidence ?? 0,
       score_delta: payload.score_delta ?? payload.scoreDelta ?? "",
       score_reasoning: payload.score_reasoning ?? payload.scoreReasoning ?? "",
-      contradiction_found:
-        payload.contradiction_found ?? payload.contradictionFound ?? false,
-      should_continue:
-        payload.should_continue !== false && payload.shouldContinue !== false,
+      contradiction_found: payload.contradiction_found ?? payload.contradictionFound ?? false,
+      should_continue: payload.should_continue !== false && payload.shouldContinue !== false,
       stop_reason: payload.stop_reason ?? payload.stopReason ?? "",
       next_variation: payload.next_variation ?? payload.nextVariation ?? "",
       direct_entity_evidence: directEntity,
       evidence_type: evidenceType as EvidenceType,
-      disambiguation_notes:
-        payload.disambiguation_notes ?? payload.disambiguationNotes ?? "",
+      disambiguation_notes: payload.disambiguation_notes ?? payload.disambiguationNotes ?? "",
     };
   });
 
@@ -171,20 +161,13 @@ export function parsePlanPayload(raw: string): PlanPayload {
   return planSchema.parse(parseLlmJson(raw));
 }
 
-export function parseAnalysisPayload(
-  raw: string,
-  knownUrls: string[],
-): AnalysisPayload {
+export function parseAnalysisPayload(raw: string, knownUrls: string[]): AnalysisPayload {
   const parsed = analysisSchema.parse(parseLlmJson(raw));
   const cited_urls = [
     ...new Set([
       ...parsed.cited_urls.filter(isValidCitationUrl),
-      ...extractCitedUrls(parsed.iteration_findings, knownUrls).filter(
-        isValidCitationUrl,
-      ),
-      ...extractCitedUrls(parsed.cumulative_synthesis, knownUrls).filter(
-        isValidCitationUrl,
-      ),
+      ...extractCitedUrls(parsed.iteration_findings, knownUrls).filter(isValidCitationUrl),
+      ...extractCitedUrls(parsed.cumulative_synthesis, knownUrls).filter(isValidCitationUrl),
     ]),
   ];
 
@@ -219,11 +202,9 @@ const reflectionSchema = z
     shouldContinue: z.coerce.boolean().optional(),
   })
   .transform((p) => {
-    const verdict =
-      p.entity_verdict ?? p.entityVerdict ?? ("uncertain" as const);
+    const verdict = p.entity_verdict ?? p.entityVerdict ?? ("uncertain" as const);
     const recommendation = p.recommendation ?? "continue";
-    const shouldContinue =
-      p.should_continue ?? p.shouldContinue ?? recommendation !== "stop";
+    const shouldContinue = p.should_continue ?? p.shouldContinue ?? recommendation !== "stop";
 
     return {
       entity_verdict: verdict,
@@ -232,12 +213,10 @@ const reflectionSchema = z
         Math.min(SCORE_MAX, p.entity_confidence ?? p.entityConfidence ?? DEFAULT_ENTITY_CONFIDENCE),
       ),
       entity_reasoning: p.entity_reasoning ?? p.entityReasoning ?? "",
-      investigation_quality:
-        p.investigation_quality ?? p.investigationQuality ?? "progressing",
+      investigation_quality: p.investigation_quality ?? p.investigationQuality ?? "progressing",
       quality_reasoning: p.quality_reasoning ?? p.qualityReasoning ?? "",
       recommendation,
-      recommendation_reasoning:
-        p.recommendation_reasoning ?? p.recommendationReasoning ?? "",
+      recommendation_reasoning: p.recommendation_reasoning ?? p.recommendationReasoning ?? "",
       pivot_suggestion: p.pivot_suggestion ?? p.pivotSuggestion ?? "",
       key_observations: p.key_observations ?? p.keyObservations ?? [],
       should_continue: shouldContinue,

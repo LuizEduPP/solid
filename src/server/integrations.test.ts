@@ -8,12 +8,12 @@ import {
   jinaReadUrl,
   mapSearchHits,
   normalizeIntegrationEndpoints,
-  searxngSearchUrl,
   normalizeScrapeProvider,
   normalizeSearchProvider,
   requiredSearchKey,
   scrapeProviderNeedsKey,
   searchProviderNeedsKey,
+  searxngSearchUrl,
 } from "../shared.js";
 
 describe("integrations", () => {
@@ -31,21 +31,12 @@ describe("integrations", () => {
     assert.equal(scrapeProviderNeedsKey("direct"), false);
     assert.equal(scrapeProviderNeedsKey("jina"), false);
     assert.equal(scrapeProviderNeedsKey("firecrawl"), true);
-    assert.equal(
-      searchProviderNeedsKey("firecrawl", "http://127.0.0.1:3002"),
-      false,
-    );
-    assert.equal(
-      scrapeProviderNeedsKey("firecrawl", "http://localhost:3002"),
-      false,
-    );
+    assert.equal(searchProviderNeedsKey("firecrawl", "http://127.0.0.1:3002"), false);
+    assert.equal(scrapeProviderNeedsKey("firecrawl", "http://localhost:3002"), false);
   });
 
   it("joins self-hosted provider URLs without doubling /v1", () => {
-    assert.equal(
-      firecrawlEndpoint("", "search"),
-      "https://api.firecrawl.dev/v1/search",
-    );
+    assert.equal(firecrawlEndpoint("", "search"), "https://api.firecrawl.dev/v1/search");
     assert.equal(
       firecrawlEndpoint("http://127.0.0.1:3002/", "scrape"),
       "http://127.0.0.1:3002/v1/scrape",

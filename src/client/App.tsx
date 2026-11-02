@@ -4,6 +4,7 @@ import {
   AppShell,
   Badge,
   Box,
+  type BoxProps,
   Burger,
   Button,
   Group,
@@ -16,7 +17,6 @@ import {
   Textarea,
   Tooltip,
   UnstyledButton,
-  type BoxProps,
 } from "@mantine/core";
 import { useDisclosure, useLocalStorage, useMediaQuery } from "@mantine/hooks";
 import {
@@ -34,32 +34,45 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  type CSSProperties,
+  Fragment,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-
+import {
+  appendStreamChunks,
+  llmRequiresApiKey,
+  MODE_THRESHOLDS,
+  scoreTone,
+  VERDICT_I18N,
+} from "../shared";
 import DataPanel from "./DataPanel";
-import SolidLogo from "./SolidLogo";
+import IterationCard from "./IterationCard";
 import i18n, { HISTORY_GROUP_KEYS } from "./i18n";
 import {
+  buildPriorContext,
   createSession,
   deleteSession,
   downloadSession,
   groupSessionsByDate,
-  buildPriorContext,
   HISTORY_KEY,
   loadHistory,
   loadWebSettings,
   normalizeWebSettings,
-  sessionPreview,
   SETTINGS_KEY,
+  sessionPreview,
   touchSession,
   upsertSession,
 } from "./local-store";
-import type { ResearchSession, WebSettings } from "./types";
 import MarkdownContent from "./MarkdownContent";
-import IterationCard from "./IterationCard";
 import SettingsForm from "./SettingsForm";
+import SolidLogo from "./SolidLogo";
 import {
   canFollowUp,
   fetchLlmModels,
@@ -67,16 +80,10 @@ import {
   fetchTitle,
   parseStream,
   pickDefaultModel,
-  streamResearch,
   type ResearchRound,
+  streamResearch,
 } from "./stream";
-import {
-  MODE_THRESHOLDS,
-  VERDICT_I18N,
-  appendStreamChunks,
-  llmRequiresApiKey,
-  scoreTone,
-} from "../shared";
+import type { ResearchSession, WebSettings } from "./types";
 
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";
@@ -183,11 +190,16 @@ function ScoreBadge({ score, size = "xs" }: { score: number; size?: "xs" | "sm" 
 
 function statusDotColor(status: ResearchSession["status"]): string {
   switch (status) {
-    case "running": return "var(--mantine-color-yellow-5)";
-    case "completed": return "var(--mantine-color-green-5)";
-    case "error": return "var(--mantine-color-red-5)";
-    case "cancelled": return "var(--mantine-color-gray-5)";
-    default: return "var(--mantine-color-gray-6)";
+    case "running":
+      return "var(--mantine-color-yellow-5)";
+    case "completed":
+      return "var(--mantine-color-green-5)";
+    case "error":
+      return "var(--mantine-color-red-5)";
+    case "cancelled":
+      return "var(--mantine-color-gray-5)";
+    default:
+      return "var(--mantine-color-gray-6)";
   }
 }
 
@@ -212,7 +224,13 @@ function SidebarSessionRow({
 
   return (
     <Box className={`sidebar-session-row${active ? " sidebar-session-row--active" : ""}`}>
-      <Tooltip label={session.title || session.objective} multiline maw={280} withArrow openDelay={400}>
+      <Tooltip
+        label={session.title || session.objective}
+        multiline
+        maw={280}
+        withArrow
+        openDelay={400}
+      >
         <UnstyledButton className="sidebar-session-button" onClick={onSelect}>
           <Group gap={6} wrap="nowrap" style={{ width: "100%" }}>
             <Box
@@ -301,7 +319,12 @@ function ChatComposer({
           className="chat-input-form"
         >
           <Group gap={8} mb={4} px={4} justify="space-between" wrap="nowrap">
-            <Box className="mode-toggle" data-mode={settings.mode} role="group" aria-label={t("mode")}>
+            <Box
+              className="mode-toggle"
+              data-mode={settings.mode}
+              role="group"
+              aria-label={t("mode")}
+            >
               <button
                 type="button"
                 className="mode-toggle-btn"
@@ -438,10 +461,7 @@ export default function App() {
   const [autoScroll, setAutoScroll] = useState(true);
 
   const activeSession = useMemo(
-    () =>
-      sessionId
-        ? (sessions.find((session) => session.id === sessionId) ?? null)
-        : null,
+    () => (sessionId ? (sessions.find((session) => session.id === sessionId) ?? null) : null),
     [sessions, sessionId],
   );
 
@@ -456,10 +476,7 @@ export default function App() {
   const navbarWidth = navbarCollapsedDesktop ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   const showMobileChrome = isDesktop !== true;
 
-  const historyGroups = useMemo(
-    () => groupSessionsByDate(sessions),
-    [sessions],
-  );
+  const historyGroups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
 
   const hasSessionData = parsed.iterations.length > 0 || running;
   const dockInspector = isWide === true && hasSessionData;
@@ -513,9 +530,7 @@ export default function App() {
       } catch (err) {
         if (cancelled) return;
         setModels([]);
-        setModelsError(
-          err instanceof Error ? err.message : t("errorLoadModels"),
-        );
+        setModelsError(err instanceof Error ? err.message : t("errorLoadModels"));
       } finally {
         if (!cancelled) setModelsLoading(false);
       }
@@ -550,21 +565,14 @@ export default function App() {
     if (!autoScrollRef.current) return;
     const viewport = threadRef.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;
-  }, [
-    parsed.iterations.length,
-    parsed.report,
-    parsed.confidence,
-    parsed.activity.length,
-    running,
-  ]);
+  }, [parsed.iterations.length, parsed.report, parsed.confidence, parsed.activity.length, running]);
 
   function handleThreadScroll() {
     const viewport = threadRef.current;
     if (!viewport) return;
 
     const atBottom =
-      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <=
-      SCROLL_BOTTOM_TOLERANCE;
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= SCROLL_BOTTOM_TOLERANCE;
 
     if (atBottom) {
       ignoreScrollPauseRef.current = false;
@@ -658,9 +666,7 @@ export default function App() {
     setError(null);
     stopRequestedRef.current = false;
 
-    const followUpSession = canFollowUp(activeSession, sessionId, parsed)
-      ? activeSession
-      : null;
+    const followUpSession = canFollowUp(activeSession, sessionId, parsed) ? activeSession : null;
 
     const priorContext = followUpSession
       ? buildPriorContext(followUpSession, objective.trim())
@@ -686,7 +692,7 @@ export default function App() {
       void fetchTitle(settings, objective.trim()).then((generatedTitle) => {
         if (!generatedTitle) return;
         setSessions((current) =>
-          current.map((s) => s.id === titleSessionId ? { ...s, title: generatedTitle } : s),
+          current.map((s) => (s.id === titleSessionId ? { ...s, title: generatedTitle } : s)),
         );
         if (inFlightRef.current?.session.id === titleSessionId) {
           inFlightRef.current.session = { ...inFlightRef.current.session, title: generatedTitle };
@@ -726,9 +732,7 @@ export default function App() {
       } else {
         const message = err instanceof Error ? err.message : t("errorUnexpected");
         setError(message);
-        syncSession(
-          touchSession(errSession, { rawStream, status: "error", error: message }),
-        );
+        syncSession(touchSession(errSession, { rawStream, status: "error", error: message }));
       }
     } finally {
       inFlightRef.current = null;
@@ -758,9 +762,7 @@ export default function App() {
     controllerRef.current?.abort();
 
     if (inflight) {
-      const cancelledStream = appendStreamChunks(inflight.rawStream, [
-        ["STATUS", t("cancelled")],
-      ]);
+      const cancelledStream = appendStreamChunks(inflight.rawStream, [["STATUS", t("cancelled")]]);
       inflight.rawStream = cancelledStream;
       syncSession(
         touchSession(inflight.session, {
@@ -789,10 +791,7 @@ export default function App() {
     />
   );
   const hasContent =
-    parsed.iterations.length > 0 ||
-    Boolean(parsed.report) ||
-    running ||
-    Boolean(activeSession);
+    parsed.iterations.length > 0 || Boolean(parsed.report) || running || Boolean(activeSession);
 
   const composerProps: ChatComposerProps = {
     error,
@@ -813,8 +812,7 @@ export default function App() {
   };
 
   const entityVerdict = parsed.reflection?.entity_verdict;
-  const showVerdictBanner =
-    entityVerdict === "unlikely" || entityVerdict === "nonexistent";
+  const showVerdictBanner = entityVerdict === "unlikely" || entityVerdict === "nonexistent";
 
   const reportAccent = {
     teal: "var(--mantine-color-teal-6)",
@@ -842,7 +840,13 @@ export default function App() {
       }
       padding={0}
       styles={{
-        main: { display: "flex", flexDirection: "column", height: "100dvh", position: "relative", minHeight: 0 },
+        main: {
+          display: "flex",
+          flexDirection: "column",
+          height: "100dvh",
+          position: "relative",
+          minHeight: 0,
+        },
         navbar: { transition: "width 200ms ease" },
         aside: { transition: "width 200ms ease" },
       }}
@@ -865,7 +869,12 @@ export default function App() {
                 onToggle={() => setAsideCollapsed((v) => !v)}
               />
             ) : (
-              <ActionIcon variant="subtle" color="gray" aria-label={t("settings")} onClick={openConfig}>
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                aria-label={t("settings")}
+                onClick={openConfig}
+              >
                 <Settings size={16} />
               </ActionIcon>
             )}
@@ -961,7 +970,12 @@ export default function App() {
         </Box>
 
         {!navbarCollapsedDesktop ? (
-          <ScrollArea flex={1} type="auto" scrollbars="y" classNames={{ viewport: "sidebar-scroll-viewport" }}>
+          <ScrollArea
+            flex={1}
+            type="auto"
+            scrollbars="y"
+            classNames={{ viewport: "sidebar-scroll-viewport" }}
+          >
             <Box className="sidebar-scroll">
               {historyGroups.length === 0 ? (
                 <Text size="sm" c="dimmed" px="sm" py="xs">
@@ -971,7 +985,9 @@ export default function App() {
                 <Stack gap="xl">
                   {historyGroups.map((group) => (
                     <Stack key={group.key} gap="xs">
-                      <Text className="sidebar-section-label">{t(HISTORY_GROUP_KEYS[group.key])}</Text>
+                      <Text className="sidebar-section-label">
+                        {t(HISTORY_GROUP_KEYS[group.key])}
+                      </Text>
                       <Stack gap={4}>
                         {group.sessions.map((session) => (
                           <SidebarSessionRow
@@ -1047,9 +1063,7 @@ export default function App() {
               <Text className="session-toolbar-title">
                 {activeSession?.title || activeSession?.objective || t("untitledResearch")}
               </Text>
-              {confidence > 0 ? (
-                <ScoreBadge score={confidence} size="sm" />
-              ) : null}
+              {confidence > 0 ? <ScoreBadge score={confidence} size="sm" /> : null}
               {hasSessionData && (isWide || !showMobileChrome) ? (
                 <InspectorToggle
                   collapsed={asideCollapsed}
@@ -1083,7 +1097,9 @@ export default function App() {
                         >
                           <Group gap={8} wrap="nowrap">
                             <Search size={13} style={{ flexShrink: 0, opacity: 0.45 }} />
-                            <Text size="sm" style={{ lineHeight: 1.4 }}>{chip}</Text>
+                            <Text size="sm" style={{ lineHeight: 1.4 }}>
+                              {chip}
+                            </Text>
                           </Group>
                         </UnstyledButton>
                       ))}
@@ -1140,7 +1156,10 @@ export default function App() {
                           ) : null}
 
                           {roundHasReport ? (
-                            <Box className="report-container" style={{ "--report-accent": reportAccent } as CSSProperties}>
+                            <Box
+                              className="report-container"
+                              style={{ "--report-accent": reportAccent } as CSSProperties}
+                            >
                               {isLastRound && showVerdictBanner ? (
                                 <Alert
                                   variant="light"
@@ -1171,7 +1190,6 @@ export default function App() {
                         {activeSession.error}
                       </Text>
                     ) : null}
-
                   </Stack>
                 </ChatColumn>
               </ScrollArea>

@@ -1,7 +1,7 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
-import { type Locale } from "../shared";
+import type { Locale } from "../shared";
 import de from "./locales/de.json";
 import en from "./locales/en.json";
 import es from "./locales/es.json";

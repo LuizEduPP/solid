@@ -5,13 +5,11 @@ import ReactMarkdown from "react-markdown";
 import rehypeExternalLinks from "rehype-external-links";
 import remarkGfm from "remark-gfm";
 import type { Plugin } from "unified";
-
-import FaviconImg from "./FaviconImg";
 import { hostnameFromUrl, isHttpUrl } from "../shared";
+import FaviconImg from "./FaviconImg";
 import "github-markdown-css/github-markdown-dark.css";
 
-const BRACKET_URLS =
-  /\[(https?:\/\/[^\]\s,]+(?:,\s*https?:\/\/[^\]\s,]+)*)\]/g;
+const BRACKET_URLS = /\[(https?:\/\/[^\]\s,]+(?:,\s*https?:\/\/[^\]\s,]+)*)\]/g;
 
 const remarkSolid: Plugin<[], Root> = () => (tree) => {
   findAndReplace(tree, [
@@ -36,18 +34,11 @@ interface MarkdownContentProps {
   content: string;
 }
 
-function MarkdownAnchor({
-  href,
-  children,
-}: {
-  href?: string;
-  children?: React.ReactNode;
-}) {
+function MarkdownAnchor({ href, children }: { href?: string; children?: React.ReactNode }) {
   if (!href) return <>{children}</>;
 
   const label = String(children ?? "");
-  const compact =
-    label === href || isHttpUrl(label) || label === hostnameFromUrl(href);
+  const compact = label === href || isHttpUrl(label) || label === hostnameFromUrl(href);
 
   if (compact) {
     const host = hostnameFromUrl(href);
@@ -80,11 +71,11 @@ export default function MarkdownContent({ content }: MarkdownContentProps) {
     <div className="markdown-body" data-color-mode="dark" data-dark-theme="dark">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkSolid]}
-        rehypePlugins={[[rehypeExternalLinks, { target: "_blank", rel: ["noopener", "noreferrer"] }]]}
+        rehypePlugins={[
+          [rehypeExternalLinks, { target: "_blank", rel: ["noopener", "noreferrer"] }],
+        ]}
         components={{
-          a: ({ href, children }) => (
-            <MarkdownAnchor href={href}>{children}</MarkdownAnchor>
-          ),
+          a: ({ href, children }) => <MarkdownAnchor href={href}>{children}</MarkdownAnchor>,
         }}
       >
         {content}

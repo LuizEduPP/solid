@@ -13,12 +13,7 @@ import {
 import type { AgentConfig } from "../config.js";
 import { cacheFaviconsForUrls } from "../favicon.js";
 import { fetchPages, formatHits, searchWeb } from "../search.js";
-import {
-  ANALYST_SYSTEM,
-  FINAL_SYSTEM,
-  PLANNER_SYSTEM,
-  REFLECTOR_SYSTEM,
-} from "./prompts.js";
+import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM, REFLECTOR_SYSTEM } from "./prompts.js";
 import {
   type AnalysisPayload,
   type PlanPayload,
@@ -70,9 +65,7 @@ interface AgentRun {
   seedCitedUrls?: string[];
 }
 
-export function extractObjective(
-  messages: Array<{ role: string; content: string }>,
-): string {
+export function extractObjective(messages: Array<{ role: string; content: string }>): string {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message.role === "user" && message.content.trim()) {
@@ -83,10 +76,7 @@ export function extractObjective(
 }
 
 function collectPriorQueries(run: AgentRun): string[] {
-  return [
-    ...(run.seedQueries ?? []),
-    ...run.iterations.flatMap((record) => record.queries),
-  ];
+  return [...(run.seedQueries ?? []), ...run.iterations.flatMap((record) => record.queries)];
 }
 
 function collectOpenGaps(run: AgentRun): string[] {
@@ -125,9 +115,7 @@ function eventIteration(record: {
   return streamChunk("ITER", JSON.stringify(record));
 }
 
-function extractMessageContent(
-  message: OpenAI.Chat.Completions.ChatCompletionMessage,
-): string {
+function extractMessageContent(message: OpenAI.Chat.Completions.ChatCompletionMessage): string {
   const content = message.content?.trim();
   if (content) return content;
 
@@ -174,12 +162,7 @@ function buildIterationSummary(run: AgentRun): string {
     .join("\n\n");
 }
 
-type StopReason =
-  | "target"
-  | "max_iterations"
-  | "max_llm_calls"
-  | "supervisor"
-  | "analyst";
+type StopReason = "target" | "max_iterations" | "max_llm_calls" | "supervisor" | "analyst";
 
 export class SolidAgent {
   private readonly client: OpenAI;
@@ -201,11 +184,7 @@ export class SolidAgent {
     }
   }
 
-  private async chat(
-    system: string,
-    user: string,
-    json = false,
-  ): Promise<string> {
+  private async chat(system: string, user: string, json = false): Promise<string> {
     this.llmCalls += 1;
     this.throwIfAborted();
     const request = {
@@ -220,10 +199,7 @@ export class SolidAgent {
     const options = this.runSignal ? { signal: this.runSignal } : undefined;
 
     try {
-      const response = await this.client.chat.completions.create(
-        request,
-        options,
-      );
+      const response = await this.client.chat.completions.create(request, options);
       return extractMessageContent(response.choices[0]!.message);
     } catch (error) {
       if (this.runSignal?.aborted) {
@@ -245,11 +221,7 @@ export class SolidAgent {
     }
   }
 
-  private async chatJson<T>(
-    system: string,
-    user: string,
-    parse: (raw: string) => T,
-  ): Promise<T> {
+  private async chatJson<T>(system: string, user: string, parse: (raw: string) => T): Promise<T> {
     let lastRaw = "";
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -271,11 +243,8 @@ export class SolidAgent {
     throw new Error("LLM returned invalid JSON after retries");
   }
 
-  private formatReflectionContext(
-    reflection: ReflectionPayload | null,
-  ): string {
-    if (!reflection)
-      return "SUPERVISOR REFLECTION: Not available yet (first iteration).\n";
+  private formatReflectionContext(reflection: ReflectionPayload | null): string {
+    if (!reflection) return "SUPERVISOR REFLECTION: Not available yet (first iteration).\n";
 
     return (
       [
@@ -298,16 +267,9 @@ export class SolidAgent {
     );
   }
 
-  private async reflect(
-    objective: string,
-    run: AgentRun,
-  ): Promise<ReflectionPayload> {
-    const scoreTrajectory = run.iterations
-      .map((i) => i.score.toFixed(1))
-      .join(" → ");
-    const evidenceTrajectory = run.iterations
-      .map((i) => i.evidenceType)
-      .join(" → ");
+  private async reflect(objective: string, run: AgentRun): Promise<ReflectionPayload> {
+    const scoreTrajectory = run.iterations.map((i) => i.score.toFixed(1)).join(" → ");
+    const evidenceTrajectory = run.iterations.map((i) => i.evidenceType).join(" → ");
 
     const user =
       `Objective:\n${objective}\n\n` +
@@ -338,9 +300,7 @@ export class SolidAgent {
       `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
 
     const plan = await this.chatJson(PLANNER_SYSTEM, user, parsePlanPayload);
-    plan.queries = plan.queries.map((query) =>
-      anchorQueryToObjective(query, objective),
-    );
+    plan.queries = plan.queries.map((query) => anchorQueryToObjective(query, objective));
     return plan;
   }
 
@@ -352,23 +312,15 @@ export class SolidAgent {
     fetchedPages: Array<{ url: string; text: string }>,
   ): Promise<AnalysisPayload> {
     const hits = queryResults.flatMap(([, queryHits]) => queryHits);
-    const knownUrls = [
-      ...hits.map((hit) => hit.url),
-      ...fetchedPages.map((p) => p.url),
-    ];
+    const knownUrls = [...hits.map((hit) => hit.url), ...fetchedPages.map((p) => p.url)];
 
     const evidence =
       queryResults
-        .map(
-          ([query, queryHits]) => `Query: ${query}\n${formatHits(queryHits)}`,
-        )
+        .map(([query, queryHits]) => `Query: ${query}\n${formatHits(queryHits)}`)
         .join("\n\n") +
       (fetchedPages.length
         ? `\n\nFetched page excerpts:\n${fetchedPages
-            .map(
-              (page) =>
-                `URL: ${page.url}\nExcerpt: ${page.text.slice(0, 1200)}`,
-            )
+            .map((page) => `URL: ${page.url}\nExcerpt: ${page.text.slice(0, 1200)}`)
             .join("\n\n")}`
         : "");
 
@@ -383,9 +335,7 @@ export class SolidAgent {
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
 
-    return this.chatJson(ANALYST_SYSTEM, user, (raw) =>
-      parseAnalysisPayload(raw, knownUrls),
-    );
+    return this.chatJson(ANALYST_SYSTEM, user, (raw) => parseAnalysisPayload(raw, knownUrls));
   }
 
   private async finalReport(
@@ -455,10 +405,7 @@ export class SolidAgent {
         seedCitedUrls: prior?.citedUrls,
       };
 
-      yield streamChunk(
-        "STATUS",
-        prior ? `Follow-up: ${prior.followUp}` : "Research started",
-      );
+      yield streamChunk("STATUS", prior ? `Follow-up: ${prior.followUp}` : "Research started");
 
       let iteration = prior?.iterationCount ?? 0;
       while (true) {
@@ -621,8 +568,7 @@ export class SolidAgent {
           const reason =
             reflection.recommendation === "stop"
               ? `${reflection.recommendation_reasoning} (entity: ${reflection.entity_verdict}, confidence: ${reflection.entity_confidence}%)`
-              : reflection.recommendation_reasoning ||
-                "Investigation concluded by supervisor";
+              : reflection.recommendation_reasoning || "Investigation concluded by supervisor";
           yield streamChunk("STATUS", reason);
           break;
         }
@@ -643,8 +589,7 @@ export class SolidAgent {
           stopReason = "analyst";
           yield streamChunk(
             "STATUS",
-            analysis.stop_reason ||
-              "Model stopped — diminishing returns from search",
+            analysis.stop_reason || "Model stopped — diminishing returns from search",
           );
           break;
         }
@@ -659,11 +604,7 @@ export class SolidAgent {
 
       yield streamChunk("STATUS", "Generating final report...");
       this.throwIfAborted();
-      const report = await this.finalReport(
-        rootObjective,
-        agentRun,
-        stopReason,
-      );
+      const report = await this.finalReport(rootObjective, agentRun, stopReason);
       this.throwIfAborted();
       yield streamChunk("REPORT", report);
     } finally {

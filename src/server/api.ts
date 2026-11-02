@@ -1,26 +1,25 @@
 import { loads } from "ai-json-repair";
-import { Hono, type Context } from "hono";
+import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
-
-import { SolidAgent, extractObjective } from "./agent/loop.js";
 import {
   DEFAULT_INTEGRATIONS,
   INTEGRATION_FIELDS,
+  type IntegrationField,
+  isLocale,
   LOCALE_ENGLISH_NAMES,
   MODE_THRESHOLDS,
-  SCORE_MAX,
   normalizeIntegrationEndpoints,
   normalizeIntegrationKeys,
-  SCRAPE_PROVIDERS,
-  SEARCH_PROVIDERS,
-  isLocale,
   normalizeScrapeProvider,
   normalizeSearchProvider,
-  stripTrailingSlash,
-  type IntegrationField,
   type PriorResearchContext,
+  SCORE_MAX,
+  SCRAPE_PROVIDERS,
+  SEARCH_PROVIDERS,
+  stripTrailingSlash,
 } from "../shared.js";
+import { extractObjective, SolidAgent } from "./agent/loop.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
 import { bearerHeaders } from "./http.js";
 
@@ -49,7 +48,11 @@ function extractLlmContent(choices?: LlmChoice[]): string {
   const jsonObj = reasoning.match(/\{[\s\S]*\}/);
   if (jsonObj) return jsonObj[0];
 
-  const lastLine = reasoning.split("\n").filter((l) => l.trim()).pop()?.trim();
+  const lastLine = reasoning
+    .split("\n")
+    .filter((l) => l.trim())
+    .pop()
+    ?.trim();
   return lastLine ?? "";
 }
 
@@ -71,9 +74,7 @@ async function completeLlmChat(
 async function parseBody<T extends z.ZodType>(
   c: Context,
   schema: T,
-): Promise<
-  { ok: true; data: z.infer<T> } | { ok: false; response: Response }
-> {
+): Promise<{ ok: true; data: z.infer<T> } | { ok: false; response: Response }> {
   const parsed = schema.safeParse(await c.req.json());
   if (!parsed.success) {
     return { ok: false, response: c.json({ error: parsed.error.flatten() }, 400) };
@@ -177,14 +178,10 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
         body.scrape_provider ?? DEFAULT_INTEGRATIONS.scrapeProvider,
       ),
       keys: normalizeIntegrationKeys(
-        Object.fromEntries(
-          INTEGRATION_FIELDS.map((field) => [field, body[`${field}_api_key`]]),
-        ),
+        Object.fromEntries(INTEGRATION_FIELDS.map((field) => [field, body[`${field}_api_key`]])),
       ),
       endpoints: normalizeIntegrationEndpoints(
-        Object.fromEntries(
-          INTEGRATION_FIELDS.map((field) => [field, body[`${field}_base_url`]]),
-        ),
+        Object.fromEntries(INTEGRATION_FIELDS.map((field) => [field, body[`${field}_base_url`]])),
       ),
     },
   };
@@ -202,10 +199,7 @@ function completionId(): string {
 
 const llmModelsSchema = z.object(llmCredentialsSchema);
 
-async function fetchProviderModels(
-  apiKey: string,
-  baseUrl: string,
-): Promise<string[]> {
+async function fetchProviderModels(apiKey: string, baseUrl: string): Promise<string[]> {
   const response = await fetch(`${stripTrailingSlash(baseUrl)}/models`, {
     headers: bearerHeaders(apiKey),
   });
@@ -230,14 +224,10 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     if (!parsed.ok) return parsed.response;
 
     try {
-      const models = await fetchProviderModels(
-        parsed.data.llm_api_key,
-        parsed.data.llm_base_url,
-      );
+      const models = await fetchProviderModels(parsed.data.llm_api_key, parsed.data.llm_base_url);
       return c.json({ models });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to fetch models";
+      const message = error instanceof Error ? error.message : "Failed to fetch models";
       return c.json({ error: message }, 502);
     }
   });
@@ -267,7 +257,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
               "Generate exactly 5 diverse, interesting research questions that a user might want to investigate. " +
               "Cover different domains: technology, science, health, society, economics. " +
               "Each question should be specific enough to research but broad enough to be interesting. " +
-              "Return ONLY a JSON array of strings, no other text. Example: [\"question 1\", \"question 2\"]" +
+              'Return ONLY a JSON array of strings, no other text. Example: ["question 1", "question 2"]' +
               languageInstruction(locale),
           },
           {
@@ -289,7 +279,11 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       } catch {
         const jsonMatch = content.match(/\[[\s\S]*\]/);
         if (!jsonMatch) return c.json({ suggestions: [] });
-        try { suggestions = loads(jsonMatch[0]); } catch { return c.json({ suggestions: [] }); }
+        try {
+          suggestions = loads(jsonMatch[0]);
+        } catch {
+          return c.json({ suggestions: [] });
+        }
       }
 
       if (!Array.isArray(suggestions)) {
@@ -302,8 +296,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
           .slice(0, 6),
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to generate suggestions";
+      const message = error instanceof Error ? error.message : "Failed to generate suggestions";
       return c.json({ error: message }, 502);
     }
   });
@@ -344,12 +337,14 @@ export function createOpenAiRouter(): Hono<AppEnv> {
       }
 
       const raw = extractLlmContent(chat.choices);
-      const title = raw.replace(/^["']|["']$/g, "").replace(/\.+$/, "").trim();
+      const title = raw
+        .replace(/^["']|["']$/g, "")
+        .replace(/\.+$/, "")
+        .trim();
 
       return c.json({ title: title || null });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to generate title";
+      const message = error instanceof Error ? error.message : "Failed to generate title";
       return c.json({ error: message }, 502);
     }
   });
@@ -384,10 +379,7 @@ export function createOpenAiRouter(): Hono<AppEnv> {
     try {
       objective = extractObjective(messages);
     } catch (error) {
-      return c.json(
-        { error: error instanceof Error ? error.message : "Invalid messages" },
-        400,
-      );
+      return c.json({ error: error instanceof Error ? error.message : "Invalid messages" }, 400);
     }
 
     const agent = new SolidAgent(agentConfig);

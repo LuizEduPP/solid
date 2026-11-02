@@ -1,36 +1,27 @@
-import {
-  Accordion,
-  Anchor,
-  PasswordInput,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Accordion, Anchor, PasswordInput, Select, Stack, Text, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-
-import { LOCALE_LABEL_KEYS } from "./i18n";
-import type { WebSettings } from "./types";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
-  SCRAPE_I18N,
-  SCRAPE_PROVIDERS,
-  SEARCH_I18N,
-  SEARCH_INTEGRATION_FIELD,
-  SEARCH_PROVIDERS,
-  isScrapeProvider,
-  isSearchProvider,
-  scrapeProviderNeedsKey,
-  searchProviderEndpoint,
-  searchProviderNeedsKey,
-  SUPPORTED_LOCALES,
   type IntegrationEndpoints,
   type IntegrationField,
   type IntegrationKeys,
+  isScrapeProvider,
+  isSearchProvider,
   type Locale,
+  SCRAPE_I18N,
+  SCRAPE_PROVIDERS,
   type ScrapeProvider,
+  SEARCH_I18N,
+  SEARCH_INTEGRATION_FIELD,
+  SEARCH_PROVIDERS,
   type SearchProvider,
+  SUPPORTED_LOCALES,
+  scrapeProviderNeedsKey,
+  searchProviderEndpoint,
+  searchProviderNeedsKey,
 } from "../shared";
+import { LOCALE_LABEL_KEYS } from "./i18n";
+import type { WebSettings } from "./types";
 
 interface SettingsFormProps {
   settings: WebSettings;
@@ -101,8 +92,7 @@ export default function SettingsForm({
     current.scrapeProvider === "firecrawl" && current.searchProvider !== "firecrawl";
   const showJina = current.scrapeProvider === "jina";
   const searchField = SEARCH_INTEGRATION_FIELD[current.searchProvider];
-  const searchKeyField =
-    searchField && searchField !== "firecrawl" ? searchField : null;
+  const searchKeyField = searchField && searchField !== "firecrawl" ? searchField : null;
 
   const searchNeedsKey = searchProviderNeedsKey(
     current.searchProvider,
@@ -118,8 +108,7 @@ export default function SettingsForm({
   );
   const selectedSearchKey = searchField ? current.integrationKeys[searchField] : "";
   const searchKeyMissing = searchNeedsKey && !selectedSearchKey.trim();
-  const scrapeKeyMissing =
-    scrapeNeedsKey && !current.integrationKeys.firecrawl.trim();
+  const scrapeKeyMissing = scrapeNeedsKey && !current.integrationKeys.firecrawl.trim();
 
   const connect = (field: IntegrationField, docsUrl?: string, keyOptional?: boolean) => (
     <ProviderConnectionFields
@@ -136,7 +125,12 @@ export default function SettingsForm({
   );
 
   return (
-    <Accordion multiple defaultValue={["model", "search"]} className="settings-accordion" variant="default">
+    <Accordion
+      multiple
+      defaultValue={["model", "search"]}
+      className="settings-accordion"
+      variant="default"
+    >
       <Accordion.Item value="general">
         <Accordion.Control>{t("settingsGeneral")}</Accordion.Control>
         <Accordion.Panel>
@@ -145,9 +139,7 @@ export default function SettingsForm({
             value={current.locale}
             data={localeOptions}
             disabled={running}
-            onChange={(value) =>
-              value && patch({ locale: value as Locale })
-            }
+            onChange={(value) => value && patch({ locale: value as Locale })}
           />
         </Accordion.Panel>
       </Accordion.Item>
@@ -194,9 +186,7 @@ export default function SettingsForm({
               value={current.searchProvider}
               data={searchOptions}
               disabled={running}
-              onChange={(value) =>
-                isSearchProvider(value) && patch({ searchProvider: value })
-              }
+              onChange={(value) => isSearchProvider(value) && patch({ searchProvider: value })}
             />
             {searchKeyField
               ? connect(
@@ -211,7 +201,8 @@ export default function SettingsForm({
             {searchKeyMissing ? (
               <Text size="xs" c="dimmed">
                 {t("providerMissingKey", {
-                  provider: searchOptions.find((item) => item.value === current.searchProvider)?.label,
+                  provider: searchOptions.find((item) => item.value === current.searchProvider)
+                    ?.label,
                 })}
               </Text>
             ) : null}
@@ -229,15 +220,15 @@ export default function SettingsForm({
               value={current.scrapeProvider}
               data={scrapeOptions}
               disabled={running}
-              onChange={(value) =>
-                isScrapeProvider(value) && patch({ scrapeProvider: value })
-              }
+              onChange={(value) => isScrapeProvider(value) && patch({ scrapeProvider: value })}
             />
             {showFirecrawlInScrape
               ? connect("firecrawl", SCRAPE_DOCS.firecrawl, firecrawlKeyOptional)
               : null}
             {showJina ? connect("jina", SCRAPE_DOCS.jina, true) : null}
-            {scrapeUsesReader && current.searchProvider === "firecrawl" && current.scrapeProvider === "firecrawl" ? (
+            {scrapeUsesReader &&
+            current.searchProvider === "firecrawl" &&
+            current.scrapeProvider === "firecrawl" ? (
               <Text size="xs" c="dimmed">
                 {t("providerSharedFirecrawl")}
               </Text>
@@ -289,11 +280,7 @@ function ProviderConnectionFields({
       />
       <PasswordInput
         label={keyLabel}
-        description={
-          keyOptional
-            ? t("providerKeyOptionalSelfHosted")
-            : undefined
-        }
+        description={keyOptional ? t("providerKeyOptionalSelfHosted") : undefined}
         value={keyValue}
         disabled={disabled}
         autoComplete="off"

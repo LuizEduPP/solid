@@ -154,7 +154,9 @@ body {
   gap: 0;
   min-height: 2rem;
   border-radius: 6px;
-  transition: background-color var(--solid-ease), transform var(--solid-ease);
+  transition:
+    background-color var(--solid-ease),
+    transform var(--solid-ease);
 }
 
 .sidebar-session-row:hover {
@@ -316,10 +318,18 @@ body {
     transform var(--solid-ease);
 }
 
-.suggestion-list > .suggestion-chip:nth-child(1) { animation-delay: 40ms; }
-.suggestion-list > .suggestion-chip:nth-child(2) { animation-delay: 80ms; }
-.suggestion-list > .suggestion-chip:nth-child(3) { animation-delay: 120ms; }
-.suggestion-list > .suggestion-chip:nth-child(4) { animation-delay: 160ms; }
+.suggestion-list > .suggestion-chip:nth-child(1) {
+  animation-delay: 40ms;
+}
+.suggestion-list > .suggestion-chip:nth-child(2) {
+  animation-delay: 80ms;
+}
+.suggestion-list > .suggestion-chip:nth-child(3) {
+  animation-delay: 120ms;
+}
+.suggestion-list > .suggestion-chip:nth-child(4) {
+  animation-delay: 160ms;
+}
 
 .suggestion-chip:hover {
   border-color: var(--solid-accent);
@@ -341,12 +351,16 @@ body {
   border: 1px solid var(--solid-border) !important;
   background: var(--solid-elevated) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  transition: border-color var(--solid-ease), box-shadow var(--solid-ease);
+  transition:
+    border-color var(--solid-ease),
+    box-shadow var(--solid-ease);
 }
 
 .chat-input-form:focus-within {
   border-color: var(--solid-accent) !important;
-  box-shadow: 0 0 0 1px var(--solid-accent), 0 10px 28px var(--solid-accent-soft);
+  box-shadow:
+    0 0 0 1px var(--solid-accent),
+    0 10px 28px var(--solid-accent-soft);
 }
 
 .chat-input-wrap--active .chat-input-form {
@@ -445,7 +459,9 @@ body {
 .iteration-card {
   border: 1px solid var(--solid-border) !important;
   background: var(--solid-surface) !important;
-  transition: border-color var(--solid-ease), transform var(--solid-ease);
+  transition:
+    border-color var(--solid-ease),
+    transform var(--solid-ease);
 }
 
 .iteration-card:hover {
@@ -652,9 +668,15 @@ body {
   font-weight: 600;
 }
 
-.markdown-body h1 { font-size: 1.35rem; }
-.markdown-body h2 { font-size: 1.15rem; }
-.markdown-body h3 { font-size: 1.02rem; }
+.markdown-body h1 {
+  font-size: 1.35rem;
+}
+.markdown-body h2 {
+  font-size: 1.15rem;
+}
+.markdown-body h3 {
+  font-size: 1.02rem;
+}
 
 .markdown-body code {
   font-family: "IBM Plex Mono", monospace;
