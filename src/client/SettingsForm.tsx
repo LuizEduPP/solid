@@ -99,14 +99,13 @@ export default function SettingsForm({
       integrationEndpoints: { ...current.integrationEndpoints, [field]: value },
     });
 
-  const searchUsesPaid = current.searchProvider !== "duckduckgo";
   const scrapeUsesReader = current.scrapeProvider !== "direct";
   const showFirecrawlInSearch = current.searchProvider === "firecrawl";
   const showFirecrawlInScrape =
     current.scrapeProvider === "firecrawl" && current.searchProvider !== "firecrawl";
   const showJina = current.scrapeProvider === "jina";
   const searchKeyField =
-    searchUsesPaid && current.searchProvider !== "firecrawl"
+    current.searchProvider !== "duckduckgo" && current.searchProvider !== "firecrawl"
       ? KEY_FIELD[current.searchProvider]
       : null;
 
