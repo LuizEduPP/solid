@@ -7,7 +7,6 @@ import remarkGfm from "remark-gfm";
 import type { Plugin } from "unified";
 import { hostnameFromUrl, isHttpUrl } from "../shared";
 import FaviconImg from "./FaviconImg";
-import "github-markdown-css/github-markdown-dark.css";
 
 const BRACKET_URLS = /\[(https?:\/\/[^\]\s,]+(?:,\s*https?:\/\/[^\]\s,]+)*)\]/g;
 

@@ -13,7 +13,12 @@ interface IterationCardProps {
 
 function SectionShell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Stack gap={8} mt="md" pt="sm" style={{ borderTop: "1px solid var(--solid-border)" }}>
+    <Stack
+      gap={8}
+      mt="md"
+      pt="sm"
+      style={{ borderTop: "1px solid var(--mantine-color-default-border)" }}
+    >
       <Text className="dp-section-title" mb={0}>
         {title}
       </Text>
@@ -48,7 +53,7 @@ function ScoreDeltaIndicator({ delta }: { delta: string }) {
   if (Number.isNaN(numDelta) || numDelta === 0) {
     return (
       <Group gap={2} wrap="nowrap">
-        <Minus size={12} color="var(--solid-text-muted)" />
+        <Minus size={12} color="var(--mantine-color-dimmed)" />
         <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>
           0
         </Text>
