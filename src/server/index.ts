@@ -1,3 +1,4 @@
+import { installOutboundHttp } from "./http.js";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -8,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { createOpenAiRouter } from "./api.js";
 import { loadServerConfig } from "./config.js";
 import { createFaviconRouter } from "./favicon.js";
+
+installOutboundHttp();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../client");

@@ -1,0 +1,119 @@
+
+luiz@bazzite:~$  cd /run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects$  cd /run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ yarn dev
+yarn run v1.22.22
+(node:31102) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+$ concurrently -n api,web -c blue,green "tsx watch src/server/index.ts" "vite"
+[web]
+[web]   VITE v7.3.6  ready in 304 ms
+[web]
+[web]   ➜  Local:   http://localhost:5173/
+[web]   ➜  Network: use --host to expose
+[api] Solid API on http://0.0.0.0:8787
+[api] Web UI on http://localhost:5173
+[api] node:events:487
+[api]       throw er; // Unhandled 'error' event
+[api]       ^
+[api]
+[api] SocketError: other side closed
+[api]     at TLSSocket.onHttp2SocketEnd (node:internal/deps/undici/undici:8758:26)
+[api]     at TLSSocket.emit (node:events:521:24)
+[api]     at endReadableNT (node:internal/streams/readable:1746:12)
+[api]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+[api] Emitted 'error' event on ClientHttp2Stream instance at:
+[api]     at emitErrorNT (node:internal/streams/destroy:170:8)
+[api]     at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+[api]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+[api]   code: 'UND_ERR_SOCKET',
+[api]   socket: {
+[api]     localAddress: '192.168.1.28',
+[api]     localPort: 56358,
+[api]     remoteAddress: '204.187.13.48',
+[api]     remotePort: 443,
+[api]     remoteFamily: 'IPv4',
+[api]     timeout: undefined,
+[api]     bytesWritten: 241,
+[api]     bytesRead: 229385
+[api]   }
+[api] }
+[api]
+[api] Node.js v26.4.0
+[web] 01:34:47 [vite] http proxy error: /v1/title
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+[web] 01:34:47 [vite] http proxy error: /v1/chat/completions
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+^C[api] tsx watch src/server/index.ts exited with code 2
+
+[web] vite exited with code SIGINT
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ ^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ ^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ yarn dev
+yarn run v1.22.22
+(node:38022) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+$ concurrently -n api,web -c blue,green "tsx watch src/server/index.ts" "vite"
+[web]
+[web]   VITE v7.3.6  ready in 111 ms
+[web]
+[web]   ➜  Local:   http://localhost:5173/
+[web]   ➜  Network: use --host to expose
+[api] Solid API on http://0.0.0.0:8787
+[api] Web UI on http://localhost:5173
+[api] node:events:487
+[api]       throw er; // Unhandled 'error' event
+[api]       ^
+[api]
+[api] Error: read ECONNRESET
+[api]     at TLSWrap.onStreamRead (node:internal/stream_base_commons:216:20)
+[api] Emitted 'error' event on ClientHttp2Stream instance at:
+[api]     at emitErrorNT (node:internal/streams/destroy:170:8)
+[api]     at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+[api]     at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+[api]   errno: -104,
+[api]   code: 'ECONNRESET',
+[api]   syscall: 'read'
+[api] }
+[api]
+[api] Node.js v26.4.0
+[web] 02:12:57 [vite] http proxy error: /v1/title
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+[web] 02:12:57 [vite] http proxy error: /v1/chat/completions
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+[web] 02:13:02 [vite] http proxy error: /v1/suggestions
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+[web] 02:13:18 [vite] http proxy error: /v1/suggestions
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+^C
+[api] tsx watch src/server/index.ts exited with code 2
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ [web] vite exited with code SIGINT
+^C^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ ^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ yarn dev
+yarn run v1.22.22
+(node:54518) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+$ concurrently -n api,web -c blue,green "tsx watch src/server/index.ts" "vite"
+[web]
+[web]   VITE v7.3.6  ready in 106 ms
+[web]
+[web]   ➜  Local:   http://localhost:5173/
+[web]   ➜  Network: use --host to expose
+[api] Solid API on http://0.0.0.0:8787
+[api] Web UI on http://localhost:5173
+[web] 02:13:27 [vite] http proxy error: /v1/suggestions
+[web] Error: connect ECONNREFUSED 127.0.0.1:8787
+[web]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1864:16)
+^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ [web] vite exited with code SIGINT
+[api] tsx watch src/server/index.ts exited with code 130
+^C^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$ ^C
+luiz@bazzite:/run/media/luiz/7338ad03-5bfe-48e2-9356-a432a852a1da/projects/027-deep-search$
