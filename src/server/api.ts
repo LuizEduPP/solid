@@ -111,7 +111,6 @@ const priorResearchContextSchema: z.ZodType<PriorResearchContext> = z.object({
   openGaps: z.array(z.string()),
   priorQueries: z.array(z.string()),
   citedUrls: z.array(z.string()),
-  uniqueDomainCount: z.number().int().nonnegative(),
   iterationCount: z.number().int().nonnegative(),
   hadDisconfirmingSearch: z.boolean(),
 });

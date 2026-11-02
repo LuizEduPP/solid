@@ -3,7 +3,6 @@ import { createParser } from "eventsource-parser";
 import i18n from "./i18n";
 import type { WebSettings } from "./types";
 import {
-  countUniqueHostnames,
   INTEGRATION_FIELDS,
   llmRequiresApiKey,
   MODE_THRESHOLDS,
@@ -245,10 +244,6 @@ export function iterationSourceUrls(iteration: IterationSnapshot): string[] {
     ...(iteration.readUrls ?? []),
     ...(iteration.sources ?? []).map((source) => source.url),
   ];
-}
-
-export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
-  return countUniqueHostnames(iterations.flatMap(iterationSourceUrls));
 }
 
 export function canFollowUp(

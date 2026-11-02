@@ -3,7 +3,7 @@ import { saveAs } from "file-saver";
 
 import { compressStepsActivity, translateActivityLine } from "./activity";
 import i18n, { type HistoryGroupKey } from "./i18n";
-import { parseStream, uniqueSourceCount } from "./stream";
+import { parseStream } from "./stream";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   DEFAULT_INTEGRATIONS,
@@ -177,7 +177,6 @@ export function buildPriorContext(
           : [],
     ),
     citedUrls: parsed.iterations.flatMap((iteration) => iteration.citedUrls ?? []),
-    uniqueDomainCount: uniqueSourceCount(parsed.iterations),
     iterationCount: parsed.iterations.length,
     hadDisconfirmingSearch: parsed.iterations.some((iteration) => iteration.disconfirming),
   };

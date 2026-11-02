@@ -524,7 +524,6 @@ export interface PriorResearchContext {
   openGaps: string[];
   priorQueries: string[];
   citedUrls: string[];
-  uniqueDomainCount: number;
   iterationCount: number;
   hadDisconfirmingSearch: boolean;
 }
