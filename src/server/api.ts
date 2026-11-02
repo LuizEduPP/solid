@@ -4,7 +4,16 @@ import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
 import { SolidAgent, extractObjective } from "./agent/loop.js";
-import { MODE_THRESHOLDS, type PriorResearchContext } from "../shared.js";
+import {
+  DEFAULT_INTEGRATIONS,
+  EMPTY_INTEGRATION_KEYS,
+  MODE_THRESHOLDS,
+  SCRAPE_PROVIDERS,
+  SEARCH_PROVIDERS,
+  normalizeScrapeProvider,
+  normalizeSearchProvider,
+  type PriorResearchContext,
+} from "../shared.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
 
 const LOCALE_NAMES: Record<string, string> = {
@@ -64,6 +73,13 @@ const requestSchema = z.object({
   llm_api_key: z.string().optional().default(""),
   llm_base_url: z.string().min(1).optional(),
   llm_model: z.string().min(1).optional(),
+  search_provider: z.enum(SEARCH_PROVIDERS).optional(),
+  scrape_provider: z.enum(SCRAPE_PROVIDERS).optional(),
+  exa_api_key: z.string().optional().default(""),
+  tavily_api_key: z.string().optional().default(""),
+  brave_api_key: z.string().optional().default(""),
+  firecrawl_api_key: z.string().optional().default(""),
+  jina_api_key: z.string().optional().default(""),
   prior_context: z
     .object({
       rootObjective: z.string().min(1),
@@ -118,6 +134,22 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
     mode,
     pagesPerIteration: AGENT_DEFAULTS.pagesPerIteration,
     temperature: resolveTemperature(body.temperature),
+    integrations: {
+      searchProvider: normalizeSearchProvider(
+        body.search_provider ?? DEFAULT_INTEGRATIONS.searchProvider,
+      ),
+      scrapeProvider: normalizeScrapeProvider(
+        body.scrape_provider ?? DEFAULT_INTEGRATIONS.scrapeProvider,
+      ),
+      keys: {
+        ...EMPTY_INTEGRATION_KEYS,
+        exa: body.exa_api_key ?? "",
+        tavily: body.tavily_api_key ?? "",
+        brave: body.brave_api_key ?? "",
+        firecrawl: body.firecrawl_api_key ?? "",
+        jina: body.jina_api_key ?? "",
+      },
+    },
   };
 }
 

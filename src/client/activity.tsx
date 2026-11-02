@@ -35,8 +35,13 @@ export function translateActivityLine(line: string): string {
     return i18n.t("activityModelStopped");
   }
 
-  let match = trimmed.match(/^Search failed: (.+)$/);
+  let   match = trimmed.match(/^Search failed: (.+)$/);
   if (match) return i18n.t("activitySearchFailed", { query: match[1] });
+
+  match = trimmed.match(/^Search fallback: (.+) → (.+)$/);
+  if (match) {
+    return i18n.t("activitySearchFallback", { from: match[1], to: match[2] });
+  }
 
   match = trimmed.match(PAGES_FETCHED_RE);
   if (match) return i18n.t("activityPagesFetched", { count: match[1] });

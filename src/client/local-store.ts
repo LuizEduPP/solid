@@ -4,7 +4,15 @@ import { saveAs } from "file-saver";
 import { compressStepsActivity, translateActivityLine } from "./activity";
 import i18n, { normalizeLocale, type HistoryGroupKey } from "./i18n";
 import { parseStream, uniqueSourceCount } from "./stream";
-import type { PriorResearchContext } from "../shared";
+import {
+  DEFAULT_INTEGRATIONS,
+  EMPTY_INTEGRATION_KEYS,
+  normalizeScrapeProvider,
+  normalizeSearchProvider,
+  type IntegrationKeys,
+  type IntegrationRuntime,
+  type PriorResearchContext,
+} from "../shared";
 import type { ResearchSession, WebSettings } from "./types";
 
 export type { ResearchSession, WebSettings } from "./types";
@@ -38,7 +46,42 @@ export const DEFAULT_WEB_SETTINGS: WebSettings = {
   model: "",
   mode: "rigorous",
   locale: "en",
+  searchProvider: DEFAULT_INTEGRATIONS.searchProvider,
+  scrapeProvider: DEFAULT_INTEGRATIONS.scrapeProvider,
+  integrationKeys: { ...EMPTY_INTEGRATION_KEYS },
 };
+
+function normalizeIntegrationKeys(raw: unknown): IntegrationKeys {
+  const keys = raw && typeof raw === "object" ? (raw as Partial<IntegrationKeys>) : {};
+  return {
+    exa: typeof keys.exa === "string" ? keys.exa : "",
+    tavily: typeof keys.tavily === "string" ? keys.tavily : "",
+    brave: typeof keys.brave === "string" ? keys.brave : "",
+    firecrawl: typeof keys.firecrawl === "string" ? keys.firecrawl : "",
+    jina: typeof keys.jina === "string" ? keys.jina : "",
+  };
+}
+
+export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings {
+  return {
+    apiKey: parsed.apiKey ?? DEFAULT_WEB_SETTINGS.apiKey,
+    baseUrl: parsed.baseUrl ?? DEFAULT_WEB_SETTINGS.baseUrl,
+    model: parsed.model ?? DEFAULT_WEB_SETTINGS.model,
+    mode: parsed.mode === "fast" ? "fast" : "rigorous",
+    locale: normalizeLocale(parsed.locale),
+    searchProvider: normalizeSearchProvider(parsed.searchProvider),
+    scrapeProvider: normalizeScrapeProvider(parsed.scrapeProvider),
+    integrationKeys: normalizeIntegrationKeys(parsed.integrationKeys),
+  };
+}
+
+export function integrationsFromSettings(settings: WebSettings): IntegrationRuntime {
+  return {
+    searchProvider: settings.searchProvider,
+    scrapeProvider: settings.scrapeProvider,
+    keys: settings.integrationKeys,
+  };
+}
 
 export function isLocalLlmBaseUrl(baseUrl: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
@@ -51,13 +94,7 @@ export function loadWebSettings(): WebSettings {
     DEFAULT_WEB_SETTINGS,
   );
 
-  return {
-    apiKey: parsed.apiKey ?? DEFAULT_WEB_SETTINGS.apiKey,
-    baseUrl: parsed.baseUrl ?? DEFAULT_WEB_SETTINGS.baseUrl,
-    model: parsed.model ?? DEFAULT_WEB_SETTINGS.model,
-    mode: parsed.mode === "fast" ? "fast" : "rigorous",
-    locale: normalizeLocale(parsed.locale),
-  };
+  return normalizeWebSettings(parsed);
 }
 
 export const HISTORY_KEY = "solid-history";

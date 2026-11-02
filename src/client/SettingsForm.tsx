@@ -1,7 +1,10 @@
 import {
+  Accordion,
+  Anchor,
   PasswordInput,
   Select,
   Stack,
+  Text,
   TextInput,
 } from "@mantine/core";
 import { useTranslation } from "react-i18next";
@@ -12,6 +15,13 @@ import {
   type Locale,
 } from "./i18n";
 import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./local-store";
+import {
+  scrapeProviderNeedsKey,
+  searchProviderNeedsKey,
+  type IntegrationKeys,
+  type ScrapeProvider,
+  type SearchProvider,
+} from "../shared";
 
 interface SettingsFormProps {
   settings: WebSettings;
@@ -22,6 +32,26 @@ interface SettingsFormProps {
   onChange: (next: WebSettings) => void;
 }
 
+const SEARCH_DOCS: Partial<Record<SearchProvider, string>> = {
+  exa: "https://dashboard.exa.ai",
+  tavily: "https://app.tavily.com",
+  brave: "https://brave.com/search/api/",
+  firecrawl: "https://www.firecrawl.dev",
+};
+
+const SCRAPE_DOCS: Partial<Record<ScrapeProvider, string>> = {
+  firecrawl: "https://www.firecrawl.dev",
+  jina: "https://jina.ai/reader",
+};
+
+const KEY_FIELD: Record<Exclude<SearchProvider, "duckduckgo"> | "jina", keyof IntegrationKeys> = {
+  exa: "exa",
+  tavily: "tavily",
+  brave: "brave",
+  firecrawl: "firecrawl",
+  jina: "jina",
+};
+
 export default function SettingsForm({
   settings,
   running,
@@ -31,6 +61,7 @@ export default function SettingsForm({
   onChange,
 }: SettingsFormProps) {
   const { t } = useTranslation();
+  const current = settings ?? DEFAULT_WEB_SETTINGS;
 
   const localeOptions = SUPPORTED_LOCALES.map((locale) => ({
     value: locale,
@@ -42,47 +73,217 @@ export default function SettingsForm({
       ? models.map((modelId) => ({ value: modelId, label: modelId }))
       : [{ value: "", label: modelsError ?? t("noModelsAvailable") }];
 
-  const current = settings ?? DEFAULT_WEB_SETTINGS;
+  const searchOptions: Array<{ value: SearchProvider; label: string }> = [
+    { value: "duckduckgo", label: t("providerDuckDuckGo") },
+    { value: "exa", label: t("providerExa") },
+    { value: "tavily", label: t("providerTavily") },
+    { value: "brave", label: t("providerBrave") },
+    { value: "firecrawl", label: t("providerFirecrawl") },
+  ];
+
+  const scrapeOptions: Array<{ value: ScrapeProvider; label: string }> = [
+    { value: "direct", label: t("providerDirect") },
+    { value: "firecrawl", label: t("providerFirecrawl") },
+    { value: "jina", label: t("providerJina") },
+  ];
+
+  const patch = (next: Partial<WebSettings>) => onChange({ ...current, ...next });
+  const patchKey = (field: keyof IntegrationKeys, value: string) =>
+    patch({
+      integrationKeys: { ...current.integrationKeys, [field]: value },
+    });
+
+  const searchNeedsKey = searchProviderNeedsKey(current.searchProvider);
+  const scrapeNeedsKey = scrapeProviderNeedsKey(current.scrapeProvider);
+  const showJinaKey = current.scrapeProvider === "jina";
+  const showFirecrawlKey =
+    current.searchProvider === "firecrawl" || current.scrapeProvider === "firecrawl";
+  const searchKeyField =
+    current.searchProvider !== "duckduckgo" && current.searchProvider !== "firecrawl"
+      ? KEY_FIELD[current.searchProvider]
+      : null;
+  const searchKeyMissing =
+    searchNeedsKey &&
+    !current.integrationKeys[KEY_FIELD[current.searchProvider as Exclude<SearchProvider, "duckduckgo">]].trim();
+  const scrapeKeyMissing =
+    scrapeNeedsKey && !current.integrationKeys.firecrawl.trim();
 
   return (
-    <Stack gap="md">
-      <Select
-        label={t("language")}
-        value={current.locale}
-        data={localeOptions}
-        disabled={running}
-        onChange={(value) =>
-          value && onChange({ ...current, locale: value as Locale })
-        }
-      />
+    <Accordion multiple defaultValue={["model", "search"]} variant="separated">
+      <Accordion.Item value="general">
+        <Accordion.Control>{t("settingsGeneral")}</Accordion.Control>
+        <Accordion.Panel>
+          <Select
+            label={t("language")}
+            value={current.locale}
+            data={localeOptions}
+            disabled={running}
+            onChange={(value) =>
+              value && patch({ locale: value as Locale })
+            }
+          />
+        </Accordion.Panel>
+      </Accordion.Item>
+
+      <Accordion.Item value="model">
+        <Accordion.Control>{t("settingsModel")}</Accordion.Control>
+        <Accordion.Panel>
+          <Stack gap="md">
+            <PasswordInput
+              label={t("apiKey")}
+              placeholder={t("apiKeyPlaceholder")}
+              value={current.apiKey}
+              disabled={running}
+              autoComplete="off"
+              onChange={(event) => patch({ apiKey: event.currentTarget.value })}
+            />
+            <TextInput
+              label={t("baseUrl")}
+              value={current.baseUrl}
+              disabled={running}
+              onChange={(event) => patch({ baseUrl: event.currentTarget.value })}
+            />
+            <Select
+              label={t("model")}
+              value={current.model}
+              data={modelOptions}
+              disabled={running || modelsLoading}
+              placeholder={modelsLoading ? t("loadingModels") : undefined}
+              error={modelsError ?? undefined}
+              searchable
+              onChange={(value) => patch({ model: value ?? "" })}
+            />
+          </Stack>
+        </Accordion.Panel>
+      </Accordion.Item>
+
+      <Accordion.Item value="search">
+        <Accordion.Control>{t("settingsSearch")}</Accordion.Control>
+        <Accordion.Panel>
+          <Stack gap="md">
+            <Select
+              label={t("searchProvider")}
+              description={t("searchProviderHint")}
+              value={current.searchProvider}
+              data={searchOptions}
+              disabled={running}
+              onChange={(value) =>
+                value && patch({ searchProvider: value as SearchProvider })
+              }
+            />
+            {searchKeyField ? (
+              <ProviderKeyField
+                label={t(`${searchKeyField}ApiKey`)}
+                value={current.integrationKeys[searchKeyField]}
+                disabled={running}
+                docsUrl={SEARCH_DOCS[current.searchProvider]}
+                docsLabel={t("providerDocs")}
+                onChange={(value) => patchKey(searchKeyField, value)}
+              />
+            ) : null}
+            {showFirecrawlKey && current.searchProvider === "firecrawl" ? (
+              <ProviderKeyField
+                label={t("firecrawlApiKey")}
+                value={current.integrationKeys.firecrawl}
+                disabled={running}
+                docsUrl={SEARCH_DOCS.firecrawl}
+                docsLabel={t("providerDocs")}
+                onChange={(value) => patchKey("firecrawl", value)}
+              />
+            ) : null}
+            {searchKeyMissing ? (
+              <Text size="xs" c="dimmed">
+                {t("providerMissingKey", {
+                  provider: searchOptions.find((item) => item.value === current.searchProvider)?.label,
+                })}
+              </Text>
+            ) : null}
+          </Stack>
+        </Accordion.Panel>
+      </Accordion.Item>
+
+      <Accordion.Item value="scrape">
+        <Accordion.Control>{t("settingsScrape")}</Accordion.Control>
+        <Accordion.Panel>
+          <Stack gap="md">
+            <Select
+              label={t("scrapeProvider")}
+              description={t("scrapeProviderHint")}
+              value={current.scrapeProvider}
+              data={scrapeOptions}
+              disabled={running}
+              onChange={(value) =>
+                value && patch({ scrapeProvider: value as ScrapeProvider })
+              }
+            />
+            {showFirecrawlKey && current.searchProvider !== "firecrawl" ? (
+              <ProviderKeyField
+                label={t("firecrawlApiKey")}
+                value={current.integrationKeys.firecrawl}
+                disabled={running}
+                docsUrl={SCRAPE_DOCS.firecrawl}
+                docsLabel={t("providerDocs")}
+                onChange={(value) => patchKey("firecrawl", value)}
+              />
+            ) : null}
+            {showJinaKey ? (
+              <ProviderKeyField
+                label={t("jinaApiKey")}
+                value={current.integrationKeys.jina}
+                disabled={running}
+                docsUrl={SCRAPE_DOCS.jina}
+                docsLabel={t("providerDocs")}
+                optional
+                optionalLabel={t("providerKeyOptional", { provider: t("providerJina") })}
+                onChange={(value) => patchKey("jina", value)}
+              />
+            ) : null}
+            {scrapeKeyMissing ? (
+              <Text size="xs" c="dimmed">
+                {t("providerMissingScrapeKey", { provider: t("providerFirecrawl") })}
+              </Text>
+            ) : null}
+          </Stack>
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
+}
+
+function ProviderKeyField({
+  label,
+  value,
+  disabled,
+  docsUrl,
+  docsLabel,
+  optional,
+  optionalLabel,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  docsUrl?: string;
+  docsLabel: string;
+  optional?: boolean;
+  optionalLabel?: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Stack gap={6}>
       <PasswordInput
-        label={t("apiKey")}
-        placeholder={t("apiKeyPlaceholder")}
-        value={current.apiKey}
-        disabled={running}
+        label={label}
+        description={optional ? optionalLabel : undefined}
+        value={value}
+        disabled={disabled}
         autoComplete="off"
-        onChange={(event) =>
-          onChange({ ...current, apiKey: event.currentTarget.value })
-        }
+        onChange={(event) => onChange(event.currentTarget.value)}
       />
-      <TextInput
-        label={t("baseUrl")}
-        value={current.baseUrl}
-        disabled={running}
-        onChange={(event) =>
-          onChange({ ...current, baseUrl: event.currentTarget.value })
-        }
-      />
-      <Select
-        label={t("model")}
-        value={current.model}
-        data={modelOptions}
-        disabled={running || modelsLoading}
-        placeholder={modelsLoading ? t("loadingModels") : undefined}
-        error={modelsError ?? undefined}
-        searchable
-        onChange={(value) => onChange({ ...current, model: value ?? "" })}
-      />
+      {docsUrl ? (
+        <Anchor href={docsUrl} target="_blank" rel="noreferrer" size="xs">
+          {docsLabel}
+        </Anchor>
+      ) : null}
     </Stack>
   );
 }

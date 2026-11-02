@@ -1,6 +1,10 @@
 import "dotenv/config";
 
-import type { ResearchMode } from "../shared.js";
+import {
+  DEFAULT_INTEGRATIONS,
+  type IntegrationRuntime,
+  type ResearchMode,
+} from "../shared.js";
 
 export interface ServerConfig {
   host: string;
@@ -16,6 +20,7 @@ export interface AgentConfig {
   mode: ResearchMode;
   pagesPerIteration: number;
   temperature: number;
+  integrations: IntegrationRuntime;
 }
 
 export const AGENT_DEFAULTS = {
@@ -26,6 +31,7 @@ export const AGENT_DEFAULTS = {
   mode: "rigorous" as ResearchMode,
   pagesPerIteration: 3,
   temperature: 0.3,
+  integrations: DEFAULT_INTEGRATIONS,
 } as const;
 
 export function loadServerConfig(): ServerConfig {

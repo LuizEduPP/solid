@@ -129,6 +129,77 @@ export function isDefaultFaviconSrc(src: string): boolean {
   return src.includes(DEFAULT_FAVICON_URL);
 }
 
+export const SEARCH_PROVIDERS = [
+  "duckduckgo",
+  "exa",
+  "tavily",
+  "brave",
+  "firecrawl",
+] as const;
+
+export const SCRAPE_PROVIDERS = ["direct", "firecrawl", "jina"] as const;
+
+export type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
+export type ScrapeProvider = (typeof SCRAPE_PROVIDERS)[number];
+
+export interface IntegrationKeys {
+  exa: string;
+  tavily: string;
+  brave: string;
+  firecrawl: string;
+  jina: string;
+}
+
+export interface IntegrationRuntime {
+  searchProvider: SearchProvider;
+  scrapeProvider: ScrapeProvider;
+  keys: IntegrationKeys;
+}
+
+export const EMPTY_INTEGRATION_KEYS: IntegrationKeys = {
+  exa: "",
+  tavily: "",
+  brave: "",
+  firecrawl: "",
+  jina: "",
+};
+
+export const DEFAULT_INTEGRATIONS: IntegrationRuntime = {
+  searchProvider: "duckduckgo",
+  scrapeProvider: "direct",
+  keys: EMPTY_INTEGRATION_KEYS,
+};
+
+export function isSearchProvider(value: unknown): value is SearchProvider {
+  return (
+    typeof value === "string" &&
+    (SEARCH_PROVIDERS as readonly string[]).includes(value)
+  );
+}
+
+export function isScrapeProvider(value: unknown): value is ScrapeProvider {
+  return (
+    typeof value === "string" &&
+    (SCRAPE_PROVIDERS as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeSearchProvider(value: unknown): SearchProvider {
+  return isSearchProvider(value) ? value : "duckduckgo";
+}
+
+export function normalizeScrapeProvider(value: unknown): ScrapeProvider {
+  return isScrapeProvider(value) ? value : "direct";
+}
+
+export function searchProviderNeedsKey(provider: SearchProvider): boolean {
+  return provider !== "duckduckgo";
+}
+
+export function scrapeProviderNeedsKey(provider: ScrapeProvider): boolean {
+  return provider === "firecrawl";
+}
+
 /** Prior research state for follow-up turns in the same session. */
 export interface PriorResearchContext {
   rootObjective: string;

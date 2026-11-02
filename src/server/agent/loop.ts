@@ -588,13 +588,20 @@ export class SolidAgent {
             const result = await searchWeb(
               query,
               this.settings.resultsPerQuery,
+              this.settings.integrations,
             );
             return { query, result };
           }),
         );
 
         for (const { query, result } of searched) {
-          if (result.error) {
+          if (result.fallback && result.provider) {
+            yield event(
+              "status",
+              `Search fallback: ${this.settings.integrations.searchProvider} → ${result.provider}`,
+            );
+          }
+          if (result.error && result.hits.length === 0) {
             yield event("status", `Search failed: ${query}`);
           }
           queryResults.push([query, result.hits]);
@@ -608,6 +615,7 @@ export class SolidAgent {
           fetchCandidates,
           this.settings.pagesPerIteration,
           agentRun.fetchedUrlCache,
+          this.settings.integrations,
         );
         throwIfAborted();
 

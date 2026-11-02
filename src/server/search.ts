@@ -1,5 +1,11 @@
 import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
+import {
+  DEFAULT_INTEGRATIONS,
+  type IntegrationRuntime,
+} from "../shared.js";
+import { scrapeWithProvider, searchWithProvider } from "./integrations.js";
+
 export interface SearchHit {
   title: string;
   url: string;
@@ -9,6 +15,8 @@ export interface SearchHit {
 interface SearchWebResult {
   hits: SearchHit[];
   error?: string;
+  provider?: string;
+  fallback?: boolean;
 }
 
 const ddgs = new DDGS();
@@ -108,7 +116,7 @@ function retryDelayMs(error: Error, attempt: number): number {
   return 2_000 + attempt * 1_000;
 }
 
-export async function searchWeb(
+async function searchDuckDuckGo(
   query: string,
   maxResults: number,
 ): Promise<SearchWebResult> {
@@ -129,7 +137,7 @@ export async function searchWeb(
 
       const hits = mapHits(results, maxResults);
       if (hits.length > 0) {
-        return { hits };
+        return { hits, provider: "duckduckgo" };
       }
 
       lastError = new Error("No valid results returned");
@@ -144,7 +152,36 @@ export async function searchWeb(
   return {
     hits: [],
     error: lastError?.message ?? "Search failed",
+    provider: "duckduckgo",
   };
+}
+
+export async function searchWeb(
+  query: string,
+  maxResults: number,
+  runtime: IntegrationRuntime = DEFAULT_INTEGRATIONS,
+): Promise<SearchWebResult> {
+  const provider = runtime.searchProvider;
+
+  if (provider !== "duckduckgo") {
+    try {
+      const result = await searchWithProvider(query, maxResults, runtime);
+      return { hits: result.hits, provider: result.provider };
+    } catch (error) {
+      const fallback = await searchDuckDuckGo(query, maxResults);
+      const reason = error instanceof Error ? error.message : "Search failed";
+      if (fallback.hits.length > 0) {
+        return { ...fallback, fallback: true, error: reason };
+      }
+      return {
+        hits: [],
+        error: reason,
+        provider,
+      };
+    }
+  }
+
+  return searchDuckDuckGo(query, maxResults);
 }
 
 export function formatHits(hits: SearchHit[]): string {
@@ -166,7 +203,22 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-async function fetchPageText(url: string): Promise<string | null> {
+async function fetchPageText(
+  url: string,
+  runtime: IntegrationRuntime = DEFAULT_INTEGRATIONS,
+): Promise<string | null> {
+  if (runtime.scrapeProvider !== "direct") {
+    try {
+      const scraped = await scrapeWithProvider(
+        url,
+        runtime.scrapeProvider,
+        runtime,
+      );
+      if (scraped) return scraped.slice(0, MAX_PAGE_CHARS);
+    } catch {
+      // fall through to direct fetch
+    }
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -204,12 +256,13 @@ export async function fetchPages(
   urls: string[],
   maxPages: number,
   skipUrls: Set<string>,
+  runtime: IntegrationRuntime = DEFAULT_INTEGRATIONS,
 ): Promise<Array<{ url: string; text: string }>> {
   const candidates = urls.filter((url) => !skipUrls.has(url));
   const batch = candidates.slice(0, Math.max(maxPages * 2, maxPages));
   const fetched = await Promise.all(
     batch.map(async (url) => {
-      const text = await fetchPageText(url);
+      const text = await fetchPageText(url, runtime);
       return text ? { url, text } : null;
     }),
   );

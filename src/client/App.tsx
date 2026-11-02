@@ -50,6 +50,7 @@ import {
   isLocalLlmBaseUrl,
   loadHistory,
   loadWebSettings,
+  normalizeWebSettings,
   sessionPreview,
   SETTINGS_KEY,
   touchSession,
@@ -306,6 +307,14 @@ export default function App() {
   const [settings, setSettings] = useLocalStorage<WebSettings>({
     key: SETTINGS_KEY,
     defaultValue: loadWebSettings(),
+    deserialize: (raw) => {
+      try {
+        if (!raw) return loadWebSettings();
+        return normalizeWebSettings(JSON.parse(raw) as Partial<WebSettings>);
+      } catch {
+        return loadWebSettings();
+      }
+    },
   });
   const [sessions, setSessions] = useLocalStorage<ResearchSession[]>({
     key: HISTORY_KEY,
@@ -903,7 +912,7 @@ export default function App() {
         onClose={closeConfig}
         title={t("settings")}
         centered
-        size="md"
+        size="lg"
       >
         <SettingsForm
           settings={settings}
