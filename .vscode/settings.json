@@ -1,0 +1,11 @@
+{
+  "terminal.integrated.env.linux": {
+    "NODE_OPTIONS": "--disable-warning=DEP0169"
+  },
+  "terminal.integrated.env.osx": {
+    "NODE_OPTIONS": "--disable-warning=DEP0169"
+  },
+  "terminal.integrated.env.windows": {
+    "NODE_OPTIONS": "--disable-warning=DEP0169"
+  }
+}
