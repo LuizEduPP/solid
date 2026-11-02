@@ -1,39 +1,30 @@
 import OpenAI from "openai";
 
-import type { AgentConfig } from "../config.js";
 import {
+  countUniqueHostnames,
+  type EvidenceType,
+  MODE_THRESHOLDS,
+  type PriorResearchContext,
+  rubricTotal,
+  type ScoreRubric,
+  type SearchHit,
+  streamChunk,
+} from "../../shared.js";
+import type { AgentConfig } from "../config.js";
+import { cacheFaviconsForUrls } from "../favicon.js";
+import { fetchPages, formatHits, searchWeb } from "../search.js";
+import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM, REFLECTOR_SYSTEM } from "./prompts.js";
+import {
+  type AnalysisPayload,
+  type PlanPayload,
   parseAnalysisPayload,
   parsePlanPayload,
   parseReflectionPayload,
-  type AnalysisPayload,
-  type PlanPayload,
   type ReflectionPayload,
 } from "./schemas.js";
-import { ANALYST_SYSTEM, FINAL_SYSTEM, PLANNER_SYSTEM, REFLECTOR_SYSTEM } from "./prompts.js";
-import {
-  applyCumulativeScore,
-  canReachTargetScore,
-  capScoreForCitedDomains,
-  capScoreForEntityConfidence,
-  computeEvidenceScore,
-  EVIDENCE_SCORE_HEADROOM,
-  OPEN_GAP_SCORE_CAP,
-} from "./scoring.js";
-import {
-  countUniqueHostnames,
-  MODE_THRESHOLDS,
-  rubricTotal,
-  type EvidenceType,
-  type PriorResearchContext,
-  type ScoreRubric,
-} from "../../shared.js";
-import { cacheFaviconsForUrls } from "../favicon.js";
-import {
-  fetchPages,
-  formatHits,
-  searchWeb,
-  type SearchHit,
-} from "../search.js";
+import { anchorQueryToObjective, applyCumulativeScore } from "./scoring.js";
+
+const ITERATION_SOURCE_PREVIEW = 6;
 
 interface IterationRecord {
   number: number;
@@ -72,7 +63,6 @@ interface AgentRun {
   seedOpenGaps?: string[];
   seedQueries?: string[];
   seedCitedUrls?: string[];
-  seedUniqueDomainCount?: number;
 }
 
 export function extractObjective(messages: Array<{ role: string; content: string }>): string {
@@ -86,10 +76,7 @@ export function extractObjective(messages: Array<{ role: string; content: string
 }
 
 function collectPriorQueries(run: AgentRun): string[] {
-  return [
-    ...(run.seedQueries ?? []),
-    ...run.iterations.flatMap((record) => record.queries),
-  ];
+  return [...(run.seedQueries ?? []), ...run.iterations.flatMap((record) => record.queries)];
 }
 
 function collectOpenGaps(run: AgentRun): string[] {
@@ -106,10 +93,6 @@ function totalUniqueDomainCount(run: AgentRun): number {
   return countUniqueHostnames(urls);
 }
 
-function event(kind: "status" | "score" | "report" | "iter" | "rubric" | "reflection", content: string): string {
-  return `@@${kind.toUpperCase()}@@\n${content}\n\n`;
-}
-
 function eventIteration(record: {
   number: number;
   angle: string;
@@ -121,6 +104,7 @@ function eventIteration(record: {
   rubric: ScoreRubric;
   citedUrls: string[];
   readUrls?: string[];
+  queries?: string[];
   sources: SearchHit[];
   disconfirming: boolean;
   gaps?: string[];
@@ -128,12 +112,10 @@ function eventIteration(record: {
   directEntityEvidence?: boolean;
   disambiguationNotes?: string;
 }): string {
-  return event("iter", JSON.stringify(record));
+  return streamChunk("ITER", JSON.stringify(record));
 }
 
-function extractMessageContent(
-  message: OpenAI.Chat.Completions.ChatCompletionMessage,
-): string {
+function extractMessageContent(message: OpenAI.Chat.Completions.ChatCompletionMessage): string {
   const content = message.content?.trim();
   if (content) return content;
 
@@ -151,48 +133,6 @@ function extractMessageContent(
   throw new Error(
     "Model returned empty content — disable reasoning in LM Studio or use another model",
   );
-}
-
-function finalizeScore(
-  run: AgentRun,
-  analysis: AnalysisPayload,
-  iteration: number,
-  settings: AgentConfig,
-): number {
-  const thresholds = MODE_THRESHOLDS[settings.mode];
-  const rubric = analysis.score_rubric;
-  const isFirstIteration = iteration === 1;
-
-  let score = applyCumulativeScore(run.currentScore, analysis.score, rubric, {
-    contradictionFound: Boolean(analysis.contradiction_found),
-    minScore: settings.minScore,
-    maxDelta: thresholds.maxScoreDelta,
-    firstIterationCap: thresholds.firstIterationCap,
-    isFirstIteration,
-  });
-
-  const uniqueDomains = totalUniqueDomainCount(run);
-  const evidenceScore = computeEvidenceScore(
-    uniqueDomains,
-    analysis.cited_urls?.length ?? 0,
-    iteration,
-    analysis.open_gaps?.length ?? 0,
-  );
-
-  score = Math.min(score, evidenceScore + EVIDENCE_SCORE_HEADROOM);
-
-  if ((analysis.open_gaps?.length ?? 0) > 0) {
-    score = Math.min(score, OPEN_GAP_SCORE_CAP);
-  }
-
-  const cumulativeCitedUrls = [
-    ...(run.seedCitedUrls ?? []),
-    ...run.iterations.flatMap((record) => record.citedUrls),
-    ...(analysis.cited_urls ?? []),
-  ];
-  score = capScoreForCitedDomains(score, cumulativeCitedUrls);
-
-  return score;
 }
 
 /**
@@ -222,10 +162,13 @@ function buildIterationSummary(run: AgentRun): string {
     .join("\n\n");
 }
 
+type StopReason = "target" | "max_iterations" | "max_llm_calls" | "supervisor" | "analyst";
+
 export class SolidAgent {
   private readonly client: OpenAI;
   private readonly settings: AgentConfig;
   private runSignal?: AbortSignal;
+  private llmCalls = 0;
 
   constructor(settings: AgentConfig) {
     this.settings = settings;
@@ -242,6 +185,7 @@ export class SolidAgent {
   }
 
   private async chat(system: string, user: string, json = false): Promise<string> {
+    this.llmCalls += 1;
     this.throwIfAborted();
     const request = {
       model: this.settings.model,
@@ -256,13 +200,16 @@ export class SolidAgent {
 
     try {
       const response = await this.client.chat.completions.create(request, options);
-      return extractMessageContent(response.choices[0]!.message);
+      const message = response.choices[0]?.message;
+      if (!message) throw new Error("LLM returned no choices");
+      return extractMessageContent(message);
     } catch (error) {
       if (this.runSignal?.aborted) {
         throw new DOMException("Aborted", "AbortError");
       }
       if (!json) throw error;
 
+      this.llmCalls += 1;
       this.throwIfAborted();
       const response = await this.client.chat.completions.create(
         {
@@ -272,15 +219,13 @@ export class SolidAgent {
         },
         options,
       );
-      return extractMessageContent(response.choices[0]!.message);
+      const retryMessage = response.choices[0]?.message;
+      if (!retryMessage) throw new Error("LLM returned no choices");
+      return extractMessageContent(retryMessage);
     }
   }
 
-  private async chatJson<T>(
-    system: string,
-    user: string,
-    parse: (raw: string) => T,
-  ): Promise<T> {
+  private async chatJson<T>(system: string, user: string, parse: (raw: string) => T): Promise<T> {
     let lastRaw = "";
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -305,8 +250,8 @@ export class SolidAgent {
   private formatReflectionContext(reflection: ReflectionPayload | null): string {
     if (!reflection) return "SUPERVISOR REFLECTION: Not available yet (first iteration).\n";
 
-    return [
-      `SUPERVISOR REFLECTION:`,
+    return `${[
+      "SUPERVISOR REFLECTION:",
       `- Entity verdict: ${reflection.entity_verdict} (confidence: ${reflection.entity_confidence}%)`,
       `- Entity reasoning: ${reflection.entity_reasoning}`,
       `- Investigation quality: ${reflection.investigation_quality}`,
@@ -319,7 +264,7 @@ export class SolidAgent {
       ...(reflection.key_observations.length
         ? [`- Key observations:\n${reflection.key_observations.map((o) => `  • ${o}`).join("\n")}`]
         : []),
-    ].join("\n") + "\n";
+    ].join("\n")}\n`;
   }
 
   private async reflect(objective: string, run: AgentRun): Promise<ReflectionPayload> {
@@ -339,13 +284,8 @@ export class SolidAgent {
   }
 
   private async plan(objective: string, run: AgentRun): Promise<PlanPayload> {
-    const thresholds = MODE_THRESHOLDS[this.settings.mode];
     const priorQueries = collectPriorQueries(run);
     const openGaps = collectOpenGaps(run);
-    const requireDisconfirm =
-      (run.currentScore ?? 0) >= thresholds.disconfirmThreshold &&
-      !run.hadDisconfirmingSearch;
-
     const reflectionContext = this.formatReflectionContext(run.lastReflection);
 
     const user =
@@ -354,14 +294,13 @@ export class SolidAgent {
         ? `Follow-up request:\n${run.followUp}\n\nPrior report excerpt:\n${run.priorReport?.slice(0, 4000) || "(none)"}\n\n`
         : "") +
       `Current cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "not scored yet"}%\n\n` +
-      `Disconfirming search REQUIRED this round: ${requireDisconfirm ? "YES — you MUST set disconfirming: true" : "no"}\n\n` +
       `${reflectionContext}\n` +
       `Cumulative synthesis so far:\n${run.cumulativeSynthesis || "(first iteration)"}\n\n` +
       `Open gaps:\n${openGaps.length ? openGaps.map((gap) => `- ${gap}`).join("\n") : "(none yet)"}\n\n` +
       `Prior queries (do not repeat):\n${priorQueries.length ? priorQueries.map((q) => `- ${q}`).join("\n") : "(none)"}`;
 
     const plan = await this.chatJson(PLANNER_SYSTEM, user, parsePlanPayload);
-    if (requireDisconfirm) plan.disconfirming = true;
+    plan.queries = plan.queries.map((query) => anchorQueryToObjective(query, objective));
     return plan;
   }
 
@@ -381,10 +320,7 @@ export class SolidAgent {
         .join("\n\n") +
       (fetchedPages.length
         ? `\n\nFetched page excerpts:\n${fetchedPages
-            .map(
-              (page) =>
-                `URL: ${page.url}\nExcerpt: ${page.text.slice(0, 1200)}`,
-            )
+            .map((page) => `URL: ${page.url}\nExcerpt: ${page.text.slice(0, 1200)}`)
             .join("\n\n")}`
         : "");
 
@@ -399,12 +335,14 @@ export class SolidAgent {
       `Current angle: ${angle}\n\n` +
       `New web results this iteration:\n${evidence}`;
 
-    return this.chatJson(ANALYST_SYSTEM, user, (raw) =>
-      parseAnalysisPayload(raw, knownUrls),
-    );
+    return this.chatJson(ANALYST_SYSTEM, user, (raw) => parseAnalysisPayload(raw, knownUrls));
   }
 
-  private async finalReport(objective: string, run: AgentRun): Promise<string> {
+  private async finalReport(
+    objective: string,
+    run: AgentRun,
+    stopReason: StopReason,
+  ): Promise<string> {
     const reflection = run.lastReflection;
     const reflectionSummary = reflection
       ? `Entity verdict: ${reflection.entity_verdict} (confidence: ${reflection.entity_confidence}%)\n` +
@@ -413,13 +351,26 @@ export class SolidAgent {
         `Key observations:\n${reflection.key_observations.map((o) => `- ${o}`).join("\n") || "(none)"}\n`
       : "";
 
+    const score = run.currentScore?.toFixed(2) ?? "0.00";
+    const partial = stopReason !== "target";
+    const reliability = partial
+      ? `RELIABILITY NOTICE: This investigation stopped before the target solidity (${score}% vs ${run.targetScore}%). ` +
+        `Stop reason: ${stopReason}. You MUST open with a Reliability section stating this is a partial result, ` +
+        `the current score, and what remains unverified. Do not present it as a settled conclusion.\n\n`
+      : "";
+
     const user =
       `Objective:\n${objective}\n\n` +
       (run.followUp ? `Follow-up request:\n${run.followUp}\n\n` : "") +
-      `Final cumulative evidence score: ${run.currentScore?.toFixed(2) ?? "0.00"}%\n\n` +
+      reliability +
+      `Final cumulative evidence score: ${score}%\n\n` +
       `${reflectionSummary}\n` +
       `Cumulative synthesis:\n${run.cumulativeSynthesis}\n\n` +
-      `Remaining gaps:\n${collectOpenGaps(run).map((gap) => `- ${gap}`).join("\n") || "(none)"}`;
+      `Remaining gaps:\n${
+        collectOpenGaps(run)
+          .map((gap) => `- ${gap}`)
+          .join("\n") || "(none)"
+      }`;
     return this.chat(FINAL_SYSTEM, user);
   }
 
@@ -430,218 +381,232 @@ export class SolidAgent {
     prior?: PriorResearchContext,
   ): AsyncGenerator<string> {
     this.runSignal = signal;
-    const throwIfAborted = () => {
-      if (signal?.aborted) {
-        throw new DOMException("Aborted", "AbortError");
-      }
-    };
+    this.llmCalls = 0;
 
     try {
+      const thresholds = MODE_THRESHOLDS[this.settings.mode];
+      let stopReason: StopReason = "analyst";
+      const rootObjective = prior?.rootObjective ?? objective;
 
-    const thresholds = MODE_THRESHOLDS[this.settings.mode];
-    const effectiveTarget = Math.min(targetScore, thresholds.targetScore);
-    const rootObjective = prior?.rootObjective ?? objective;
+      const agentRun: AgentRun = {
+        objective: rootObjective,
+        targetScore,
+        cumulativeSynthesis: prior?.cumulativeSynthesis ?? "",
+        currentScore: prior?.currentScore ?? null,
+        iterations: [],
+        allHits: [],
+        fetchedUrlCache: new Set<string>(),
+        hadDisconfirmingSearch: prior?.hadDisconfirmingSearch ?? false,
+        lastReflection: null,
+        followUp: prior?.followUp,
+        priorReport: prior?.report,
+        seedOpenGaps: prior?.openGaps,
+        seedQueries: prior?.priorQueries,
+        seedCitedUrls: prior?.citedUrls,
+      };
 
-    const agentRun: AgentRun = {
-      objective: rootObjective,
-      targetScore: effectiveTarget,
-      cumulativeSynthesis: prior?.cumulativeSynthesis ?? "",
-      currentScore: prior?.currentScore ?? null,
-      iterations: [],
-      allHits: [],
-      fetchedUrlCache: new Set<string>(),
-      hadDisconfirmingSearch: prior?.hadDisconfirmingSearch ?? false,
-      lastReflection: null,
-      followUp: prior?.followUp,
-      priorReport: prior?.report,
-      seedOpenGaps: prior?.openGaps,
-      seedQueries: prior?.priorQueries,
-      seedCitedUrls: prior?.citedUrls,
-      seedUniqueDomainCount: prior?.uniqueDomainCount ?? 0,
-    };
+      yield streamChunk("STATUS", prior ? `Follow-up: ${prior.followUp}` : "Research started");
 
-    yield event(
-      "status",
-      prior ? `Follow-up: ${prior.followUp}` : "Research started",
-    );
-
-    let iteration = prior?.iterationCount ?? 0;
-    while (true) {
-      throwIfAborted();
-      iteration += 1;
-      const plan = await this.plan(rootObjective, agentRun);
-      throwIfAborted();
-      const queries = plan.queries;
-      const angle = plan.angle;
-
-      yield event(
-        "status",
-        `Iteration ${iteration} · ${angle}${plan.disconfirming ? " · disconfirmation" : ""}`,
-      );
-
-      const queryResults: Array<[string, SearchHit[]]> = [];
-      let totalHits = 0;
-
-      for (const query of queries) {
-        throwIfAborted();
-        const result = await searchWeb(query, this.settings.resultsPerQuery);
-
-        if (result.error) {
-          yield event("status", `Search failed: ${query}`);
+      let iteration = prior?.iterationCount ?? 0;
+      while (true) {
+        this.throwIfAborted();
+        if (agentRun.iterations.length >= thresholds.maxIterations) {
+          stopReason = "max_iterations";
+          yield streamChunk(
+            "STATUS",
+            `Circuit breaker: max ${thresholds.maxIterations} iterations`,
+          );
+          break;
+        }
+        if (this.llmCalls >= thresholds.maxLlmCalls) {
+          stopReason = "max_llm_calls";
+          yield streamChunk("STATUS", "Circuit breaker: LLM call budget reached");
+          break;
         }
 
-        queryResults.push([query, result.hits]);
-        totalHits += result.hits.length;
-        agentRun.allHits.push(...result.hits);
-      }
+        iteration += 1;
+        const plan = await this.plan(rootObjective, agentRun);
+        this.throwIfAborted();
+        const queries = plan.queries;
+        const angle = plan.angle;
 
-      const hits = queryResults.flatMap(([, queryHits]) => queryHits);
-      const fetchCandidates = hits.map((hit) => hit.url);
-      const fetchedPages = await fetchPages(
-        fetchCandidates,
-        this.settings.pagesPerIteration,
-        agentRun.fetchedUrlCache,
-      );
-      throwIfAborted();
+        yield streamChunk(
+          "STATUS",
+          `Iteration ${iteration} · ${angle}${plan.disconfirming ? " · disconfirmation" : ""}`,
+        );
 
-      void cacheFaviconsForUrls([
-        ...fetchedPages.map((page) => page.url),
-        ...hits.map((hit) => hit.url),
-      ]);
+        const queryResults: Array<[string, SearchHit[]]> = [];
+        let totalHits = 0;
 
-      if (fetchedPages.length > 0) {
-        yield event("status", `${fetchedPages.length} page(s) fetched`);
-      }
+        const searched = await Promise.all(
+          queries.map(async (query) => {
+            this.throwIfAborted();
+            const result = await searchWeb(
+              query,
+              this.settings.resultsPerQuery,
+              this.settings.integrations,
+            );
+            return { query, result };
+          }),
+        );
 
-      yield event("status", `${totalHits} results · analyzing`);
+        for (const { query, result } of searched) {
+          if (result.error && result.hits.length === 0) {
+            yield streamChunk("STATUS", `Search failed: ${query}`);
+          }
+          queryResults.push([query, result.hits]);
+          totalHits += result.hits.length;
+          agentRun.allHits.push(...result.hits);
+        }
 
-      const analysis = await this.analyze(
-        rootObjective,
-        agentRun,
-        angle,
-        queryResults,
-        fetchedPages,
-      );
-      throwIfAborted();
+        const hits = queryResults.flatMap(([, queryHits]) => queryHits);
+        const fetchCandidates = hits.map((hit) => hit.url);
+        const fetchedPages = await fetchPages(
+          fetchCandidates,
+          this.settings.pagesPerIteration,
+          agentRun.fetchedUrlCache,
+          this.settings.integrations,
+        );
+        this.throwIfAborted();
 
-      if (plan.disconfirming) {
-        agentRun.hadDisconfirmingSearch = true;
-      }
+        void cacheFaviconsForUrls([
+          ...fetchedPages.map((page) => page.url),
+          ...hits.map((hit) => hit.url),
+        ]);
 
-      const rubric = analysis.score_rubric;
-      let score = finalizeScore(agentRun, analysis, iteration, this.settings);
+        if (fetchedPages.length > 0) {
+          yield streamChunk("STATUS", `${fetchedPages.length} page(s) fetched`);
+        }
 
-      const gate = canReachTargetScore({
-        score,
-        targetScore: effectiveTarget,
-        openGaps: analysis.open_gaps ?? [],
-        iteration,
-        thresholds,
-        uniqueDomainCount: totalUniqueDomainCount(agentRun),
-        hadDisconfirmingSearch: agentRun.hadDisconfirmingSearch,
-      });
+        yield streamChunk("STATUS", `${totalHits} results · analyzing`);
 
-      if (score >= effectiveTarget && !gate.allowed) {
-        score = Math.min(score, effectiveTarget - 1);
-        yield event("status", `Score capped: ${gate.reason}`);
-        analysis.should_continue = true;
-      }
+        const analysis = await this.analyze(
+          rootObjective,
+          agentRun,
+          angle,
+          queryResults,
+          fetchedPages,
+        );
+        this.throwIfAborted();
 
-      const record: IterationRecord = {
-        number: iteration,
-        angle,
-        queries,
-        hits,
-        fetchedPages,
-        iterationFindings: analysis.iteration_findings,
-        cumulativeSynthesis: analysis.cumulative_synthesis,
-        resolvedGaps: (analysis.resolved_gaps ?? []).map(String),
-        gaps: (analysis.open_gaps ?? []).map(String),
-        citedUrls: analysis.cited_urls ?? [],
-        rubric,
-        score,
-        scoreDelta: analysis.score_delta,
-        scoreReasoning: analysis.score_reasoning,
-        disconfirming: plan.disconfirming,
-        nextVariation: String(analysis.next_variation ?? ""),
-        evidenceType: analysis.evidence_type,
-        directEntityEvidence: analysis.direct_entity_evidence,
-        disambiguationNotes: analysis.disambiguation_notes,
-      };
-      agentRun.iterations.push(record);
-      agentRun.cumulativeSynthesis = analysis.cumulative_synthesis;
-      agentRun.currentScore = score;
+        if (plan.disconfirming) {
+          agentRun.hadDisconfirmingSearch = true;
+        }
 
-      yield eventIteration({
-        number: iteration,
-        angle,
-        score,
-        scoreDelta: analysis.score_delta,
-        findings: analysis.iteration_findings,
-        synthesis: analysis.cumulative_synthesis,
-        scoreReasoning: analysis.score_reasoning,
-        rubric,
-        citedUrls: analysis.cited_urls ?? [],
-        readUrls: fetchedPages.map((page) => page.url),
-        sources: hits.slice(0, 6),
-        disconfirming: plan.disconfirming,
-        gaps: (analysis.open_gaps ?? []).map(String),
-        evidenceType: analysis.evidence_type,
-        directEntityEvidence: analysis.direct_entity_evidence,
-        disambiguationNotes: analysis.disambiguation_notes,
-      });
-      yield event("rubric", JSON.stringify({ iteration, rubric, total: rubricTotal(rubric) }));
-      yield event("score", score.toFixed(2));
+        const rubric = analysis.score_rubric;
+        const score = applyCumulativeScore(
+          agentRun.currentScore,
+          analysis.score,
+          rubric,
+          this.settings.minScore,
+        );
 
-      if (score >= effectiveTarget && gate.allowed) {
-        yield event("status", `Target ${effectiveTarget}% reached`);
-        break;
-      }
-
-      // --- Reflection: the LLM reviews the entire investigation and decides ---
-      yield event("status", "Reflecting on investigation...");
-      const reflection = await this.reflect(rootObjective, agentRun);
-      throwIfAborted();
-      agentRun.lastReflection = reflection;
-      yield event("reflection", JSON.stringify(reflection));
-
-      if (reflection.entity_confidence < 50) {
-        score = capScoreForEntityConfidence(score, reflection.entity_confidence);
+        const record: IterationRecord = {
+          number: iteration,
+          angle,
+          queries,
+          hits,
+          fetchedPages,
+          iterationFindings: analysis.iteration_findings,
+          cumulativeSynthesis: analysis.cumulative_synthesis,
+          resolvedGaps: (analysis.resolved_gaps ?? []).map(String),
+          gaps: (analysis.open_gaps ?? []).map(String),
+          citedUrls: analysis.cited_urls ?? [],
+          rubric,
+          score,
+          scoreDelta: analysis.score_delta,
+          scoreReasoning: analysis.score_reasoning,
+          disconfirming: plan.disconfirming,
+          nextVariation: String(analysis.next_variation ?? ""),
+          evidenceType: analysis.evidence_type,
+          directEntityEvidence: analysis.direct_entity_evidence,
+          disambiguationNotes: analysis.disambiguation_notes,
+        };
+        agentRun.iterations.push(record);
+        agentRun.cumulativeSynthesis = analysis.cumulative_synthesis;
         agentRun.currentScore = score;
-        yield event("score", score.toFixed(2));
+
+        yield eventIteration({
+          number: iteration,
+          angle,
+          score,
+          scoreDelta: analysis.score_delta,
+          findings: analysis.iteration_findings,
+          synthesis: analysis.cumulative_synthesis,
+          scoreReasoning: analysis.score_reasoning,
+          rubric,
+          citedUrls: analysis.cited_urls ?? [],
+          readUrls: fetchedPages.map((page) => page.url),
+          queries,
+          sources: hits.slice(0, ITERATION_SOURCE_PREVIEW),
+          disconfirming: plan.disconfirming,
+          gaps: (analysis.open_gaps ?? []).map(String),
+          evidenceType: analysis.evidence_type,
+          directEntityEvidence: analysis.direct_entity_evidence,
+          disambiguationNotes: analysis.disambiguation_notes,
+        });
+        yield streamChunk(
+          "RUBRIC",
+          JSON.stringify({ iteration, rubric, total: rubricTotal(rubric) }),
+        );
+        yield streamChunk("SCORE", score.toFixed(2));
+
+        if (score >= targetScore) {
+          stopReason = "target";
+          yield streamChunk("STATUS", `Target ${targetScore}% reached`);
+          break;
+        }
+
+        yield streamChunk("STATUS", "Reflecting on investigation...");
+        const reflection = await this.reflect(rootObjective, agentRun);
+        this.throwIfAborted();
+        agentRun.lastReflection = reflection;
+        yield streamChunk("REFLECTION", JSON.stringify(reflection));
+
+        if (!reflection.should_continue) {
+          stopReason = "supervisor";
+          const reason =
+            reflection.recommendation === "stop"
+              ? `${reflection.recommendation_reasoning} (entity: ${reflection.entity_verdict}, confidence: ${reflection.entity_confidence}%)`
+              : reflection.recommendation_reasoning || "Investigation concluded by supervisor";
+          yield streamChunk("STATUS", reason);
+          break;
+        }
+
+        if (reflection.recommendation === "pivot") {
+          yield streamChunk(
+            "STATUS",
+            `Pivoting strategy: ${reflection.pivot_suggestion || reflection.recommendation_reasoning}`,
+          );
+        }
+
+        if (!analysis.should_continue && reflection.should_continue) {
+          yield streamChunk(
+            "STATUS",
+            "Analyst recommended stopping, but supervisor sees value in continuing",
+          );
+        } else if (!analysis.should_continue) {
+          stopReason = "analyst";
+          yield streamChunk(
+            "STATUS",
+            analysis.stop_reason || "Model stopped — diminishing returns from search",
+          );
+          break;
+        }
       }
 
-      if (!reflection.should_continue) {
-        const reason = reflection.recommendation === "stop"
-          ? `${reflection.recommendation_reasoning} (entity: ${reflection.entity_verdict}, confidence: ${reflection.entity_confidence}%)`
-          : reflection.recommendation_reasoning || "Investigation concluded by supervisor";
-        yield event("status", reason);
-        break;
-      }
-
-      if (reflection.recommendation === "pivot") {
-        yield event(
-          "status",
-          `Pivoting strategy: ${reflection.pivot_suggestion || reflection.recommendation_reasoning}`,
+      if (stopReason !== "target") {
+        yield streamChunk(
+          "STATUS",
+          `Partial result: score ${agentRun.currentScore?.toFixed(0) ?? "0"}% (target ${targetScore}%)`,
         );
       }
 
-      if (!analysis.should_continue && reflection.should_continue) {
-        yield event("status", "Analyst recommended stopping, but supervisor sees value in continuing");
-      } else if (!analysis.should_continue) {
-        yield event(
-          "status",
-          analysis.stop_reason || "Model stopped — diminishing returns from search",
-        );
-        break;
-      }
-    }
-
-    yield event("status", "Generating final report...");
-    throwIfAborted();
-    const report = await this.finalReport(rootObjective, agentRun);
-    throwIfAborted();
-    yield event("report", report);
+      yield streamChunk("STATUS", "Generating final report...");
+      this.throwIfAborted();
+      const report = await this.finalReport(rootObjective, agentRun, stopReason);
+      this.throwIfAborted();
+      yield streamChunk("REPORT", report);
     } finally {
       this.runSignal = undefined;
     }

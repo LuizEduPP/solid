@@ -1,5 +1,11 @@
-import type { Locale } from "./i18n";
-import type { ResearchMode } from "../shared";
+import type {
+  IntegrationEndpoints,
+  IntegrationKeys,
+  Locale,
+  ResearchMode,
+  ScrapeProvider,
+  SearchProvider,
+} from "../shared";
 
 export interface WebSettings {
   apiKey: string;
@@ -7,6 +13,10 @@ export interface WebSettings {
   model: string;
   mode: ResearchMode;
   locale: Locale;
+  searchProvider: SearchProvider;
+  scrapeProvider: ScrapeProvider;
+  integrationKeys: IntegrationKeys;
+  integrationEndpoints: IntegrationEndpoints;
 }
 
 export interface ResearchSession {

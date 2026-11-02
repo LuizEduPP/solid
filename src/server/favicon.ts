@@ -49,7 +49,10 @@ const DEFAULT_ICON_HEADERS = {
 } as const;
 
 function safeHostname(hostname: string): string | null {
-  const normalized = hostname.trim().toLowerCase().replace(/^www\./, "");
+  const normalized = hostname
+    .trim()
+    .toLowerCase()
+    .replace(/^www\./, "");
   if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalized)) return null;
   return normalized;
 }

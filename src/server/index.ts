@@ -1,13 +1,18 @@
-import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
-import { Hono } from "hono";
+import "./silence-ddgs-logs.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { Hono } from "hono";
+
 import { createOpenAiRouter } from "./api.js";
 import { loadServerConfig } from "./config.js";
 import { createFaviconRouter } from "./favicon.js";
+import { installOutboundHttp } from "./http.js";
+
+installOutboundHttp();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../client");

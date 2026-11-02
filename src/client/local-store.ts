@@ -1,27 +1,24 @@
 import { isAfter, isToday, isYesterday, subDays } from "date-fns";
 import { saveAs } from "file-saver";
-
+import {
+  DEFAULT_INTEGRATION_ENDPOINTS,
+  DEFAULT_INTEGRATIONS,
+  EMPTY_INTEGRATION_KEYS,
+  normalizeIntegrationEndpoints,
+  normalizeIntegrationKeys,
+  normalizeLocale,
+  normalizeScrapeProvider,
+  normalizeSearchProvider,
+  type PriorResearchContext,
+} from "../shared";
 import { compressStepsActivity, translateActivityLine } from "./activity";
-import i18n, { normalizeLocale, type HistoryGroupKey } from "./i18n";
-import { parseStream, uniqueSourceCount } from "./stream";
-import type { PriorResearchContext } from "../shared";
+import i18n, { type HistoryGroupKey } from "./i18n";
+import { parseStream } from "./stream";
 import type { ResearchSession, WebSettings } from "./types";
 
-export type { ResearchSession, WebSettings } from "./types";
-
-function readLocalStorageJson<T>(
-  key: string,
-  legacyKeys: readonly string[],
-  fallback: T,
-): T {
+function readLocalStorageJson<T>(key: string, fallback: T): T {
   try {
-    let raw = localStorage.getItem(key);
-    if (!raw) {
-      for (const legacyKey of legacyKeys) {
-        raw = localStorage.getItem(legacyKey);
-        if (raw) break;
-      }
-    }
+    const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -30,7 +27,6 @@ function readLocalStorageJson<T>(
 }
 
 export const SETTINGS_KEY = "solid-settings";
-const LEGACY_SETTINGS_KEYS = ["rigor-settings", "deepsearch-settings"] as const;
 
 export const DEFAULT_WEB_SETTINGS: WebSettings = {
   apiKey: "",
@@ -38,38 +34,37 @@ export const DEFAULT_WEB_SETTINGS: WebSettings = {
   model: "",
   mode: "rigorous",
   locale: "en",
+  searchProvider: DEFAULT_INTEGRATIONS.searchProvider,
+  scrapeProvider: DEFAULT_INTEGRATIONS.scrapeProvider,
+  integrationKeys: { ...EMPTY_INTEGRATION_KEYS },
+  integrationEndpoints: { ...DEFAULT_INTEGRATION_ENDPOINTS },
 };
 
-export function isLocalLlmBaseUrl(baseUrl: string): boolean {
-  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
-}
-
-export function loadWebSettings(): WebSettings {
-  const parsed = readLocalStorageJson<Partial<WebSettings>>(
-    SETTINGS_KEY,
-    LEGACY_SETTINGS_KEYS,
-    DEFAULT_WEB_SETTINGS,
-  );
-
+export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings {
   return {
     apiKey: parsed.apiKey ?? DEFAULT_WEB_SETTINGS.apiKey,
     baseUrl: parsed.baseUrl ?? DEFAULT_WEB_SETTINGS.baseUrl,
     model: parsed.model ?? DEFAULT_WEB_SETTINGS.model,
     mode: parsed.mode === "fast" ? "fast" : "rigorous",
     locale: normalizeLocale(parsed.locale),
+    searchProvider: normalizeSearchProvider(parsed.searchProvider),
+    scrapeProvider: normalizeScrapeProvider(parsed.scrapeProvider),
+    integrationKeys: normalizeIntegrationKeys(parsed.integrationKeys),
+    integrationEndpoints: normalizeIntegrationEndpoints(parsed.integrationEndpoints),
   };
 }
 
+export function loadWebSettings(): WebSettings {
+  const parsed = readLocalStorageJson<Partial<WebSettings>>(SETTINGS_KEY, DEFAULT_WEB_SETTINGS);
+
+  return normalizeWebSettings(parsed);
+}
+
 export const HISTORY_KEY = "solid-history";
-const LEGACY_HISTORY_KEYS = ["rigor-history", "deepsearch-history"] as const;
 const MAX_SESSIONS = 40;
 
 export function loadHistory(): ResearchSession[] {
-  const parsed = readLocalStorageJson<unknown>(
-    HISTORY_KEY,
-    LEGACY_HISTORY_KEYS,
-    [],
-  );
+  const parsed = readLocalStorageJson<unknown>(HISTORY_KEY, []);
   if (!Array.isArray(parsed)) return [];
   return parsed.filter(isResearchSession);
 }
@@ -116,26 +111,18 @@ export function upsertSession(
 ): ResearchSession[] {
   const index = sessions.findIndex((item) => item.id === session.id);
   const next =
-    index >= 0
-      ? sessions.map((item, i) => (i === index ? session : item))
-      : [session, ...sessions];
+    index >= 0 ? sessions.map((item, i) => (i === index ? session : item)) : [session, ...sessions];
   return next.slice(0, MAX_SESSIONS);
 }
 
-export function deleteSession(
-  sessions: ResearchSession[],
-  id: string,
-): ResearchSession[] {
+export function deleteSession(sessions: ResearchSession[], id: string): ResearchSession[] {
   return sessions.filter((item) => item.id !== id);
 }
 
 export function sessionPreview(session: ResearchSession, untitled: string): string {
   if (session.title) return session.title;
   const parsed = parseStream(session.rawStream);
-  const text =
-    session.objective.trim() ||
-    parsed.iterations[0]?.findings ||
-    untitled;
+  const text = session.objective.trim() || parsed.iterations[0]?.findings || untitled;
   return text.length > 56 ? `${text.slice(0, 56)}…` : text;
 }
 
@@ -153,9 +140,10 @@ export function buildPriorContext(
     currentScore: parsed.confidence,
     report: parsed.report,
     openGaps: lastIteration?.gaps ?? [],
-    priorQueries: parsed.iterations.map((iteration) => iteration.angle).filter(Boolean),
+    priorQueries: parsed.iterations.flatMap((iteration) =>
+      iteration.queries?.length ? iteration.queries : iteration.angle ? [iteration.angle] : [],
+    ),
     citedUrls: parsed.iterations.flatMap((iteration) => iteration.citedUrls ?? []),
-    uniqueDomainCount: uniqueSourceCount(parsed.iterations),
     iterationCount: parsed.iterations.length,
     hadDisconfirmingSearch: parsed.iterations.some((iteration) => iteration.disconfirming),
   };
@@ -173,9 +161,7 @@ function historyBucket(date: Date): HistoryGroupKey {
   return "earlier";
 }
 
-export function groupSessionsByDate(
-  sessions: ResearchSession[],
-): HistoryGroup[] {
+export function groupSessionsByDate(sessions: ResearchSession[]): HistoryGroup[] {
   const groups = new Map<HistoryGroupKey, ResearchSession[]>();
 
   for (const session of sessions) {
@@ -186,9 +172,10 @@ export function groupSessionsByDate(
   }
 
   const order: HistoryGroupKey[] = ["today", "yesterday", "last7", "earlier"];
-  return order
-    .filter((key) => groups.has(key))
-    .map((key) => ({ key, sessions: groups.get(key)! }));
+  return order.flatMap((key) => {
+    const grouped = groups.get(key);
+    return grouped ? [{ key, sessions: grouped }] : [];
+  });
 }
 
 function exportSessionMarkdown(session: ResearchSession): string {
@@ -222,9 +209,7 @@ function exportSessionMarkdown(session: ResearchSession): string {
   }
 
   if (parsed.activity.length > 0) {
-    const log = compressStepsActivity(parsed.activity)
-      .map(translateActivityLine)
-      .filter(Boolean);
+    const log = compressStepsActivity(parsed.activity).map(translateActivityLine).filter(Boolean);
     if (log.length > 0) {
       lines.push(`## ${t("exportLog")}`, "", "```", log.join("\n"), "```", "");
     }

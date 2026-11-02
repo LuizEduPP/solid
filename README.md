@@ -42,17 +42,17 @@
 
 ## Why Solid?
 
-Most “research agents” stop when the model *feels* done. **Solid stops when the evidence meets explicit gates** — minimum iterations, diverse sources, closed gaps, and a mandatory **disconfirmation** pass before high scores stick.
+Most “research agents” stop when the model _feels_ done. **Solid stops when the evidence meets explicit gates** — minimum iterations, diverse sources, closed gaps, and a mandatory **disconfirmation** pass before high scores stick.
 
 You get a running **solidness score** (0–100) backed by a visible 4-part rubric, not a black-box “confidence” number.
 
-| | Typical chat research | **Solid** |
-| --- | --- | --- |
-| Stop condition | Model decides | Score + rubric gates |
-| Source quality | Often opaque | Domains, citations, gaps tracked |
-| High scores | Easy to inflate | Capped with open gaps; disconfirmation required |
-| Output | One blob of text | Iterations, steps log, exportable markdown report |
-| Deepening | Start over | **Follow-up in the same session** with prior context |
+|                | Typical chat research | **Solid**                                            |
+| -------------- | --------------------- | ---------------------------------------------------- |
+| Stop condition | Model decides         | Score + rubric gates                                 |
+| Source quality | Often opaque          | Domains, citations, gaps tracked                     |
+| High scores    | Easy to inflate       | Capped with open gaps; disconfirmation required      |
+| Output         | One blob of text      | Iterations, steps log, exportable markdown report    |
+| Deepening      | Start over            | **Follow-up in the same session** with prior context |
 
 ---
 
@@ -82,21 +82,21 @@ yarn install
 yarn dev
 ```
 
-| Service | URL |
-| --- | --- |
-| **Web UI** | [http://localhost:5173](http://localhost:5173) |
-| **API** | [http://localhost:8787](http://localhost:8787) |
+| Service    | URL                                                          |
+| ---------- | ------------------------------------------------------------ |
+| **Web UI** | [http://localhost:5173](http://localhost:5173)               |
+| **API**    | [http://localhost:8787](http://localhost:8787)               |
 | **Health** | [http://localhost:8787/health](http://localhost:8787/health) |
 
 ### 1. Configure your LLM
 
 Open **Settings** in the sidebar:
 
-| Field | Example (local) | Example (OpenAI) |
-| --- | --- | --- |
-| API key | *(empty for local)* | `sk-...` |
+| Field    | Example (local)            | Example (OpenAI)            |
+| -------- | -------------------------- | --------------------------- |
+| API key  | _(empty for local)_        | `sk-...`                    |
 | Base URL | `http://127.0.0.1:1234/v1` | `https://api.openai.com/v1` |
-| Model | your local model id | `gpt-4o-mini` |
+| Model    | your local model id        | `gpt-4o-mini`               |
 
 ### 2. Ask a question
 
@@ -104,7 +104,7 @@ Type a research objective and submit. Watch iterations, rubric scores, and the f
 
 ### 3. Follow up (optional)
 
-After a report finishes, stay in the same chat and ask something like *“deepen point X from the report”*. Solid continues from the prior synthesis, score, gaps, and sources instead of starting over.
+After a report finishes, stay in the same chat and ask something like _“deepen point X from the report”_. Solid continues from the prior synthesis, score, gaps, and sources instead of starting over.
 
 ### Production build
 
@@ -127,10 +127,10 @@ cp .env.example .env
 
 Thresholds are defined in `src/shared.ts` (`MODE_THRESHOLDS`).
 
-| Mode | Target score | Min. iterations | Min. unique domains | Max score Δ / iter | 1st iteration cap | Disconfirm at ≥ |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Rigorous** | 100% | 6 | 5 | 6 | 40% | 70% |
-| **Fast** | 85% | 3 | 3 | 12 | 55% | 80% |
+| Mode         | Target score | Min. iterations | Min. unique domains | Max score Δ / iter | 1st iteration cap | Disconfirm at ≥ |
+| ------------ | -----------: | --------------: | ------------------: | -----------------: | ----------------: | --------------: |
+| **Rigorous** |         100% |               6 |                   5 |                  6 |               40% |             70% |
+| **Fast**     |          85% |               3 |                   3 |                 12 |               55% |             80% |
 
 Toggle modes with the ⚡ icon in the composer (saved in browser settings).
 
@@ -178,13 +178,13 @@ Agent reasoning and reports follow **the language of your question**. The app UI
 
 OpenAI-compatible routes under `/v1`:
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `POST` | `/v1/chat/completions` | Run research (streaming or not) |
-| `POST` | `/v1/llm/models` | List models from your LLM provider |
-| `GET` | `/v1/models` | List Solid as a model (`solid`) |
-| `GET` | `/health` | Health check |
-| `GET` | `/favicons/:hostname` | Cached favicon for a source domain |
+| Method | Path                   | Purpose                            |
+| ------ | ---------------------- | ---------------------------------- |
+| `POST` | `/v1/chat/completions` | Run research (streaming or not)    |
+| `POST` | `/v1/llm/models`       | List models from your LLM provider |
+| `GET`  | `/v1/models`           | List Solid as a model (`solid`)    |
+| `GET`  | `/health`              | Health check                       |
+| `GET`  | `/favicons/:hostname`  | Cached favicon for a source domain |
 
 ### New research (streaming)
 
@@ -235,13 +235,13 @@ curl -N http://localhost:8787/v1/chat/completions \
 
 **Request fields (optional unless noted):**
 
-| Field | Default | Notes |
-| --- | --- | --- |
-| `research_mode` | `rigorous` | `rigorous` or `fast` |
-| `target_score` | mode default (100 / 85) | Override target solidness |
-| `min_score` | `0.01` | Floor for cumulative score |
-| `temperature` | `0.3` | LLM temperature (0–2) |
-| `prior_context` | — | Resume / follow-up from prior state |
+| Field           | Default                 | Notes                               |
+| --------------- | ----------------------- | ----------------------------------- |
+| `research_mode` | `rigorous`              | `rigorous` or `fast`                |
+| `target_score`  | mode default (100 / 85) | Override target solidness           |
+| `min_score`     | `0.01`                  | Floor for cumulative score          |
+| `temperature`   | `0.3`                   | LLM temperature (0–2)               |
+| `prior_context` | —                       | Resume / follow-up from prior state |
 
 **Stream markers in the assistant content:** `@@STATUS@@` · `@@SCORE@@` · `@@ITER@@` · `@@RUBRIC@@` · `@@REPORT@@`
 
@@ -249,14 +249,14 @@ curl -N http://localhost:8787/v1/chat/completions \
 
 ## Stack
 
-| Layer | Tech |
-| --- | --- |
-| **Runtime** | TypeScript, Node.js, ESM |
-| **API** | Hono, `@hono/node-server`, OpenAI SDK, Zod |
-| **Agent** | Custom loop, DuckDuckGo search (`@phukon/duckduckgo-search`), direct page fetch, `ai-json-repair` |
-| **UI** | React 19, Vite 7, Mantine 9, react-router-dom |
-| **Markdown** | react-markdown, remark-gfm, github-markdown-css |
-| **i18n** | react-i18next (7 locales) |
+| Layer        | Tech                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| **Runtime**  | TypeScript, Node.js, ESM                                                                          |
+| **API**      | Hono, `@hono/node-server`, OpenAI SDK, Zod                                                        |
+| **Agent**    | Custom loop, DuckDuckGo search (`@phukon/duckduckgo-search`), direct page fetch, `ai-json-repair` |
+| **UI**       | React 19, Vite 7, Mantine 9, react-router-dom                                                     |
+| **Markdown** | react-markdown, remark-gfm, github-markdown-css                                                   |
+| **i18n**     | react-i18next (7 locales)                                                                         |
 
 ---
 
@@ -302,7 +302,6 @@ If you use, fork, modify, distribute, or **sell** this project (including SaaS o
 - Credit the original author in docs, landing pages, or an About/Credits screen, for example:
 
   > Based on [Solid](https://github.com/LuizEduPP/solid) by [Luiz Eduardo](https://github.com/LuizEduPP) ([@LuizEduPP](https://github.com/LuizEduPP))
-
 Removing copyright notices from distributed copies **violates the MIT License**. See [NOTICE](NOTICE) for details.
 
 ---

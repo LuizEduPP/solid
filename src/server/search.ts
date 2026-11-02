@@ -1,14 +1,18 @@
+import "./silence-ddgs-logs.js";
 import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
-export interface SearchHit {
-  title: string;
-  url: string;
-  snippet: string;
-}
+import {
+  DEFAULT_INTEGRATIONS,
+  type IntegrationRuntime,
+  mapSearchHits,
+  type SearchHit,
+} from "../shared.js";
+import { scrapeWithProvider, searchWithProvider } from "./integrations.js";
 
 interface SearchWebResult {
   hits: SearchHit[];
   error?: string;
+  provider?: string;
 }
 
 const ddgs = new DDGS();
@@ -19,19 +23,14 @@ const FETCH_TIMEOUT_MS = 8_000;
 const MAX_PAGE_CHARS = 3_500;
 
 let lastSearchAt = 0;
+let throttleTail = Promise.resolve();
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function searchRegion(query: string): string {
-  return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query)
-    ? "br-pt"
-    : "wt-wt";
-}
-
-function isValidUrl(url: string): boolean {
-  return url.startsWith("http://") || url.startsWith("https://");
+  return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query) ? "br-pt" : "wt-wt";
 }
 
 function isRateLimitError(error: Error): boolean {
@@ -56,9 +55,7 @@ function simplifyQuery(query: string): string {
 function queryVariants(query: string): string[] {
   const trimmed = query.trim();
   const simplified = simplifyQuery(trimmed);
-  return simplified && simplified !== trimmed
-    ? [trimmed, simplified]
-    : [trimmed];
+  return simplified && simplified !== trimmed ? [trimmed, simplified] : [trimmed];
 }
 
 function pickSearchParams(
@@ -66,36 +63,22 @@ function pickSearchParams(
   attempt: number,
 ): { keywords: string; region: string; backend: (typeof BACKENDS)[number] } {
   const variants = queryVariants(query);
-  const keywords = variants[Math.min(attempt, variants.length - 1)]!;
+  const keywords = variants.at(Math.min(attempt, variants.length - 1)) ?? query;
   const primaryRegion = searchRegion(query);
-  const region =
-    attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
-  const backend = BACKENDS[attempt % BACKENDS.length]!;
+  const region = attempt >= 2 && primaryRegion !== "wt-wt" ? "wt-wt" : primaryRegion;
+  const backend = BACKENDS[attempt % BACKENDS.length] ?? "lite";
 
   return { keywords, region, backend };
 }
 
 async function throttle(): Promise<void> {
-  const wait = lastSearchAt + MIN_GAP_MS - Date.now();
-  if (wait > 0) await sleep(wait);
-  lastSearchAt = Date.now();
-}
-
-function mapHits(
-  results: Array<{ title?: string; href?: string; body?: string }>,
-  maxResults: number,
-): SearchHit[] {
-  return results.slice(0, maxResults).flatMap((item) => {
-    const url = item.href?.trim() ?? "";
-    if (!isValidUrl(url)) return [];
-    return [
-      {
-        title: item.title?.trim() ?? "",
-        url,
-        snippet: item.body?.trim() ?? "",
-      },
-    ];
+  const run = throttleTail.then(async () => {
+    const wait = lastSearchAt + MIN_GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastSearchAt = Date.now();
   });
+  throttleTail = run.catch(() => undefined);
+  await run;
 }
 
 function retryDelayMs(error: Error, attempt: number): number {
@@ -103,10 +86,7 @@ function retryDelayMs(error: Error, attempt: number): number {
   return 2_000 + attempt * 1_000;
 }
 
-export async function searchWeb(
-  query: string,
-  maxResults: number,
-): Promise<SearchWebResult> {
+async function searchDuckDuckGo(query: string, maxResults: number): Promise<SearchWebResult> {
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
@@ -122,9 +102,16 @@ export async function searchWeb(
         backend,
       });
 
-      const hits = mapHits(results, maxResults);
+      const hits = mapSearchHits(
+        results.map((item) => ({
+          title: item.title,
+          url: item.href,
+          snippet: item.body,
+        })),
+        maxResults,
+      );
       if (hits.length > 0) {
-        return { hits };
+        return { hits, provider: "duckduckgo" };
       }
 
       lastError = new Error("No valid results returned");
@@ -139,17 +126,38 @@ export async function searchWeb(
   return {
     hits: [],
     error: lastError?.message ?? "Search failed",
+    provider: "duckduckgo",
   };
+}
+
+export async function searchWeb(
+  query: string,
+  maxResults: number,
+  runtime: IntegrationRuntime = DEFAULT_INTEGRATIONS,
+): Promise<SearchWebResult> {
+  const provider = runtime.searchProvider;
+
+  if (provider !== "duckduckgo") {
+    try {
+      const result = await searchWithProvider(query, maxResults, runtime);
+      return { hits: result.hits, provider: result.provider };
+    } catch (error) {
+      return {
+        hits: [],
+        error: error instanceof Error ? error.message : "Search failed",
+        provider,
+      };
+    }
+  }
+
+  return searchDuckDuckGo(query, maxResults);
 }
 
 export function formatHits(hits: SearchHit[]): string {
   if (hits.length === 0) return "(no results)";
 
   return hits
-    .map(
-      (hit, index) =>
-        `[${index + 1}] ${hit.title}\nURL: ${hit.url}\n${hit.snippet}`.trim(),
-    )
+    .map((hit, index) => `[${index + 1}] ${hit.title}\nURL: ${hit.url}\n${hit.snippet}`.trim())
     .join("\n\n");
 }
 
@@ -162,7 +170,18 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-async function fetchPageText(url: string): Promise<string | null> {
+async function fetchPageText(
+  url: string,
+  runtime: IntegrationRuntime = DEFAULT_INTEGRATIONS,
+): Promise<string | null> {
+  if (runtime.scrapeProvider !== "direct") {
+    try {
+      const scraped = await scrapeWithProvider(url, runtime.scrapeProvider, runtime);
+      return scraped ? scraped.slice(0, MAX_PAGE_CHARS) : null;
+    } catch {
+      return null;
+    }
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -197,18 +216,22 @@ export async function fetchPages(
   urls: string[],
   maxPages: number,
   skipUrls: Set<string>,
+  runtime: IntegrationRuntime = DEFAULT_INTEGRATIONS,
 ): Promise<Array<{ url: string; text: string }>> {
+  const candidates = urls.filter((url) => !skipUrls.has(url));
+  const batch = candidates.slice(0, Math.max(maxPages * 2, maxPages));
+  const fetched = await Promise.all(
+    batch.map(async (url) => {
+      const text = await fetchPageText(url, runtime);
+      return text ? { url, text } : null;
+    }),
+  );
+
   const results: Array<{ url: string; text: string }> = [];
-
-  for (const url of urls) {
-    if (results.length >= maxPages) break;
-    if (skipUrls.has(url)) continue;
-
-    const text = await fetchPageText(url);
-    if (text) {
-      skipUrls.add(url);
-      results.push({ url, text });
-    }
+  for (const item of fetched) {
+    if (!item || results.length >= maxPages) continue;
+    skipUrls.add(item.url);
+    results.push(item);
   }
 
   return results;

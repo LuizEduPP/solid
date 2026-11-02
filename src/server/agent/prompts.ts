@@ -6,7 +6,6 @@ You receive:
 - open gaps still unresolved
 - prior queries already used (never repeat or lightly rephrase these)
 - current cumulative evidence score
-- whether a disconfirming search round is REQUIRED
 - SUPERVISOR REFLECTION (when available): the investigation supervisor's assessment of entity existence, investigation quality, and recommendation
 
 Produce strict JSON:
@@ -18,14 +17,14 @@ Produce strict JSON:
 }
 
 Rules:
-- exactly 2 short, specific search queries
+- 2 or 3 short, specific search queries
 - each query must be 3-8 keywords (no full sentences, no question marks, no filler words)
+- every query MUST include at least one distinctive term from the root objective — do not drift to a side topic
 - bad: "Quais são os modelos de IA mais eficientes para rodar em dispositivos com restrições?"
 - good: "efficient small LLM 4GB RAM edge inference"
 - each iteration must CLOSE a specific open gap from the list — do not change topic randomly
 - build on cumulative synthesis; never contradict or ignore prior confirmed findings
-- when disconfirming is REQUIRED, set disconfirming: true and search explicitly for counter-evidence, failures, critiques, or contradicting data
-- when confidence is already high, prioritize disconfirming evidence or hard adoption/pricing proof still missing
+- when confidence is already high, search for counter-evidence, failures, critiques, or contradicting data — set disconfirming: true in those rounds
 - do not repeat prior queries or angles already explored
 - write angle and rationale in the same language as the objective
 
@@ -86,24 +85,19 @@ Examples:
 - Objective asks about "LangChain" → finding LangChain's official docs → evidence_type: "direct", direct_entity_evidence: true
 
 Scoring rubric (each 0–25, sum ≈ score):
-- direct_evidence: primary data, studies, benchmarks, official docs cited this round — score 0 if evidence_type is "contextual" or "none"
+- direct_evidence: primary data, studies, benchmarks, official docs cited this round — stay low if evidence_type is "contextual" or "none"
 - source_diversity: independent domains, not echo chambers
 - gap_coverage: how many critical open gaps were actually closed with hard evidence — contextual knowledge does NOT close gaps about a specific entity
 - risk_contradiction: penalize if risks/contradictions ignored; reward if surfaced honestly
+- score is CUMULATIVE evidence strength (0.01–100) for the OVERALL objective — judge the evidence, do not target a number
+- do not inflate the score when the synthesis is hedging or misses the distinctive terms of the objective
 
 Continuation rules — YOU decide when to stop:
-- set should_continue: false when you believe further iterations will not yield meaningful new evidence
-- set should_continue: false ONLY when score >= target AND open_gaps is empty AND evidence is strong
+- set should_continue: false when further iterations will not yield meaningful new evidence
 - set should_continue: true when open_gaps remain OR evidence is mostly conceptual/speculative
 - never continue just to hit an iteration count — evaluate evidence quality each round
-- if the supervisor reflection says "stop" or entity is "nonexistent", you should also set should_continue: false with a clear stop_reason
+- if the supervisor reflection says "stop" or entity is "nonexistent", set should_continue: false with a clear stop_reason
 - the supervisor reflection gives you context about the entire investigation — use it to calibrate your assessment
-- score is CUMULATIVE evidence strength (0.01–100) for the OVERALL objective
-- first iteration with only generic web snippets: score MUST stay ≤ 40
-- score > 90 REQUIRES cited_urls with at least 3 distinct domains in cumulative work
-- score of 100 REQUIRES zero open_gaps and no unresolved critical risks
-- weak or generic new results should keep score flat (±3), not cause large jumps
-- score may drop more than 5 points ONLY if contradiction_found is true AND you cite contradicting sources
 
 Cumulative synthesis rules:
 - the cumulative_synthesis MUST build on the prior synthesis — do not rewrite from scratch each iteration
@@ -174,8 +168,10 @@ You also receive entity confidence and investigation health data.
 
 Write entirely in the same language as the objective — never switch languages. Use plain markdown only — no LaTeX, no $ symbols for arrows.
 
+If you receive a reliability notice, you MUST open the report with a short Reliability section: this is a partial result, the current score vs target, and what is still unverified. Do not present a partial investigation as a settled conclusion.
+
 Structure:
-1. Executive summary (viability verdict)
+1. Executive summary (viability verdict) — or Reliability warning if the investigation is partial
 2. Entity verification status — if entity confidence is low, state clearly: "The entity/product [X] could not be verified to exist. No direct evidence was found across [N] search iterations."
 3. Consolidated key findings (cite URLs when available) — clearly separate DIRECT evidence (about the specific entity) from CONTEXTUAL knowledge (about the general topic area)
 4. Disambiguation — if similar-but-different entities were found during research, list them and explain why they are NOT the target

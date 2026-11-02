@@ -1,0 +1,24 @@
+{
+  "terminal.integrated.env.linux": {
+    "NODE_OPTIONS": "--disable-warning=DEP0169"
+  },
+  "terminal.integrated.env.osx": {
+    "NODE_OPTIONS": "--disable-warning=DEP0169"
+  },
+  "terminal.integrated.env.windows": {
+    "NODE_OPTIONS": "--disable-warning=DEP0169"
+  },
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" }
+}

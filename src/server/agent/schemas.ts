@@ -1,8 +1,19 @@
 import { loads } from "ai-json-repair";
 import { z } from "zod";
-
+import {
+  DEFAULT_ENTITY_CONFIDENCE,
+  ENTITY_VERDICTS,
+  EVIDENCE_TYPES,
+  type EvidenceType,
+  INVESTIGATION_QUALITIES,
+  isHttpUrl,
+  MAX_PLAN_QUERIES,
+  REFLECTION_RECOMMENDATIONS,
+  type ReflectionSnapshot,
+  SCORE_MAX,
+  type ScoreRubric,
+} from "../../shared.js";
 import { extractCitedUrls, normalizeRubric } from "./scoring.js";
-import type { EntityVerdict, EvidenceType, InvestigationQuality, ScoreRubric } from "../../shared.js";
 
 export interface PlanPayload {
   queries: string[];
@@ -46,14 +57,12 @@ const planSchema = z
     disconfirming: z.coerce.boolean().optional(),
   })
   .transform((payload) => ({
-    queries: (payload.queries ?? []).filter(Boolean).slice(0, 2),
+    queries: (payload.queries ?? []).filter(Boolean).slice(0, MAX_PLAN_QUERIES),
     angle: payload.angle ?? "",
     disconfirming: payload.disconfirming ?? false,
   }));
 
-const evidenceTypeSchema = z
-  .enum(["direct", "contextual", "none"])
-  .catch("contextual");
+const evidenceTypeSchema = z.enum(EVIDENCE_TYPES).catch("contextual");
 
 const analysisSchema = z
   .object({
@@ -90,19 +99,12 @@ const analysisSchema = z
   })
   .transform((payload) => {
     const synthesis =
-      payload.cumulative_synthesis ??
-      payload.cumulativeSynthesis ??
-      payload.findings ??
-      "";
-    const findings =
-      payload.iteration_findings ?? payload.iterationFindings ?? synthesis;
+      payload.cumulative_synthesis ?? payload.cumulativeSynthesis ?? payload.findings ?? "";
+    const findings = payload.iteration_findings ?? payload.iterationFindings ?? synthesis;
 
-    const evidenceType =
-      payload.evidence_type ?? payload.evidenceType ?? "contextual";
+    const evidenceType = payload.evidence_type ?? payload.evidenceType ?? "contextual";
     const directEntity =
-      payload.direct_entity_evidence ??
-      payload.directEntityEvidence ??
-      evidenceType === "direct";
+      payload.direct_entity_evidence ?? payload.directEntityEvidence ?? evidenceType === "direct";
 
     return {
       iteration_findings: findings,
@@ -114,16 +116,13 @@ const analysisSchema = z
       score: payload.score ?? payload.confidence ?? 0,
       score_delta: payload.score_delta ?? payload.scoreDelta ?? "",
       score_reasoning: payload.score_reasoning ?? payload.scoreReasoning ?? "",
-      contradiction_found:
-        payload.contradiction_found ?? payload.contradictionFound ?? false,
-      should_continue:
-        payload.should_continue !== false && payload.shouldContinue !== false,
+      contradiction_found: payload.contradiction_found ?? payload.contradictionFound ?? false,
+      should_continue: payload.should_continue !== false && payload.shouldContinue !== false,
       stop_reason: payload.stop_reason ?? payload.stopReason ?? "",
       next_variation: payload.next_variation ?? payload.nextVariation ?? "",
       direct_entity_evidence: directEntity,
       evidence_type: evidenceType as EvidenceType,
-      disambiguation_notes:
-        payload.disambiguation_notes ?? payload.disambiguationNotes ?? "",
+      disambiguation_notes: payload.disambiguation_notes ?? payload.disambiguationNotes ?? "",
     };
   });
 
@@ -145,11 +144,10 @@ function normalizeLlmKeys(value: unknown): unknown {
 }
 
 function isValidCitationUrl(url: string): boolean {
-  if (!url.trim() || url.includes("...")) return false;
-
+  if (url.includes("...") || !isHttpUrl(url.trim())) return false;
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    new URL(url);
+    return true;
   } catch {
     return false;
   }
@@ -176,23 +174,10 @@ export function parseAnalysisPayload(raw: string, knownUrls: string[]): Analysis
   return { ...parsed, cited_urls };
 }
 
-type ReflectionRecommendation = "continue" | "pivot" | "stop";
+export type ReflectionPayload = ReflectionSnapshot;
 
-export interface ReflectionPayload {
-  entity_verdict: EntityVerdict;
-  entity_confidence: number;
-  entity_reasoning: string;
-  investigation_quality: InvestigationQuality;
-  quality_reasoning: string;
-  recommendation: ReflectionRecommendation;
-  recommendation_reasoning: string;
-  pivot_suggestion: string;
-  key_observations: string[];
-  should_continue: boolean;
-}
-
-const entityVerdictEnum = z.enum(["confirmed", "likely", "uncertain", "unlikely", "nonexistent"]);
-const investigationQualityEnum = z.enum(["progressing", "stagnating", "circular", "exhausted"]);
+const entityVerdictEnum = z.enum(ENTITY_VERDICTS);
+const investigationQualityEnum = z.enum(INVESTIGATION_QUALITIES);
 
 const reflectionSchema = z
   .object({
@@ -206,7 +191,7 @@ const reflectionSchema = z
     investigationQuality: investigationQualityEnum.optional(),
     quality_reasoning: z.coerce.string().optional(),
     qualityReasoning: z.coerce.string().optional(),
-    recommendation: z.enum(["continue", "pivot", "stop"]).catch("continue"),
+    recommendation: z.enum(REFLECTION_RECOMMENDATIONS).catch("continue"),
     recommendation_reasoning: z.coerce.string().optional(),
     recommendationReasoning: z.coerce.string().optional(),
     pivot_suggestion: z.coerce.string().optional(),
@@ -217,24 +202,21 @@ const reflectionSchema = z
     shouldContinue: z.coerce.boolean().optional(),
   })
   .transform((p) => {
-    const verdict = p.entity_verdict ?? p.entityVerdict ?? "uncertain" as const;
+    const verdict = p.entity_verdict ?? p.entityVerdict ?? ("uncertain" as const);
     const recommendation = p.recommendation ?? "continue";
-    const shouldContinue =
-      p.should_continue ?? p.shouldContinue ?? recommendation !== "stop";
+    const shouldContinue = p.should_continue ?? p.shouldContinue ?? recommendation !== "stop";
 
     return {
       entity_verdict: verdict,
       entity_confidence: Math.max(
         0,
-        Math.min(100, p.entity_confidence ?? p.entityConfidence ?? 50),
+        Math.min(SCORE_MAX, p.entity_confidence ?? p.entityConfidence ?? DEFAULT_ENTITY_CONFIDENCE),
       ),
       entity_reasoning: p.entity_reasoning ?? p.entityReasoning ?? "",
-      investigation_quality:
-        p.investigation_quality ?? p.investigationQuality ?? "progressing",
+      investigation_quality: p.investigation_quality ?? p.investigationQuality ?? "progressing",
       quality_reasoning: p.quality_reasoning ?? p.qualityReasoning ?? "",
       recommendation,
-      recommendation_reasoning:
-        p.recommendation_reasoning ?? p.recommendationReasoning ?? "",
+      recommendation_reasoning: p.recommendation_reasoning ?? p.recommendationReasoning ?? "",
       pivot_suggestion: p.pivot_suggestion ?? p.pivotSuggestion ?? "",
       key_observations: p.key_observations ?? p.keyObservations ?? [],
       should_continue: shouldContinue,

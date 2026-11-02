@@ -19,7 +19,10 @@
     "build": "vite build && tsc -p tsconfig.server.json",
     "start": "NODE_ENV=production node dist/server/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "node --import tsx --test src/server/agent/agent.test.ts"
+    "test": "node --import tsx --test src/server/*.test.ts src/server/**/*.test.ts",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
@@ -42,9 +45,11 @@
     "react-router-dom": "^7.18.1",
     "rehype-external-links": "^3.0.0",
     "remark-gfm": "^4.0.1",
+    "undici": "^8.12.3",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.4",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^25.0.9",
     "@types/react": "^19.2.8",

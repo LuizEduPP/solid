@@ -4,23 +4,6 @@ const PAGE_READ_RE = /^Page read: (https?:\/\/\S+)$/i;
 const PAGES_FETCHED_RE = /^(\d+) page\(s\) fetched$/;
 const DISCONFIRM_TAG = " · disconfirmation";
 
-function translateGateReason(reason: string): string {
-  let match = reason.match(/^(\d+) open gap\(s\)$/);
-  if (match) return i18n.t("gateOpenGaps", { count: match[1] });
-
-  match = reason.match(/^minimum (\d+) iterations$/);
-  if (match) return i18n.t("gateMinIterations", { count: match[1] });
-
-  match = reason.match(/^minimum (\d+) unique domains$/);
-  if (match) return i18n.t("gateMinDomains", { count: match[1] });
-
-  if (reason === "missing disconfirmation round") {
-    return i18n.t("gateDisconfirmation");
-  }
-
-  return reason;
-}
-
 export function translateActivityLine(line: string): string {
   const trimmed = line.trim();
   if (!trimmed) return line;
@@ -44,19 +27,30 @@ export function translateActivityLine(line: string): string {
   match = trimmed.match(/^(\d+) results · analyzing$/);
   if (match) return i18n.t("activityResultsAnalyzing", { count: match[1] });
 
-  match = trimmed.match(/^Score capped: (.+)$/);
-  if (match) {
-    return i18n.t("activityScoreCapped", {
-      reason: translateGateReason(match[1]!),
-    });
-  }
-
   match = trimmed.match(/^Target (\d+)% reached$/);
   if (match) return i18n.t("activityTargetReached", { target: match[1] });
 
-  match = trimmed.match(/^Iteration (\d+) · (.+)$/);
+  match = trimmed.match(/^Circuit breaker: max (\d+) iterations$/);
   if (match) {
-    let angle = match[2]!;
+    return i18n.t("activityCircuitBreakerIterations", { count: match[1] });
+  }
+
+  if (trimmed === "Circuit breaker: LLM call budget reached") {
+    return i18n.t("activityCircuitBreakerLlm");
+  }
+
+  match = trimmed.match(/^Partial result: score (\d+)% \(target (\d+)%\)$/);
+  if (match) {
+    return i18n.t("activityPartialResult", {
+      score: match[1],
+      target: match[2],
+    });
+  }
+
+  match = trimmed.match(/^Iteration (\d+) · (.+)$/);
+  const angleMatch = match?.[2];
+  if (match && angleMatch) {
+    let angle = angleMatch;
     let suffix = "";
     if (angle.endsWith(DISCONFIRM_TAG)) {
       angle = angle.slice(0, -DISCONFIRM_TAG.length);
@@ -91,4 +85,3 @@ export function compressStepsActivity(lines: string[]): string[] {
   flushPages();
   return out;
 }
-

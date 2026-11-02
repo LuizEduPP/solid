@@ -1,24 +1,20 @@
 import { createParser } from "eventsource-parser";
-
+import {
+  DEFAULT_ENTITY_CONFIDENCE,
+  type EvidenceType,
+  INTEGRATION_FIELDS,
+  llmRequiresApiKey,
+  MODE_THRESHOLDS,
+  type PriorResearchContext,
+  type ReflectionSnapshot,
+  type ScoreRubric,
+  type SearchHit,
+  STREAM_MARKER_RE,
+  type StreamMarker,
+  streamToken,
+} from "../shared";
 import i18n from "./i18n";
 import type { WebSettings } from "./types";
-import {
-  countUniqueHostnames,
-  MODE_THRESHOLDS,
-  type EntityVerdict,
-  type EvidenceType,
-  type InvestigationQuality,
-  type PriorResearchContext,
-  type ScoreRubric,
-} from "../shared";
-
-export type { EntityVerdict, InvestigationQuality } from "../shared";
-
-export interface SourceSnapshot {
-  title: string;
-  url: string;
-  snippet: string;
-}
 
 export interface IterationSnapshot {
   number: number;
@@ -31,25 +27,13 @@ export interface IterationSnapshot {
   rubric?: ScoreRubric;
   citedUrls?: string[];
   readUrls?: string[];
-  sources?: SourceSnapshot[];
+  sources?: SearchHit[];
+  queries?: string[];
   gaps?: string[];
   disconfirming?: boolean;
   evidenceType?: EvidenceType;
   directEntityEvidence?: boolean;
   disambiguationNotes?: string;
-}
-
-export interface ReflectionSnapshot {
-  entity_verdict: EntityVerdict;
-  entity_confidence: number;
-  entity_reasoning: string;
-  investigation_quality: InvestigationQuality;
-  quality_reasoning: string;
-  recommendation: "continue" | "pivot" | "stop";
-  recommendation_reasoning: string;
-  pivot_suggestion: string;
-  key_observations: string[];
-  should_continue: boolean;
 }
 
 export interface ResearchRound {
@@ -69,16 +53,18 @@ interface ParsedStream {
   rounds: ResearchRound[];
 }
 
-const MARKER_RE = /@@(?:STATUS|SCORE|REPORT|ITER|RUBRIC|REFLECTION|FOLLOWUP)@@\n/;
-
-function sectionBody(output: string, start: number): string {
+function sectionEnd(output: string, start: number): number {
   const tail = output.slice(start);
-  const nextIdx = tail.search(MARKER_RE);
-  return (nextIdx >= 0 ? tail.slice(0, nextIdx) : tail).trim();
+  const nextIdx = tail.search(STREAM_MARKER_RE);
+  return start + (nextIdx >= 0 ? nextIdx : tail.length);
 }
 
-function extractSections(output: string, marker: string): string[] {
-  const token = `@@${marker}@@\n`;
+function sectionBody(output: string, start: number): string {
+  return output.slice(start, sectionEnd(output, start)).trim();
+}
+
+function extractSections(output: string, marker: StreamMarker): string[] {
+  const token = streamToken(marker);
   const results: string[] = [];
   let start = 0;
 
@@ -86,19 +72,17 @@ function extractSections(output: string, marker: string): string[] {
     const idx = output.indexOf(token, start);
     if (idx < 0) break;
 
-    const body = sectionBody(output, idx + token.length);
+    const bodyStart = idx + token.length;
+    const body = sectionBody(output, bodyStart);
     if (body) results.push(body);
-
-    const tail = output.slice(idx + token.length);
-    const nextIdx = tail.search(MARKER_RE);
-    start = idx + token.length + (nextIdx >= 0 ? nextIdx : tail.length);
+    start = sectionEnd(output, bodyStart);
   }
 
   return results;
 }
 
-function extractTailSection(output: string, marker: string): string {
-  const token = `@@${marker}@@\n`;
+function extractTailSection(output: string, marker: StreamMarker): string {
+  const token = streamToken(marker);
   const idx = output.lastIndexOf(token);
   if (idx < 0) return "";
   return sectionBody(output, idx + token.length);
@@ -121,6 +105,7 @@ function parseIterationPayload(raw: string): IterationSnapshot | null {
       citedUrls: payload.citedUrls,
       readUrls: payload.readUrls,
       sources: payload.sources,
+      queries: payload.queries?.map(String),
       disconfirming: Boolean(payload.disconfirming),
       gaps: payload.gaps?.map(String),
       evidenceType: payload.evidenceType as EvidenceType | undefined,
@@ -140,7 +125,7 @@ function parseReflectionSnapshot(output: string): ReflectionSnapshot | null {
     if (!payload.entity_verdict) return null;
     return {
       entity_verdict: payload.entity_verdict ?? "uncertain",
-      entity_confidence: Number(payload.entity_confidence ?? 50),
+      entity_confidence: Number(payload.entity_confidence ?? DEFAULT_ENTITY_CONFIDENCE),
       entity_reasoning: String(payload.entity_reasoning ?? ""),
       investigation_quality: payload.investigation_quality ?? "progressing",
       quality_reasoning: String(payload.quality_reasoning ?? ""),
@@ -174,7 +159,7 @@ function parseLatestRubric(output: string): ScoreRubric | null {
   }
 }
 
-const FOLLOWUP_TOKEN = "@@FOLLOWUP@@\n";
+const FOLLOWUP_TOKEN = streamToken("FOLLOWUP");
 
 function parseRounds(output: string): ResearchRound[] {
   const parts: { followUpMessage?: string; raw: string }[] = [];
@@ -194,8 +179,7 @@ function parseRounds(output: string): ResearchRound[] {
 
     const msgStart = nextFollowUp + FOLLOWUP_TOKEN.length;
     const msgBody = sectionBody(output, msgStart);
-
-    const chunkStart = msgStart + msgBody.length;
+    const chunkStart = sectionEnd(output, msgStart);
     const nextFollowUp2 = output.indexOf(FOLLOWUP_TOKEN, chunkStart);
     const chunkEnd = nextFollowUp2 >= 0 ? nextFollowUp2 : output.length;
 
@@ -226,13 +210,12 @@ export function parseStream(output: string): ParsedStream {
   let confidence = scoreText ? Number(scoreText.split(/\s/)[0]) : 0;
 
   if (confidence === 0 && iterations.length > 0) {
-    confidence = iterations.at(-1)!.score;
+    confidence = iterations.at(-1)?.score ?? 0;
   }
 
   const iteration = iterations.at(-1)?.number ?? null;
 
-  const rubric =
-    parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;
+  const rubric = parseLatestRubric(output) ?? iterations.at(-1)?.rubric ?? null;
 
   const reflection = parseReflectionSnapshot(output);
   const rounds = parseRounds(output);
@@ -249,89 +232,107 @@ export function parseStream(output: string): ParsedStream {
   };
 }
 
-export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
-  const urls = iterations.flatMap((iteration) => iteration.citedUrls ?? []);
-  return countUniqueHostnames(urls);
+export function iterationSourceUrls(iteration: IterationSnapshot): string[] {
+  return [
+    ...(iteration.citedUrls ?? []),
+    ...(iteration.readUrls ?? []),
+    ...(iteration.sources ?? []).map((source) => source.url),
+  ];
 }
 
-export async function fetchTitle(
-  settings: WebSettings,
-  objective: string,
-): Promise<string | null> {
+export function canFollowUp(
+  session: { id: string; status: string } | null | undefined,
+  sessionId: string | undefined,
+  parsed: Pick<ParsedStream, "report" | "iterations">,
+): boolean {
+  return Boolean(
+    session &&
+      sessionId === session.id &&
+      session.status !== "running" &&
+      (parsed.report || parsed.iterations.length > 0),
+  );
+}
+
+function llmFields(settings: Pick<WebSettings, "apiKey" | "baseUrl">): Record<string, string> {
+  return {
+    llm_api_key: settings.apiKey,
+    llm_base_url: settings.baseUrl,
+  };
+}
+
+function integrationFields(settings: WebSettings): Record<string, string> {
+  return Object.fromEntries(
+    INTEGRATION_FIELDS.flatMap((field) => [
+      [`${field}_api_key`, settings.integrationKeys[field]],
+      [`${field}_base_url`, settings.integrationEndpoints[field]],
+    ]),
+  );
+}
+
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; status: number; payload: T | null }> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const payload = (await response.json().catch(() => null)) as T | null;
+  return { ok: response.ok, status: response.status, payload };
+}
+
+export async function fetchTitle(settings: WebSettings, objective: string): Promise<string | null> {
   if (!settings.model.trim()) return null;
 
   try {
-    const response = await fetch("/v1/title", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        llm_api_key: settings.apiKey,
-        llm_base_url: settings.baseUrl,
-        llm_model: settings.model,
-        objective,
-        locale: settings.locale,
-      }),
+    const { ok, payload } = await postJson<{ title?: string | null }>("/v1/title", {
+      ...llmFields(settings),
+      llm_model: settings.model,
+      objective,
+      locale: settings.locale,
     });
-
-    if (!response.ok) return null;
-
-    const payload = (await response.json().catch(() => null)) as {
-      title?: string | null;
-    } | null;
-
-    return payload?.title ?? null;
+    return ok ? (payload?.title ?? null) : null;
   } catch {
     return null;
   }
 }
 
-export async function fetchSuggestions(settings: WebSettings, signal?: AbortSignal): Promise<string[]> {
-  if (!settings.apiKey.trim() && !settings.baseUrl.includes("localhost") && !settings.baseUrl.includes("127.0.0.1")) {
+export async function fetchSuggestions(
+  settings: Pick<WebSettings, "apiKey" | "baseUrl" | "model" | "locale">,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  if (llmRequiresApiKey(settings.apiKey, settings.baseUrl)) {
     return [];
   }
   if (!settings.model.trim()) return [];
 
-  const response = await fetch("/v1/suggestions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
+  const { ok, payload } = await postJson<{ suggestions?: string[] }>(
+    "/v1/suggestions",
+    {
+      ...llmFields(settings),
       llm_model: settings.model,
       locale: settings.locale,
-    }),
+    },
     signal,
-  });
+  );
 
-  if (!response.ok) return [];
-
-  const payload = (await response.json().catch(() => null)) as {
-    suggestions?: string[];
-  } | null;
-
-  return Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+  return ok && Array.isArray(payload?.suggestions) ? payload.suggestions : [];
 }
 
-export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
-  const response = await fetch("/v1/llm/models", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
-    }),
-  });
-
-  const payload = (await response.json().catch(() => null)) as {
+export async function fetchLlmModels(
+  settings: Pick<WebSettings, "apiKey" | "baseUrl">,
+): Promise<string[]> {
+  const { ok, status, payload } = await postJson<{
     models?: string[];
     error?: string;
-  } | null;
+  }>("/v1/llm/models", llmFields(settings));
 
-  if (!response.ok) {
+  if (!ok) {
     throw new Error(
-      typeof payload?.error === "string"
-        ? payload.error
-        : `Failed to list models (${response.status})`,
+      typeof payload?.error === "string" ? payload.error : `Failed to list models (${status})`,
     );
   }
 
@@ -340,10 +341,7 @@ export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
 
 export function pickDefaultModel(models: string[], current: string): string {
   if (current && models.includes(current)) return current;
-  if (models.length === 0) return current;
-
-  const preferred = models.find((id) => /gemma-4-e4b|gemma.*4b/i.test(id));
-  return preferred ?? models[0]!;
+  return models[0] ?? current;
 }
 
 export async function streamResearch(
@@ -362,9 +360,11 @@ export async function streamResearch(
       stream: true,
       target_score: MODE_THRESHOLDS[settings.mode].targetScore,
       research_mode: settings.mode,
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
+      ...llmFields(settings),
       llm_model: settings.model,
+      search_provider: settings.searchProvider,
+      scrape_provider: settings.scrapeProvider,
+      ...integrationFields(settings),
       messages: [{ role: "user", content: objective }],
       prior_context: priorContext,
     }),

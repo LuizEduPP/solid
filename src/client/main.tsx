@@ -1,55 +1,24 @@
-import { MantineProvider, createTheme } from "@mantine/core";
-import "@mantine/core/styles.css";
+import "@mantine/core/styles.layer.css";
+import "github-markdown-css/github-markdown-dark.css";
+
+import { MantineProvider } from "@mantine/core";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-
+import { normalizeLocale } from "../shared";
 import App, { CHAT_SESSION_PATH, HOME_PATH } from "./App";
-import i18n, { normalizeLocale } from "./i18n";
+import i18n from "./i18n";
 import { loadWebSettings } from "./local-store";
+import { theme } from "./theme";
 import "./index.css";
-
-/** Neutral zinc ladder for surfaces; blue only via primaryColor on actions/selection. */
-const theme = createTheme({
-  primaryColor: "indigo",
-  fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
-  fontFamilyMonospace: '"IBM Plex Mono", monospace',
-  defaultRadius: "md",
-  colors: {
-    dark: [
-      "#ececf1",
-      "#d4d4d8",
-      "#a1a1aa",
-      "#71717a",
-      "#52525b",
-      "#3f3f46",
-      "#323238",
-      "#25262b",
-      "#1a1b1e",
-      "#111113",
-    ],
-    indigo: [
-      "#f2f4fd",
-      "#e1e7fb",
-      "#c5d0f7",
-      "#a3b5f2",
-      "#829aee",
-      "#5878e8",
-      "#4d69d4",
-      "#425abf",
-      "#384caa",
-      "#2d3d96",
-    ],
-  },
-  other: {
-    bodyBg: "#111113",
-  },
-});
 
 void i18n.changeLanguage(normalizeLocale(loadWebSettings().locale));
 
-createRoot(document.getElementById("root")!).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("Missing #root");
+
+createRoot(root).render(
   <StrictMode>
     <I18nextProvider i18n={i18n}>
       <MantineProvider theme={theme} defaultColorScheme="dark">

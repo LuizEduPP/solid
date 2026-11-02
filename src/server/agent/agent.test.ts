@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseAnalysisPayload, parsePlanPayload, parseReflectionPayload } from "./schemas.js";
-import { rubricTotal, uniqueHostnamesFromHits, MODE_THRESHOLDS } from "../../shared.js";
 import {
+  appendStreamChunks,
+  countUniqueHostnames,
+  groupUrlsByHostname,
+  llmRequiresApiKey,
+  MODE_THRESHOLDS,
+  mapSearchHits,
+  rubricTotal,
+  scoreTone,
+  streamChunk,
+} from "../../shared.js";
+import { parseAnalysisPayload, parsePlanPayload, parseReflectionPayload } from "./schemas.js";
+import {
+  anchorQueryToObjective,
   applyCumulativeScore,
-  canReachTargetScore,
-  capScoreForCitedDomains,
-  capScoreForEntityConfidence,
-  computeEvidenceScore,
   extractCitedUrls,
   normalizeRubric,
+  objectiveCoverage,
 } from "./scoring.js";
 
 describe("agent", () => {
@@ -46,10 +54,7 @@ describe("agent", () => {
 }`;
 
       const parsed = parseAnalysisPayload(broken, []);
-      assert.deepEqual(parsed.cited_urls, [
-        "https://example.com/a",
-        "https://example.com/b",
-      ]);
+      assert.deepEqual(parsed.cited_urls, ["https://example.com/a", "https://example.com/b"]);
       assert.equal(parsed.score, 63);
       assert.equal(parsed.score_rubric.direct_evidence, 18);
     });
@@ -131,97 +136,114 @@ describe("agent", () => {
     });
 
     it("extracts cited urls from text and known list", () => {
-      const urls = extractCitedUrls(
-        "Source https://a.com/x and https://b.org/y.",
-        ["https://a.com/x"],
-      );
+      const urls = extractCitedUrls("Source https://a.com/x and https://b.org/y.", [
+        "https://a.com/x",
+      ]);
 
       assert.deepEqual(urls, ["https://a.com/x", "https://b.org/y"]);
     });
 
-    it("caps score above 90 without three cited domains", () => {
-      const capped = capScoreForCitedDomains(95, [
-        "https://a.com/1",
-        "https://b.com/2",
-      ]);
-      assert.equal(capped, 90);
-
-      const allowed = capScoreForCitedDomains(95, [
-        "https://a.com/1",
-        "https://b.com/2",
-        "https://c.org/3",
-      ]);
-      assert.equal(allowed, 95);
-    });
-    it("caps first iteration score", () => {
+    it("uses the proposed score on the first iteration", () => {
       const rubric = normalizeRubric({
         direct_evidence: 20,
         source_diversity: 20,
         gap_coverage: 20,
         risk_contradiction: 20,
       });
-      const score = applyCumulativeScore(null, 85, rubric, {
-        contradictionFound: false,
-        minScore: 0,
-        maxDelta: 6,
-        firstIterationCap: 40,
-        isFirstIteration: true,
-      });
-      assert.equal(score, 40);
+      assert.equal(applyCumulativeScore(null, 85, rubric, 0), 85);
     });
 
-    it("limits score increase per iteration", () => {
+    it("blends proposed score with the rubric after the first iteration", () => {
       const rubric = normalizeRubric({
         direct_evidence: 25,
         source_diversity: 25,
         gap_coverage: 25,
         risk_contradiction: 25,
       });
-      const score = applyCumulativeScore(50, 95, rubric, {
-        contradictionFound: false,
-        minScore: 0,
-        maxDelta: 6,
-        firstIterationCap: 40,
-        isFirstIteration: false,
-      });
-      assert.equal(score, 56);
+      assert.equal(applyCumulativeScore(50, 95, rubric, 0), 97.25);
     });
 
-    it("blocks 100 when gaps remain", () => {
-      const gate = canReachTargetScore({
-        score: 100,
-        targetScore: 100,
-        openGaps: ["missing clinical trial"],
-        iteration: 8,
-        thresholds: MODE_THRESHOLDS.rigorous,
-        uniqueDomainCount: 6,
-        hadDisconfirmingSearch: true,
-      });
-      assert.equal(gate.allowed, false);
-    });
-
-    it("blocks 100 without disconfirmation round", () => {
-      const gate = canReachTargetScore({
-        score: 100,
-        targetScore: 100,
-        openGaps: [],
-        iteration: 8,
-        thresholds: MODE_THRESHOLDS.rigorous,
-        uniqueDomainCount: 6,
-        hadDisconfirmingSearch: false,
-      });
-      assert.equal(gate.allowed, false);
-      assert.equal(gate.reason, "missing disconfirmation round");
-    });
-
-    it("computes evidence score from domains", () => {
+    it("counts unique hostnames from hits", () => {
       const hits = [
         { title: "a", url: "https://a.com/x", snippet: "s" },
         { title: "b", url: "https://b.org/y", snippet: "s" },
       ];
-      assert.equal(uniqueHostnamesFromHits(hits).length, 2);
-      const evidence = computeEvidenceScore(2, 1, 2, 3);
-      assert.ok(evidence < 50);
+      assert.equal(countUniqueHostnames(hits.map((hit) => hit.url)), 2);
+    });
+
+    it("measures coverage of distinctive objective terms", () => {
+      const coverage = objectiveCoverage(
+        "NexaRAG Studio latency benchmarks",
+        "General notes about search engines",
+      );
+      assert.ok(coverage < 0.4);
+      assert.equal(
+        objectiveCoverage("NexaRAG Studio latency", "NexaRAG Studio latency results"),
+        1,
+      );
+    });
+
+    it("re-anchors a drifted query to the root objective", () => {
+      assert.equal(
+        anchorQueryToObjective("latency benchmark edge", "NexaRAG Studio latency"),
+        "latency benchmark edge",
+      );
+      assert.equal(
+        anchorQueryToObjective("unrelated weather forecast", "NexaRAG Studio"),
+        "nexarag unrelated weather forecast",
+      );
+    });
+
+    it("gives fast mode a shorter run budget than rigorous", () => {
+      assert.ok(MODE_THRESHOLDS.fast.maxIterations < MODE_THRESHOLDS.rigorous.maxIterations);
+      assert.ok(MODE_THRESHOLDS.fast.maxLlmCalls < MODE_THRESHOLDS.rigorous.maxLlmCalls);
+    });
+
+    it("maps scores to the same color tones used in the UI", () => {
+      assert.equal(scoreTone(0), "gray");
+      assert.equal(scoreTone(39), "red");
+      assert.equal(scoreTone(40), "yellow");
+      assert.equal(scoreTone(70), "teal");
+    });
+
+    it("formats stream chunks with a shared marker", () => {
+      assert.equal(streamChunk("STATUS", "cancelled"), "@@STATUS@@\ncancelled\n\n");
+      assert.equal(
+        appendStreamChunks("raw", [
+          ["FOLLOWUP", "more"],
+          ["STATUS", "go"],
+        ]),
+        "raw\n\n@@FOLLOWUP@@\nmore\n\n@@STATUS@@\ngo\n\n",
+      );
+    });
+
+    it("counts extra pages from the same host without collapsing them", () => {
+      const grouped = groupUrlsByHostname([
+        "https://www.example.com/a",
+        "https://example.com/a/",
+        "https://example.com/a#top",
+        "https://example.com/b",
+        "https://other.test/x",
+      ]);
+      const example = grouped.find(([host]) => host === "example.com");
+      const other = grouped.find(([host]) => host === "other.test");
+      assert.equal(example?.[1].length, 2);
+      assert.equal(other?.[1].length, 1);
+    });
+
+    it("maps search hits and requires a cloud LLM key", () => {
+      assert.equal(
+        mapSearchHits(
+          [
+            { title: "A", url: "https://ok.test", snippet: "x" },
+            { title: "B", url: "ftp://no", snippet: "y" },
+          ],
+          8,
+        ).length,
+        1,
+      );
+      assert.equal(llmRequiresApiKey("", "https://api.openai.com/v1"), true);
+      assert.equal(llmRequiresApiKey("", "http://127.0.0.1:1234/v1"), false);
     });
 
     it("sums rubric to 100 max", () => {
@@ -234,23 +256,6 @@ describe("agent", () => {
         }),
       );
       assert.equal(total, 100);
-    });
-  });
-
-  describe("entity confidence score cap", () => {
-    it("caps score when reflector entity confidence is very low", () => {
-      const capped = capScoreForEntityConfidence(60, 15);
-      assert.equal(capped, 20);
-    });
-
-    it("uses entity confidence as floor for cap", () => {
-      assert.equal(capScoreForEntityConfidence(80, 30), 30);
-      assert.equal(capScoreForEntityConfidence(80, 45), 45);
-    });
-
-    it("does not cap score when entity confidence is adequate", () => {
-      assert.equal(capScoreForEntityConfidence(60, 55), 60);
-      assert.equal(capScoreForEntityConfidence(90, 80), 90);
     });
   });
 

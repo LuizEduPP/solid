@@ -1,41 +1,37 @@
-import {
-  Badge,
-  Box,
-  Group,
-  Progress,
-  RingProgress,
-  ScrollArea,
-  Stack,
-  Text,
-  Tooltip,
-} from "@mantine/core";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleDashed,
-  CircleSlash,
-  HelpCircle,
-  XCircle,
-} from "lucide-react";
+import { Badge, Box, Group, Progress, ScrollArea, Stack, Text, Tooltip } from "@mantine/core";
+import { AlertTriangle, CheckCircle2, CircleDashed, HelpCircle, XCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-
+import {
+  type EntityVerdict,
+  EVIDENCE_COLORS,
+  EVIDENCE_I18N,
+  groupUrlsByHostname,
+  type InvestigationQuality,
+  QUALITY_I18N,
+  type ReflectionSnapshot,
+  RUBRIC_DIMENSIONS,
+  RUBRIC_MAX,
+  SCORE_MAX,
+  type ScoreRubric,
+  scoreTone,
+  VERDICT_I18N,
+} from "../shared";
 import FaviconImg from "./FaviconImg";
-import type { IterationSnapshot, ReflectionSnapshot, EntityVerdict, InvestigationQuality } from "./stream";
-import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniqueUrlsByHostname, RUBRIC_DIMENSIONS, RUBRIC_MAX, type ScoreRubric } from "../shared";
+import { type IterationSnapshot, iterationSourceUrls } from "./stream";
 
-const VERDICT_CONFIG: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2; i18n: string }> = {
-  confirmed: { color: "green", icon: CheckCircle2, i18n: "verdictConfirmed" },
-  likely: { color: "blue", icon: CheckCircle2, i18n: "verdictLikely" },
-  uncertain: { color: "yellow", icon: HelpCircle, i18n: "verdictUncertain" },
-  unlikely: { color: "orange", icon: AlertTriangle, i18n: "verdictUnlikely" },
-  nonexistent: { color: "red", icon: XCircle, i18n: "verdictNonexistent" },
+const VERDICT_STYLE: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2 }> = {
+  confirmed: { color: "green", icon: CheckCircle2 },
+  likely: { color: "blue", icon: CheckCircle2 },
+  uncertain: { color: "yellow", icon: HelpCircle },
+  unlikely: { color: "orange", icon: AlertTriangle },
+  nonexistent: { color: "red", icon: XCircle },
 };
 
-const QUALITY_CONFIG: Record<InvestigationQuality, { color: string; i18n: string }> = {
-  progressing: { color: "green", i18n: "qualityProgressing" },
-  stagnating: { color: "yellow", i18n: "qualityStagnating" },
-  circular: { color: "orange", i18n: "qualityCircular" },
-  exhausted: { color: "red", i18n: "qualityExhausted" },
+const QUALITY_COLOR: Record<InvestigationQuality, string> = {
+  progressing: "green",
+  stagnating: "yellow",
+  circular: "orange",
+  exhausted: "red",
 };
 
 const RUBRIC_COLORS: Record<keyof ScoreRubric, string> = {
@@ -55,36 +51,33 @@ interface DataPanelProps {
 }
 
 function ScoreSection({ confidence, targetScore }: { confidence: number; targetScore: number }) {
-  const pct = Math.min(100, confidence);
-  const color = confidence >= targetScore * 0.85 ? "teal" : confidence >= 40 ? "yellow" : "red";
+  const { t } = useTranslation();
+  const pct = Math.min(SCORE_MAX, confidence);
+  const tone = scoreTone(confidence);
 
   return (
     <Box className="dp-section">
-      <Group justify="center">
-        <RingProgress
-          size={120}
-          thickness={10}
-          roundCaps
-          sections={[{ value: pct, color }]}
-          label={
-            <Stack gap={2} align="center">
-              <Text fw={700} size="xl" lh={1} style={{ fontVariantNumeric: "tabular-nums" }}>
-                {confidence.toFixed(0)}%
-              </Text>
-              <Text c="dimmed" size="xs" lh={1} style={{ fontVariantNumeric: "tabular-nums" }}>
-                / {targetScore}
-              </Text>
-            </Stack>
-          }
-        />
+      <Group justify="space-between" align="flex-end" mb={10}>
+        <div>
+          <Text className="dp-section-title" mb={6}>
+            {t("solidness")}
+          </Text>
+          <Text className="dp-score-value" c={tone}>
+            {confidence.toFixed(0)}%
+          </Text>
+        </div>
+        <Text c="dimmed" size="xs" style={{ fontVariantNumeric: "tabular-nums" }}>
+          {t("solidnessTarget", { target: targetScore })}
+        </Text>
       </Group>
+      <Progress value={pct} size="sm" radius="xl" color={tone === "gray" ? "indigo" : tone} />
     </Box>
   );
 }
 
 function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }) {
   const { t } = useTranslation();
-  const cfg = VERDICT_CONFIG[reflection.entity_verdict];
+  const cfg = VERDICT_STYLE[reflection.entity_verdict];
   const Icon = cfg.icon;
 
   return (
@@ -98,7 +91,7 @@ function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }
           leftSection={<Icon size={14} />}
           style={{ cursor: "help" }}
         >
-          {t(cfg.i18n)} ({reflection.entity_confidence}%)
+          {t(VERDICT_I18N[reflection.entity_verdict])} ({reflection.entity_confidence}%)
         </Badge>
       </Tooltip>
     </Box>
@@ -107,8 +100,6 @@ function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }
 
 function QualitySection({ reflection }: { reflection: ReflectionSnapshot }) {
   const { t } = useTranslation();
-  const cfg = QUALITY_CONFIG[reflection.investigation_quality];
-
   return (
     <Box className="dp-section">
       <Text className="dp-section-title">{t("investigationQuality")}</Text>
@@ -116,10 +107,10 @@ function QualitySection({ reflection }: { reflection: ReflectionSnapshot }) {
         <Badge
           size="md"
           variant="light"
-          color={cfg.color}
+          color={QUALITY_COLOR[reflection.investigation_quality]}
           style={{ cursor: "help" }}
         >
-          {t(cfg.i18n)}
+          {t(QUALITY_I18N[reflection.investigation_quality])}
         </Badge>
       </Tooltip>
     </Box>
@@ -139,13 +130,20 @@ function RubricSection({ rubric }: { rubric: ScoreRubric }) {
             <Tooltip key={key} label={t(hintKey)} multiline maw={260} withArrow>
               <Box>
                 <Group justify="space-between" gap={4} mb={2}>
-                  <Text size="xs" c="dimmed" fw={500}>{t(labelKey)}</Text>
-                  <Text size="xs" c="dimmed" fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
+                  <Text size="xs" c="dimmed" fw={500}>
+                    {t(labelKey)}
+                  </Text>
+                  <Text
+                    size="xs"
+                    c="dimmed"
+                    fw={600}
+                    style={{ fontVariantNumeric: "tabular-nums" }}
+                  >
                     {value}/{RUBRIC_MAX}
                   </Text>
                 </Group>
                 <Progress
-                  value={(value / RUBRIC_MAX) * 100}
+                  value={(value / RUBRIC_MAX) * SCORE_MAX}
                   size="sm"
                   radius="xl"
                   color={RUBRIC_COLORS[key]}
@@ -167,8 +165,8 @@ function ObservationsSection({ observations }: { observations: string[] }) {
     <Box className="dp-section">
       <Text className="dp-section-title">{t("keyObservations")}</Text>
       <Stack gap={4}>
-        {observations.map((obs, i) => (
-          <Text key={i} size="xs" c="dimmed" lh={1.4}>
+        {observations.map((obs) => (
+          <Text key={obs} size="xs" c="dimmed" lh={1.4}>
             • {obs}
           </Text>
         ))}
@@ -179,43 +177,44 @@ function ObservationsSection({ observations }: { observations: string[] }) {
 
 function SourcesSection({ iterations }: { iterations: IterationSnapshot[] }) {
   const { t } = useTranslation();
-  const allUrls = iterations.flatMap((it) => [
-    ...(it.citedUrls ?? []),
-    ...(it.readUrls ?? []),
-  ]);
-  const unique = uniqueUrlsByHostname(allUrls);
+  const byHost = groupUrlsByHostname(iterations.flatMap(iterationSourceUrls));
 
-  if (unique.length === 0) return null;
-
-  const byHost = new Map<string, string[]>();
-  for (const url of unique) {
-    const host = hostnameFromUrl(url);
-    if (!byHost.has(host)) byHost.set(host, []);
-    byHost.get(host)!.push(url);
-  }
+  if (byHost.length === 0) return null;
 
   return (
     <Box className="dp-section">
-      <Text className="dp-section-title">{t("dpSources", { count: byHost.size })}</Text>
+      <Text className="dp-section-title">{t("dpSources", { count: byHost.length })}</Text>
       <Stack gap={4}>
-        {[...byHost.entries()].map(([host, urls]) => (
-          <Group key={host} gap={6} wrap="nowrap">
-            <FaviconImg url={urls[0]} size={14} style={{ borderRadius: 2, flexShrink: 0 }} />
-            <Text
-              component="a"
-              href={urls[0]}
-              target="_blank"
-              rel="noreferrer"
-              size="xs"
-              c="dimmed"
-              style={{ textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-              className="dp-source-link"
-            >
-              {host}
-              {urls.length > 1 ? ` (+${urls.length - 1})` : ""}
-            </Text>
-          </Group>
-        ))}
+        {byHost.map(([host, urls]) => {
+          const [primary] = urls;
+          if (!primary) return null;
+          const extra = urls.length - 1;
+          const label = extra > 0 ? `${host} (+${extra})` : host;
+          return (
+            <Group key={host} gap={6} wrap="nowrap">
+              <FaviconImg url={primary} size={14} style={{ borderRadius: 2, flexShrink: 0 }} />
+              <Tooltip label={urls.join("\n")} multiline maw={360} withArrow disabled={extra === 0}>
+                <Text
+                  component="a"
+                  href={primary}
+                  target="_blank"
+                  rel="noreferrer"
+                  size="xs"
+                  c="dimmed"
+                  style={{
+                    textDecoration: "none",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  className="dp-source-link"
+                >
+                  {label}
+                </Text>
+              </Tooltip>
+            </Group>
+          );
+        })}
       </Stack>
     </Box>
   );
@@ -234,16 +233,27 @@ function TimelineSection({ iterations }: { iterations: IterationSnapshot[] }) {
             <Box className="dp-timeline-dot-col">
               {i > 0 && <Box className="dp-timeline-line dp-timeline-line--top" />}
               <Box className={`dp-timeline-dot dp-timeline-dot--${it.evidenceType ?? "none"}`} />
-              {i < iterations.length - 1 && <Box className="dp-timeline-line dp-timeline-line--bottom" />}
+              {i < iterations.length - 1 && (
+                <Box className="dp-timeline-line dp-timeline-line--bottom" />
+              )}
             </Box>
             <Group gap={6} flex={1} miw={0} wrap="nowrap">
-              <Text size="xs" fw={600} style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+              <Text
+                size="xs"
+                fw={600}
+                style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}
+              >
                 #{it.number}
               </Text>
               <Badge size="xs" variant="light" color={EVIDENCE_COLORS[it.evidenceType ?? "none"]}>
                 {t(EVIDENCE_I18N[it.evidenceType ?? "none"])}
               </Badge>
-              <Text size="xs" c="dimmed" fw={600} style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+              <Text
+                size="xs"
+                c="dimmed"
+                fw={600}
+                style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}
+              >
                 {it.score.toFixed(0)}%
               </Text>
             </Group>
@@ -263,9 +273,13 @@ function GapsSection({ iterations }: { iterations: IterationSnapshot[] }) {
     <Box className="dp-section">
       <Text className="dp-section-title">{t("openGaps")}</Text>
       <Stack gap={4}>
-        {lastGaps.map((gap, i) => (
-          <Group key={i} gap={6} wrap="nowrap" align="flex-start">
-            <CircleDashed size={12} style={{ flexShrink: 0, marginTop: 3 }} color="var(--mantine-color-yellow-5)" />
+        {lastGaps.map((gap) => (
+          <Group key={gap} gap={6} wrap="nowrap" align="flex-start">
+            <CircleDashed
+              size={12}
+              style={{ flexShrink: 0, marginTop: 3 }}
+              color="var(--mantine-color-yellow-5)"
+            />
             <Text size="xs" c="dimmed" lh={1.4}>
               {gap}
             </Text>
@@ -304,9 +318,10 @@ export default function DataPanel({
         <GapsSection iterations={iterations} />
 
         {running && iterations.length === 0 && (
-          <Box className="dp-section" style={{ textAlign: "center" }}>
-            <CircleSlash size={20} color="var(--solid-text-muted)" />
-            <Text size="xs" c="dimmed" mt={4}>{t("researching")}…</Text>
+          <Box className="dp-section">
+            <Text size="xs" c="dimmed">
+              {t("researching")}…
+            </Text>
           </Box>
         )}
       </Stack>
