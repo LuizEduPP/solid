@@ -54,10 +54,14 @@ interface ParsedStream {
   rounds: ResearchRound[];
 }
 
-function sectionBody(output: string, start: number): string {
+function sectionEnd(output: string, start: number): number {
   const tail = output.slice(start);
   const nextIdx = tail.search(STREAM_MARKER_RE);
-  return (nextIdx >= 0 ? tail.slice(0, nextIdx) : tail).trim();
+  return start + (nextIdx >= 0 ? nextIdx : tail.length);
+}
+
+function sectionBody(output: string, start: number): string {
+  return output.slice(start, sectionEnd(output, start)).trim();
 }
 
 function extractSections(output: string, marker: StreamMarker): string[] {
@@ -69,12 +73,10 @@ function extractSections(output: string, marker: StreamMarker): string[] {
     const idx = output.indexOf(token, start);
     if (idx < 0) break;
 
-    const body = sectionBody(output, idx + token.length);
+    const bodyStart = idx + token.length;
+    const body = sectionBody(output, bodyStart);
     if (body) results.push(body);
-
-    const tail = output.slice(idx + token.length);
-    const nextIdx = tail.search(STREAM_MARKER_RE);
-    start = idx + token.length + (nextIdx >= 0 ? nextIdx : tail.length);
+    start = sectionEnd(output, bodyStart);
   }
 
   return results;
@@ -159,12 +161,6 @@ function parseLatestRubric(output: string): ScoreRubric | null {
 }
 
 const FOLLOWUP_TOKEN = streamToken("FOLLOWUP");
-
-function sectionEnd(output: string, start: number): number {
-  const tail = output.slice(start);
-  const nextIdx = tail.search(STREAM_MARKER_RE);
-  return start + (nextIdx >= 0 ? nextIdx : tail.length);
-}
 
 function parseRounds(output: string): ResearchRound[] {
   const parts: { followUpMessage?: string; raw: string }[] = [];

@@ -11,15 +11,10 @@ import {
   EVIDENCE_I18N,
   hostnameFromUrl,
   uniquePageUrls,
-  type SearchHit,
 } from "../shared";
 
 interface IterationCardProps {
   iteration: IterationSnapshot;
-}
-
-function mergedPageUrls(readUrls: string[], sources: SearchHit[]): string[] {
-  return uniquePageUrls([...readUrls, ...sources.map((source) => source.url)]);
 }
 
 function SectionShell({
@@ -92,7 +87,10 @@ function ScoreDeltaIndicator({ delta }: { delta: string }) {
 
 export default function IterationCard({ iteration }: IterationCardProps) {
   const { t } = useTranslation();
-  const pages = mergedPageUrls(iteration.readUrls ?? [], iteration.sources ?? []);
+  const pages = uniquePageUrls([
+    ...(iteration.readUrls ?? []),
+    ...(iteration.sources ?? []).map((source) => source.url),
+  ]);
   const evType = iteration.evidenceType ?? "none";
 
   return (

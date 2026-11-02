@@ -86,9 +86,9 @@ function chatPath(sessionId: string): string {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 64;
-const SIDEBAR_WIDTH = 280;
+const SIDEBAR_WIDTH = 256;
 const SIDEBAR_COLLAPSED_WIDTH = 56;
-const DATA_PANEL_WIDTH = 300;
+const DATA_PANEL_WIDTH = 288;
 const SIDEBAR_COLLAPSED_KEY = "solid-sidebar-collapsed";
 const ASIDE_COLLAPSED_KEY = "solid-aside-collapsed";
 
@@ -301,7 +301,7 @@ function ChatComposer({
           className="chat-input-form"
         >
           <Group gap={8} mb={4} px={4} justify="space-between" wrap="nowrap">
-            <Box className="mode-toggle" role="group" aria-label={t("mode")}>
+            <Box className="mode-toggle" data-mode={settings.mode} role="group" aria-label={t("mode")}>
               <button
                 type="button"
                 className="mode-toggle-btn"
@@ -1074,7 +1074,7 @@ export default function App() {
                     <ChatComposer {...composerProps} />
                   </Box>
                   {suggestions.length > 0 ? (
-                    <Stack gap={8} w="100%" maw={520}>
+                    <Stack gap={8} w="100%" maw={520} className="suggestion-list">
                       {suggestions.slice(0, 4).map((chip) => (
                         <UnstyledButton
                           key={chip}

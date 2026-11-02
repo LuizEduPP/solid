@@ -17,19 +17,9 @@ import {
 } from "../shared";
 import type { ResearchSession, WebSettings } from "./types";
 
-function readLocalStorageJson<T>(
-  key: string,
-  legacyKeys: readonly string[],
-  fallback: T,
-): T {
+function readLocalStorageJson<T>(key: string, fallback: T): T {
   try {
-    let raw = localStorage.getItem(key);
-    if (!raw) {
-      for (const legacyKey of legacyKeys) {
-        raw = localStorage.getItem(legacyKey);
-        if (raw) break;
-      }
-    }
+    const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -38,7 +28,6 @@ function readLocalStorageJson<T>(
 }
 
 export const SETTINGS_KEY = "solid-settings";
-const LEGACY_SETTINGS_KEYS = ["rigor-settings", "deepsearch-settings"] as const;
 
 export const DEFAULT_WEB_SETTINGS: WebSettings = {
   apiKey: "",
@@ -69,7 +58,6 @@ export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings 
 export function loadWebSettings(): WebSettings {
   const parsed = readLocalStorageJson<Partial<WebSettings>>(
     SETTINGS_KEY,
-    LEGACY_SETTINGS_KEYS,
     DEFAULT_WEB_SETTINGS,
   );
 
@@ -77,15 +65,10 @@ export function loadWebSettings(): WebSettings {
 }
 
 export const HISTORY_KEY = "solid-history";
-const LEGACY_HISTORY_KEYS = ["rigor-history", "deepsearch-history"] as const;
 const MAX_SESSIONS = 40;
 
 export function loadHistory(): ResearchSession[] {
-  const parsed = readLocalStorageJson<unknown>(
-    HISTORY_KEY,
-    LEGACY_HISTORY_KEYS,
-    [],
-  );
+  const parsed = readLocalStorageJson<unknown>(HISTORY_KEY, []);
   if (!Array.isArray(parsed)) return [];
   return parsed.filter(isResearchSession);
 }

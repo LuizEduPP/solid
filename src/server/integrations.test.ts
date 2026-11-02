@@ -6,6 +6,7 @@ import {
   DEFAULT_INTEGRATIONS,
   firecrawlEndpoint,
   jinaReadUrl,
+  mapSearchHits,
   normalizeIntegrationEndpoints,
   searxngSearchUrl,
   normalizeScrapeProvider,
@@ -14,7 +15,6 @@ import {
   scrapeProviderNeedsKey,
   searchProviderNeedsKey,
 } from "../shared.js";
-import { mapSearchHits } from "../shared.js";
 
 describe("integrations", () => {
   it("normalizes unknown providers to free defaults", () => {

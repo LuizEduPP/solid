@@ -45,6 +45,18 @@ const theme = createTheme({
       "#384caa",
       "#2d3d96",
     ],
+    orange: [
+      "#fff4eb",
+      "#ffe4cc",
+      "#ffc894",
+      "#f5a85c",
+      "#e8893c",
+      "#d9772a",
+      "#c46620",
+      "#a8541c",
+      "#8c4418",
+      "#6f3514",
+    ],
   },
   other: {
     bodyBg: "#111113",
