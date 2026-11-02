@@ -7,6 +7,7 @@ import {
   firecrawlEndpoint,
   jinaReadUrl,
   normalizeIntegrationEndpoints,
+  searxngSearchUrl,
   normalizeScrapeProvider,
   normalizeSearchProvider,
   scrapeProviderNeedsKey,
@@ -24,6 +25,7 @@ describe("integrations", () => {
 
   it("only paid cloud search and Firecrawl scrape require a key", () => {
     assert.equal(searchProviderNeedsKey("duckduckgo"), false);
+    assert.equal(searchProviderNeedsKey("searxng"), false);
     assert.equal(searchProviderNeedsKey("exa"), true);
     assert.equal(scrapeProviderNeedsKey("direct"), false);
     assert.equal(scrapeProviderNeedsKey("jina"), false);
@@ -54,6 +56,14 @@ describe("integrations", () => {
     assert.equal(
       jinaReadUrl("http://reader.local", "https://example.com"),
       "http://reader.local/https://example.com",
+    );
+    assert.equal(
+      searxngSearchUrl("http://127.0.0.1:8080/", "open source"),
+      "http://127.0.0.1:8080/search?q=open+source&format=json",
+    );
+    assert.equal(
+      searxngSearchUrl("https://search.example.com/search", "ai"),
+      "https://search.example.com/search?q=ai&format=json",
     );
   });
 

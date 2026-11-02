@@ -18,6 +18,7 @@ import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./local-store";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   scrapeProviderNeedsKey,
+  searchProviderEndpoint,
   searchProviderNeedsKey,
   type IntegrationEndpoints,
   type IntegrationKeys,
@@ -35,6 +36,7 @@ interface SettingsFormProps {
 }
 
 const SEARCH_DOCS: Partial<Record<SearchProvider, string>> = {
+  searxng: "https://docs.searxng.org/",
   exa: "https://dashboard.exa.ai",
   tavily: "https://app.tavily.com",
   brave: "https://brave.com/search/api/",
@@ -47,6 +49,7 @@ const SCRAPE_DOCS: Partial<Record<ScrapeProvider, string>> = {
 };
 
 const KEY_FIELD: Record<Exclude<SearchProvider, "duckduckgo"> | "jina", keyof IntegrationKeys> = {
+  searxng: "searxng",
   exa: "exa",
   tavily: "tavily",
   brave: "brave",
@@ -77,6 +80,7 @@ export default function SettingsForm({
 
   const searchOptions: Array<{ value: SearchProvider; label: string }> = [
     { value: "duckduckgo", label: t("providerDuckDuckGo") },
+    { value: "searxng", label: t("providerSearxng") },
     { value: "exa", label: t("providerExa") },
     { value: "tavily", label: t("providerTavily") },
     { value: "brave", label: t("providerBrave") },
@@ -111,13 +115,7 @@ export default function SettingsForm({
 
   const searchNeedsKey = searchProviderNeedsKey(
     current.searchProvider,
-    current.searchProvider === "exa"
-      ? current.integrationEndpoints.exa
-      : current.searchProvider === "tavily"
-        ? current.integrationEndpoints.tavily
-        : current.searchProvider === "brave"
-          ? current.integrationEndpoints.brave
-          : current.integrationEndpoints.firecrawl,
+    searchProviderEndpoint(current.searchProvider, current.integrationEndpoints),
   );
   const scrapeNeedsKey = scrapeProviderNeedsKey(
     current.scrapeProvider,
@@ -206,6 +204,7 @@ export default function SettingsForm({
                 keyValue={current.integrationKeys[searchKeyField]}
                 disabled={running}
                 docsUrl={SEARCH_DOCS[current.searchProvider]}
+                keyOptional={current.searchProvider === "searxng"}
                 onEndpointChange={(value) => patchEndpoint(searchKeyField, value)}
                 onKeyChange={(value) => patchKey(searchKeyField, value)}
               />

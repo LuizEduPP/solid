@@ -5,7 +5,9 @@ import {
   firecrawlEndpoint,
   jinaReadUrl,
   scrapeProviderNeedsKey,
+  searchProviderEndpoint,
   searchProviderNeedsKey,
+  searxngSearchUrl,
   tavilySearchEndpoint,
   type IntegrationRuntime,
   type ScrapeProvider,
@@ -210,6 +212,36 @@ async function searchBrave(
   );
 }
 
+async function searchSearxng(
+  query: string,
+  maxResults: number,
+  apiKey: string,
+  baseUrl: string,
+): Promise<ProviderHit[]> {
+  const payload = asRecord(
+    await fetchJson(searxngSearchUrl(baseUrl, query), {
+      headers: authHeaders(apiKey, {
+        Accept: "application/json",
+        "User-Agent": "Solid/1.0 (+research)",
+      }),
+    }),
+  );
+
+  return mapProviderHits(
+    asArray(payload.results).map((item) => {
+      const row = asRecord(item);
+      return {
+        title: String(row.title ?? ""),
+        url: String(row.url ?? ""),
+        snippet: snippetOf(
+          typeof row.content === "string" ? row.content : undefined,
+        ),
+      };
+    }),
+    maxResults,
+  );
+}
+
 async function searchFirecrawl(
   query: string,
   maxResults: number,
@@ -248,6 +280,7 @@ export function requiredSearchKey(
   if (provider === "tavily") return keys.tavily.trim();
   if (provider === "brave") return keys.brave.trim();
   if (provider === "firecrawl") return keys.firecrawl.trim();
+  if (provider === "searxng") return keys.searxng.trim();
   return "";
 }
 
@@ -259,16 +292,7 @@ export async function searchWithProvider(
   const provider = runtime.searchProvider;
   const key = requiredSearchKey(provider, runtime.keys);
   const endpoints = endpointsOf(runtime);
-  const endpoint =
-    provider === "exa"
-      ? endpoints.exa
-      : provider === "tavily"
-        ? endpoints.tavily
-        : provider === "brave"
-          ? endpoints.brave
-          : provider === "firecrawl"
-            ? endpoints.firecrawl
-            : "";
+  const endpoint = searchProviderEndpoint(provider, endpoints);
 
   if (searchProviderNeedsKey(provider, endpoint) && !key) {
     throw new Error(`Missing API key for ${provider}`);
@@ -280,6 +304,8 @@ export async function searchWithProvider(
   else if (provider === "brave") hits = await searchBrave(query, maxResults, key, endpoints.brave);
   else if (provider === "firecrawl") {
     hits = await searchFirecrawl(query, maxResults, key, endpoints.firecrawl);
+  } else if (provider === "searxng") {
+    hits = await searchSearxng(query, maxResults, key, endpoints.searxng);
   } else {
     throw new Error("Unsupported search provider");
   }

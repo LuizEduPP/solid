@@ -131,6 +131,7 @@ export function isDefaultFaviconSrc(src: string): boolean {
 
 export const SEARCH_PROVIDERS = [
   "duckduckgo",
+  "searxng",
   "exa",
   "tavily",
   "brave",
@@ -148,6 +149,7 @@ export interface IntegrationKeys {
   brave: string;
   firecrawl: string;
   jina: string;
+  searxng: string;
 }
 
 export interface IntegrationEndpoints {
@@ -156,6 +158,7 @@ export interface IntegrationEndpoints {
   brave: string;
   firecrawl: string;
   jina: string;
+  searxng: string;
 }
 
 export interface IntegrationRuntime {
@@ -171,6 +174,7 @@ export const EMPTY_INTEGRATION_KEYS: IntegrationKeys = {
   brave: "",
   firecrawl: "",
   jina: "",
+  searxng: "",
 };
 
 export const DEFAULT_INTEGRATION_ENDPOINTS: IntegrationEndpoints = {
@@ -179,6 +183,7 @@ export const DEFAULT_INTEGRATION_ENDPOINTS: IntegrationEndpoints = {
   brave: "https://api.search.brave.com",
   firecrawl: "https://api.firecrawl.dev",
   jina: "https://r.jina.ai",
+  searxng: "http://127.0.0.1:8080",
 };
 
 export const DEFAULT_INTEGRATIONS: IntegrationRuntime = {
@@ -232,6 +237,28 @@ export function jinaReadUrl(base: string, target: string): string {
   return `${root}/${target}`;
 }
 
+export function searxngSearchUrl(base: string, query: string): string {
+  const root = resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.searxng);
+  const path = root.split("?")[0] ?? root;
+  const endpoint = path.endsWith("/search") ? path : joinUrl(path, "/search");
+  const url = new URL(endpoint);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "json");
+  return url.toString();
+}
+
+export function searchProviderEndpoint(
+  provider: SearchProvider,
+  endpoints: IntegrationEndpoints,
+): string {
+  if (provider === "exa") return endpoints.exa;
+  if (provider === "tavily") return endpoints.tavily;
+  if (provider === "brave") return endpoints.brave;
+  if (provider === "firecrawl") return endpoints.firecrawl;
+  if (provider === "searxng") return endpoints.searxng;
+  return "";
+}
+
 export function isSearchProvider(value: unknown): value is SearchProvider {
   return (
     typeof value === "string" &&
@@ -265,6 +292,10 @@ export function normalizeIntegrationEndpoints(raw: unknown): IntegrationEndpoint
         ? value.firecrawl.trim()
         : DEFAULT_INTEGRATION_ENDPOINTS.firecrawl,
     jina: typeof value.jina === "string" ? value.jina.trim() : DEFAULT_INTEGRATION_ENDPOINTS.jina,
+    searxng:
+      typeof value.searxng === "string"
+        ? value.searxng.trim()
+        : DEFAULT_INTEGRATION_ENDPOINTS.searxng,
   };
 }
 
@@ -272,7 +303,7 @@ export function searchProviderNeedsKey(
   provider: SearchProvider,
   endpoint = "",
 ): boolean {
-  if (provider === "duckduckgo") return false;
+  if (provider === "duckduckgo" || provider === "searxng") return false;
   if (provider === "firecrawl") {
     return usesCloudEndpoint(endpoint, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
   }

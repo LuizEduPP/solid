@@ -81,11 +81,13 @@ const requestSchema = z.object({
   brave_api_key: z.string().optional().default(""),
   firecrawl_api_key: z.string().optional().default(""),
   jina_api_key: z.string().optional().default(""),
+  searxng_api_key: z.string().optional().default(""),
   exa_base_url: z.string().optional().default(""),
   tavily_base_url: z.string().optional().default(""),
   brave_base_url: z.string().optional().default(""),
   firecrawl_base_url: z.string().optional().default(""),
   jina_base_url: z.string().optional().default(""),
+  searxng_base_url: z.string().optional().default(""),
   prior_context: z
     .object({
       rootObjective: z.string().min(1),
@@ -154,6 +156,7 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
         brave: body.brave_api_key ?? "",
         firecrawl: body.firecrawl_api_key ?? "",
         jina: body.jina_api_key ?? "",
+        searxng: body.searxng_api_key ?? "",
       },
       endpoints: normalizeIntegrationEndpoints({
         exa: body.exa_base_url,
@@ -161,6 +164,7 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
         brave: body.brave_base_url,
         firecrawl: body.firecrawl_base_url,
         jina: body.jina_base_url,
+        searxng: body.searxng_base_url,
       }),
     },
   };

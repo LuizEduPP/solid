@@ -62,6 +62,7 @@ function normalizeIntegrationKeys(raw: unknown): IntegrationKeys {
     brave: typeof keys.brave === "string" ? keys.brave : "",
     firecrawl: typeof keys.firecrawl === "string" ? keys.firecrawl : "",
     jina: typeof keys.jina === "string" ? keys.jina : "",
+    searxng: typeof keys.searxng === "string" ? keys.searxng : "",
   };
 }
 
