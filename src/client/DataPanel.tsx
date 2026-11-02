@@ -3,7 +3,6 @@ import {
   Box,
   Group,
   Progress,
-  RingProgress,
   ScrollArea,
   Stack,
   Text,
@@ -13,7 +12,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleDashed,
-  CircleSlash,
   HelpCircle,
   XCircle,
 } from "lucide-react";
@@ -21,21 +19,31 @@ import { useTranslation } from "react-i18next";
 
 import FaviconImg from "./FaviconImg";
 import type { IterationSnapshot, ReflectionSnapshot, EntityVerdict, InvestigationQuality } from "./stream";
-import { EVIDENCE_COLORS, EVIDENCE_I18N, hostnameFromUrl, uniqueUrlsByHostname, RUBRIC_DIMENSIONS, RUBRIC_MAX, type ScoreRubric } from "../shared";
+import {
+  EVIDENCE_COLORS,
+  EVIDENCE_I18N,
+  hostnameFromUrl,
+  QUALITY_I18N,
+  uniqueUrlsByHostname,
+  RUBRIC_DIMENSIONS,
+  RUBRIC_MAX,
+  VERDICT_I18N,
+  type ScoreRubric,
+} from "../shared";
 
-const VERDICT_CONFIG: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2; i18n: string }> = {
-  confirmed: { color: "green", icon: CheckCircle2, i18n: "verdictConfirmed" },
-  likely: { color: "blue", icon: CheckCircle2, i18n: "verdictLikely" },
-  uncertain: { color: "yellow", icon: HelpCircle, i18n: "verdictUncertain" },
-  unlikely: { color: "orange", icon: AlertTriangle, i18n: "verdictUnlikely" },
-  nonexistent: { color: "red", icon: XCircle, i18n: "verdictNonexistent" },
+const VERDICT_STYLE: Record<EntityVerdict, { color: string; icon: typeof CheckCircle2 }> = {
+  confirmed: { color: "green", icon: CheckCircle2 },
+  likely: { color: "blue", icon: CheckCircle2 },
+  uncertain: { color: "yellow", icon: HelpCircle },
+  unlikely: { color: "orange", icon: AlertTriangle },
+  nonexistent: { color: "red", icon: XCircle },
 };
 
-const QUALITY_CONFIG: Record<InvestigationQuality, { color: string; i18n: string }> = {
-  progressing: { color: "green", i18n: "qualityProgressing" },
-  stagnating: { color: "yellow", i18n: "qualityStagnating" },
-  circular: { color: "orange", i18n: "qualityCircular" },
-  exhausted: { color: "red", i18n: "qualityExhausted" },
+const QUALITY_COLOR: Record<InvestigationQuality, string> = {
+  progressing: "green",
+  stagnating: "yellow",
+  circular: "orange",
+  exhausted: "red",
 };
 
 const RUBRIC_COLORS: Record<keyof ScoreRubric, string> = {
@@ -55,36 +63,29 @@ interface DataPanelProps {
 }
 
 function ScoreSection({ confidence, targetScore }: { confidence: number; targetScore: number }) {
+  const { t } = useTranslation();
   const pct = Math.min(100, confidence);
-  const color = confidence >= targetScore * 0.85 ? "teal" : confidence >= 40 ? "yellow" : "red";
+  const color = confidence >= targetScore * 0.85 ? "teal" : confidence >= 40 ? "yellow" : "gray";
 
   return (
     <Box className="dp-section">
-      <Group justify="center">
-        <RingProgress
-          size={120}
-          thickness={10}
-          roundCaps
-          sections={[{ value: pct, color }]}
-          label={
-            <Stack gap={2} align="center">
-              <Text fw={700} size="xl" lh={1} style={{ fontVariantNumeric: "tabular-nums" }}>
-                {confidence.toFixed(0)}%
-              </Text>
-              <Text c="dimmed" size="xs" lh={1} style={{ fontVariantNumeric: "tabular-nums" }}>
-                / {targetScore}
-              </Text>
-            </Stack>
-          }
-        />
+      <Group justify="space-between" align="flex-end" mb={10}>
+        <div>
+          <Text className="dp-section-title" mb={6}>{t("solidness")}</Text>
+          <Text className="dp-score-value">{confidence.toFixed(0)}%</Text>
+        </div>
+        <Text c="dimmed" size="xs" style={{ fontVariantNumeric: "tabular-nums" }}>
+          {t("solidnessTarget", { target: targetScore })}
+        </Text>
       </Group>
+      <Progress value={pct} size="sm" radius="xl" color={color} />
     </Box>
   );
 }
 
 function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }) {
   const { t } = useTranslation();
-  const cfg = VERDICT_CONFIG[reflection.entity_verdict];
+  const cfg = VERDICT_STYLE[reflection.entity_verdict];
   const Icon = cfg.icon;
 
   return (
@@ -98,7 +99,7 @@ function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }
           leftSection={<Icon size={14} />}
           style={{ cursor: "help" }}
         >
-          {t(cfg.i18n)} ({reflection.entity_confidence}%)
+          {t(VERDICT_I18N[reflection.entity_verdict])} ({reflection.entity_confidence}%)
         </Badge>
       </Tooltip>
     </Box>
@@ -107,8 +108,6 @@ function EntityVerdictSection({ reflection }: { reflection: ReflectionSnapshot }
 
 function QualitySection({ reflection }: { reflection: ReflectionSnapshot }) {
   const { t } = useTranslation();
-  const cfg = QUALITY_CONFIG[reflection.investigation_quality];
-
   return (
     <Box className="dp-section">
       <Text className="dp-section-title">{t("investigationQuality")}</Text>
@@ -116,10 +115,10 @@ function QualitySection({ reflection }: { reflection: ReflectionSnapshot }) {
         <Badge
           size="md"
           variant="light"
-          color={cfg.color}
+          color={QUALITY_COLOR[reflection.investigation_quality]}
           style={{ cursor: "help" }}
         >
-          {t(cfg.i18n)}
+          {t(QUALITY_I18N[reflection.investigation_quality])}
         </Badge>
       </Tooltip>
     </Box>
@@ -304,9 +303,8 @@ export default function DataPanel({
         <GapsSection iterations={iterations} />
 
         {running && iterations.length === 0 && (
-          <Box className="dp-section" style={{ textAlign: "center" }}>
-            <CircleSlash size={20} color="var(--solid-text-muted)" />
-            <Text size="xs" c="dimmed" mt={4}>{t("researching")}…</Text>
+          <Box className="dp-section">
+            <Text size="xs" c="dimmed">{t("researching")}…</Text>
           </Box>
         )}
       </Stack>

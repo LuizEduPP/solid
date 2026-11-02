@@ -23,17 +23,18 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  ChevronLeft,
-  ChevronRight,
+  Download,
   PanelLeft,
   PanelLeftClose,
+  PanelRight,
+  PanelRightClose,
   Plus,
   Search,
   Settings,
   Square,
   X,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -70,15 +71,7 @@ import {
   streamResearch,
   type ResearchRound,
 } from "./stream";
-import { MODE_THRESHOLDS, type EntityVerdict } from "../shared";
-
-const VERDICT_I18N: Record<EntityVerdict, string> = {
-  confirmed: "verdictConfirmed",
-  likely: "verdictLikely",
-  uncertain: "verdictUncertain",
-  unlikely: "verdictUnlikely",
-  nonexistent: "verdictNonexistent",
-};
+import { MODE_THRESHOLDS, VERDICT_I18N } from "../shared";
 
 export const HOME_PATH = "/";
 export const CHAT_SESSION_PATH = "/c/:sessionId";
@@ -90,7 +83,7 @@ function chatPath(sessionId: string): string {
 const SCROLL_BOTTOM_TOLERANCE = 64;
 const SIDEBAR_WIDTH = 280;
 const SIDEBAR_COLLAPSED_WIDTH = 56;
-const DATA_PANEL_WIDTH = 320;
+const DATA_PANEL_WIDTH = 300;
 const SIDEBAR_COLLAPSED_KEY = "solid-sidebar-collapsed";
 const ASIDE_COLLAPSED_KEY = "solid-aside-collapsed";
 
@@ -98,6 +91,72 @@ function ChatColumn({ children, className, ...props }: BoxProps & { children: Re
   return (
     <Box className={["chat-column", className].filter(Boolean).join(" ")} {...props}>
       {children}
+    </Box>
+  );
+}
+
+function QueryTurn({ label, text }: { label: string; text: string }) {
+  return (
+    <Box className="turn-query">
+      <Text className="turn-query-label">{label}</Text>
+      <Text className="turn-query-text">{text}</Text>
+    </Box>
+  );
+}
+
+function InspectorToggle({
+  collapsed,
+  onToggle,
+  withTooltip,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  withTooltip?: boolean;
+}) {
+  const { t } = useTranslation();
+  const label = collapsed ? t("expandSolidness") : t("collapseSolidness");
+  const button = (
+    <ActionIcon variant="subtle" color="gray" aria-label={label} onClick={onToggle}>
+      {collapsed ? <PanelRight size={16} /> : <PanelRightClose size={16} />}
+    </ActionIcon>
+  );
+  return withTooltip ? (
+    <Tooltip label={label} withArrow>
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
+}
+
+function RailIcon({
+  label,
+  onClick,
+  disabled,
+  variant = "subtle",
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "subtle" | "default";
+  children: ReactNode;
+}) {
+  return (
+    <Box className="sidebar-rail-btn">
+      <Tooltip label={label} position="right" withArrow>
+        <ActionIcon
+          variant={variant}
+          color="gray"
+          size="md"
+          radius="md"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {children}
+        </ActionIcon>
+      </Tooltip>
     </Box>
   );
 }
@@ -225,26 +284,42 @@ function ChatComposer({
           withBorder={false}
           className="chat-input-form"
         >
-          <Group gap={6} mb={6} px={4}>
-            <Badge
-              size="sm"
-              variant={settings.mode === "fast" ? "filled" : "light"}
-              color={settings.mode === "fast" ? "yellow" : "indigo"}
-              style={{ cursor: running ? "default" : "pointer", textTransform: "capitalize" }}
-              onClick={running ? undefined : onToggleMode}
-            >
-              {settings.mode === "fast" ? t("modeFast") : t("modeRigorous")}
-            </Badge>
+          <Group gap={8} mb={4} px={4} justify="space-between" wrap="nowrap">
+            <Box className="mode-toggle" role="group" aria-label={t("mode")}>
+              <button
+                type="button"
+                className="mode-toggle-btn"
+                aria-pressed={settings.mode === "rigorous"}
+                disabled={running}
+                onClick={() => {
+                  if (!running && settings.mode !== "rigorous") onToggleMode();
+                }}
+              >
+                {t("modeRigorousShort")}
+              </button>
+              <button
+                type="button"
+                className="mode-toggle-btn"
+                aria-pressed={settings.mode === "fast"}
+                disabled={running}
+                onClick={() => {
+                  if (!running && settings.mode !== "fast") onToggleMode();
+                }}
+              >
+                {t("modeFastShort")}
+              </button>
+            </Box>
             {activeSession && !running ? (
-              <Badge
-                size="sm"
+              <ActionIcon
                 variant="subtle"
                 color="gray"
-                style={{ cursor: "pointer" }}
+                size="sm"
+                radius="md"
+                aria-label={t("export")}
                 onClick={onDownload}
               >
-                {t("export")}
-              </Badge>
+                <Download size={14} />
+              </ActionIcon>
             ) : null}
           </Group>
           <Group gap={6} align="flex-end" wrap="nowrap">
@@ -360,6 +435,7 @@ export default function App() {
   );
 
   const isDesktop = useMediaQuery("(min-width: 48em)");
+  const isWide = useMediaQuery("(min-width: 75em)");
   const navbarCollapsedDesktop = isDesktop === true && sidebarCollapsed;
   const navbarWidth = navbarCollapsedDesktop ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
   const showMobileChrome = isDesktop !== true;
@@ -370,6 +446,7 @@ export default function App() {
   );
 
   const hasSessionData = parsed.iterations.length > 0 || running;
+  const dockInspector = isWide === true && hasSessionData;
   const showDataPanel = hasSessionData && !asideCollapsed;
 
   useEffect(() => {
@@ -685,6 +762,16 @@ export default function App() {
   const isActiveRunning = running;
   const confidence = parsed.confidence;
   const targetScore = MODE_THRESHOLDS[settings.mode].targetScore;
+  const inspector = (
+    <DataPanel
+      confidence={confidence}
+      targetScore={targetScore}
+      iterations={parsed.iterations}
+      reflection={parsed.reflection}
+      rubric={parsed.rubric}
+      running={running}
+    />
+  );
   const hasContent =
     parsed.iterations.length > 0 ||
     Boolean(parsed.report) ||
@@ -725,27 +812,50 @@ export default function App() {
 
   return (
     <AppShell
-      header={showMobileChrome ? { height: 48 } : undefined}
+      header={showMobileChrome ? { height: 52 } : undefined}
       navbar={{
         width: navbarWidth,
         breakpoint: "sm",
         collapsed: { mobile: !mobileOpened, desktop: false },
       }}
+      aside={
+        dockInspector
+          ? {
+              width: DATA_PANEL_WIDTH,
+              breakpoint: "lg",
+              collapsed: { desktop: asideCollapsed, mobile: true },
+            }
+          : undefined
+      }
       padding={0}
       styles={{
         main: { display: "flex", flexDirection: "column", height: "100dvh", position: "relative", minHeight: 0 },
         navbar: { transition: "width 200ms ease" },
+        aside: { transition: "width 200ms ease" },
       }}
     >
       {showMobileChrome ? (
         <AppShell.Header className="mobile-nav-bar">
-          <Group h="100%" px="md">
-            <Burger
-              opened={mobileOpened}
-              onClick={toggleMobile}
-              size="sm"
-              aria-label={mobileOpened ? t("collapseSidebar") : t("expandSidebar")}
-            />
+          <Group h="100%" px="sm" justify="space-between" wrap="nowrap">
+            <Group gap="xs" wrap="nowrap">
+              <Burger
+                opened={mobileOpened}
+                onClick={toggleMobile}
+                size="sm"
+                aria-label={mobileOpened ? t("collapseSidebar") : t("expandSidebar")}
+              />
+              <SolidLogo size={22} wordmarkSize="sm" />
+            </Group>
+            {hasSessionData ? (
+              <InspectorToggle
+                collapsed={asideCollapsed}
+                onToggle={() => setAsideCollapsed((v) => !v)}
+              />
+            ) : (
+              <ActionIcon variant="subtle" color="gray" aria-label={t("settings")} onClick={openConfig}>
+                <Settings size={16} />
+              </ActionIcon>
+            )}
           </Group>
         </AppShell.Header>
       ) : null}
@@ -811,27 +921,22 @@ export default function App() {
           </Group>
 
           {navbarCollapsedDesktop ? (
-            <Box className="sidebar-rail-btn">
-              <Tooltip label={t("newResearch")} position="right" withArrow>
-                <ActionIcon
-                  variant="default"
-                  size="md"
-                  radius="md"
-                  aria-label={t("newResearch")}
-                  disabled={running}
-                  onClick={handleNewResearch}
-                >
-                  <Plus size={16} strokeWidth={2} />
-                </ActionIcon>
-              </Tooltip>
-            </Box>
+            <RailIcon
+              label={t("newResearch")}
+              variant="default"
+              disabled={running}
+              onClick={handleNewResearch}
+            >
+              <Plus size={16} strokeWidth={2} />
+            </RailIcon>
           ) : (
             <Button
               fullWidth
+              className="sidebar-new-btn"
               variant="default"
               radius="md"
               size="sm"
-              leftSection={<Plus size={16} strokeWidth={2} />}
+              leftSection={<Plus size={15} strokeWidth={2} />}
               disabled={running}
               onClick={handleNewResearch}
             >
@@ -877,20 +982,9 @@ export default function App() {
 
         <Box className="sidebar-footer">
           {navbarCollapsedDesktop ? (
-            <Box className="sidebar-rail-btn">
-              <Tooltip label={t("settings")} position="right" withArrow>
-                <ActionIcon
-                  variant="subtle"
-                  color="gray"
-                  size="md"
-                  radius="md"
-                  aria-label={t("settings")}
-                  onClick={openConfig}
-                >
-                  <Settings size={16} />
-                </ActionIcon>
-              </Tooltip>
-            </Box>
+            <RailIcon label={t("settings")} onClick={openConfig}>
+              <Settings size={16} />
+            </RailIcon>
           ) : (
             <Button
               fullWidth
@@ -913,6 +1007,12 @@ export default function App() {
         title={t("settings")}
         centered
         size="lg"
+        radius="lg"
+        overlayProps={{ backgroundOpacity: 0.62, blur: 8 }}
+        styles={{
+          title: { fontWeight: 600, letterSpacing: "-0.02em" },
+          header: { paddingBottom: 8 },
+        }}
       >
         <SettingsForm
           settings={settings}
@@ -927,10 +1027,30 @@ export default function App() {
       {/* ─── MAIN CONTENT ─── */}
       <AppShell.Main>
         <Box className="chat-main">
+          {hasContent ? (
+            <Box className="session-toolbar">
+              <Text className="session-toolbar-title">
+                {activeSession?.title || activeSession?.objective || t("untitledResearch")}
+              </Text>
+              {confidence > 0 ? (
+                <Badge variant="light" color="gray" size="sm" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {confidence.toFixed(0)}%
+                </Badge>
+              ) : null}
+              {hasSessionData && (isWide || !showMobileChrome) ? (
+                <InspectorToggle
+                  collapsed={asideCollapsed}
+                  onToggle={() => setAsideCollapsed((v) => !v)}
+                  withTooltip={isWide}
+                />
+              ) : null}
+            </Box>
+          ) : null}
+
           {!hasContent ? (
             <Box className="chat-empty">
               <ChatColumn className="chat-empty-column">
-                <Stack align="center" gap="xl" w="100%">
+                <Stack align="center" gap={28} w="100%">
                   <Stack align="center" gap="sm">
                     <SolidLogo wordmarkSize="lg" gap="sm" />
                     <Text c="dimmed" size="md" ta="center">
@@ -941,20 +1061,20 @@ export default function App() {
                     <ChatComposer {...composerProps} />
                   </Box>
                   {suggestions.length > 0 ? (
-                    <Group gap="xs" justify="center" wrap="wrap" maw={520}>
-                      {suggestions.map((chip) => (
+                    <Stack gap={8} w="100%" maw={520}>
+                      {suggestions.slice(0, 4).map((chip) => (
                         <UnstyledButton
                           key={chip}
                           className="suggestion-chip"
                           onClick={() => handleSuggestionClick(chip)}
                         >
-                          <Group gap={6} wrap="nowrap">
-                            <Search size={12} style={{ flexShrink: 0, opacity: 0.5 }} />
-                            <Text size="xs">{chip}</Text>
+                          <Group gap={8} wrap="nowrap">
+                            <Search size={13} style={{ flexShrink: 0, opacity: 0.45 }} />
+                            <Text size="sm" style={{ lineHeight: 1.4 }}>{chip}</Text>
                           </Group>
                         </UnstyledButton>
                       ))}
-                    </Group>
+                    </Stack>
                   ) : null}
                 </Stack>
               </ChatColumn>
@@ -979,24 +1099,17 @@ export default function App() {
                       return (
                         <Fragment key={roundIdx}>
                           {roundIdx === 0 && activeSession?.objective ? (
-                            <Paper p="md" radius="md" withBorder={false} bg="dark.6">
-                              <Text>{activeSession.objective}</Text>
-                            </Paper>
+                            <QueryTurn label={t("queryLabel")} text={activeSession.objective} />
                           ) : null}
 
                           {round.followUpMessage ? (
-                            <Paper p="md" radius="md" withBorder={false} bg="dark.6" mt="md">
-                              <Text>{round.followUpMessage}</Text>
-                            </Paper>
+                            <QueryTurn label={t("followUpLabel")} text={round.followUpMessage} />
                           ) : null}
 
                           {round.iterations.length > 0 ? (
                             <Box className="iteration-timeline">
-                              {round.iterations.map((iteration, i) => (
-                                <Box key={iteration.number} className="iteration-timeline-item">
-                                  {i > 0 && <Box className="iteration-connector" />}
-                                  <IterationCard iteration={iteration} />
-                                </Box>
+                              {round.iterations.map((iteration) => (
+                                <IterationCard key={iteration.number} iteration={iteration} />
                               ))}
                             </Box>
                           ) : null}
@@ -1011,7 +1124,7 @@ export default function App() {
                           ) : null}
 
                           {roundHasReport ? (
-                            <Box className="report-container" style={{ borderLeftColor: reportBorderColor }}>
+                            <Box className="report-container" style={{ "--report-accent": reportBorderColor } as CSSProperties}>
                               {isLastRound && showVerdictBanner ? (
                                 <Alert
                                   variant="light"
@@ -1029,9 +1142,7 @@ export default function App() {
                                   />
                                 </Alert>
                               ) : null}
-                              <Text size="sm" fw={600} mb="sm">
-                                {t("answer")}
-                              </Text>
+                              <Text className="report-kicker">{t("answer")}</Text>
                               <MarkdownContent content={round.report} />
                             </Box>
                           ) : null}
@@ -1054,7 +1165,7 @@ export default function App() {
                   className="chat-column-host"
                   style={{
                     position: "absolute",
-                    bottom: "calc(9rem + env(safe-area-inset-bottom, 0px))",
+                    bottom: "calc(8.5rem + env(safe-area-inset-bottom, 0px))",
                     insetInline: 0,
                     pointerEvents: "none",
                     zIndex: 30,
@@ -1086,30 +1197,16 @@ export default function App() {
           )}
         </Box>
 
-        {/* ─── FLOATING DATA PANEL ─── */}
-        {hasSessionData ? (
-          <UnstyledButton
-            className="data-panel-toggle"
-            onClick={() => setAsideCollapsed((v) => !v)}
-            aria-label={asideCollapsed ? "Show data panel" : "Hide data panel"}
-          >
-            {asideCollapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </UnstyledButton>
-        ) : null}
-
-        {showDataPanel ? (
-          <Box className="data-panel-float" style={{ width: DATA_PANEL_WIDTH }}>
-            <DataPanel
-              confidence={confidence}
-              targetScore={targetScore}
-              iterations={parsed.iterations}
-              reflection={parsed.reflection}
-              rubric={parsed.rubric}
-              running={running}
-            />
-          </Box>
+        {!dockInspector && showDataPanel ? (
+          <Box className="data-panel-float">{inspector}</Box>
         ) : null}
       </AppShell.Main>
+
+      {dockInspector ? (
+        <AppShell.Aside className="app-aside" withBorder={false} p={0}>
+          {showDataPanel ? inspector : null}
+        </AppShell.Aside>
+      ) : null}
     </AppShell>
   );
 }

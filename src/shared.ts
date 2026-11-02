@@ -42,6 +42,29 @@ export const EVIDENCE_I18N: Record<EvidenceType, string> = {
   none: "evidenceNone",
 };
 
+export const VERDICT_I18N: Record<EntityVerdict, string> = {
+  confirmed: "verdictConfirmed",
+  likely: "verdictLikely",
+  uncertain: "verdictUncertain",
+  unlikely: "verdictUnlikely",
+  nonexistent: "verdictNonexistent",
+};
+
+export const QUALITY_I18N: Record<InvestigationQuality, string> = {
+  progressing: "qualityProgressing",
+  stagnating: "qualityStagnating",
+  circular: "qualityCircular",
+  exhausted: "qualityExhausted",
+};
+
+export function isHttpUrl(url: string): boolean {
+  return url.startsWith("http://") || url.startsWith("https://");
+}
+
+export function isLocalLlmBaseUrl(baseUrl: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
+}
+
 export const RUBRIC_MAX = 25;
 
 export const RUBRIC_DIMENSIONS = [
@@ -128,22 +151,54 @@ export const SCRAPE_PROVIDERS = ["direct", "firecrawl", "jina"] as const;
 export type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
 export type ScrapeProvider = (typeof SCRAPE_PROVIDERS)[number];
 
-export interface IntegrationKeys {
-  exa: string;
-  tavily: string;
-  brave: string;
-  firecrawl: string;
-  jina: string;
-  searxng: string;
-}
+export const SEARCH_I18N: Record<SearchProvider, string> = {
+  duckduckgo: "providerDuckDuckGo",
+  searxng: "providerSearxng",
+  exa: "providerExa",
+  tavily: "providerTavily",
+  brave: "providerBrave",
+  firecrawl: "providerFirecrawl",
+};
 
-export interface IntegrationEndpoints {
-  exa: string;
-  tavily: string;
-  brave: string;
-  firecrawl: string;
-  jina: string;
-  searxng: string;
+export const SCRAPE_I18N: Record<ScrapeProvider, string> = {
+  direct: "providerDirect",
+  firecrawl: "providerFirecrawl",
+  jina: "providerJina",
+};
+
+export const INTEGRATION_FIELDS = [
+  "exa",
+  "tavily",
+  "brave",
+  "firecrawl",
+  "jina",
+  "searxng",
+] as const;
+
+export type IntegrationField = (typeof INTEGRATION_FIELDS)[number];
+export type IntegrationRecord = Record<IntegrationField, string>;
+export type IntegrationKeys = IntegrationRecord;
+export type IntegrationEndpoints = IntegrationRecord;
+
+export const SEARCH_INTEGRATION_FIELD: Partial<
+  Record<SearchProvider, IntegrationField>
+> = {
+  exa: "exa",
+  tavily: "tavily",
+  brave: "brave",
+  firecrawl: "firecrawl",
+  searxng: "searxng",
+};
+
+export function integrationRecord(
+  fill: string | ((field: IntegrationField) => string),
+): IntegrationRecord {
+  return Object.fromEntries(
+    INTEGRATION_FIELDS.map((field) => [
+      field,
+      typeof fill === "function" ? fill(field) : fill,
+    ]),
+  ) as IntegrationRecord;
 }
 
 export interface IntegrationRuntime {
@@ -153,14 +208,7 @@ export interface IntegrationRuntime {
   endpoints: IntegrationEndpoints;
 }
 
-export const EMPTY_INTEGRATION_KEYS: IntegrationKeys = {
-  exa: "",
-  tavily: "",
-  brave: "",
-  firecrawl: "",
-  jina: "",
-  searxng: "",
-};
+export const EMPTY_INTEGRATION_KEYS: IntegrationKeys = integrationRecord("");
 
 export const DEFAULT_INTEGRATION_ENDPOINTS: IntegrationEndpoints = {
   exa: "https://api.exa.ai",
@@ -196,6 +244,10 @@ export function usesCloudEndpoint(configured: string, cloudDefault: string): boo
   return resolveProviderUrl(configured, cloudDefault) === stripTrailingSlash(cloudDefault);
 }
 
+function resolvedJoin(base: string, fallback: string, path: string): string {
+  return joinUrl(resolveProviderUrl(base, fallback), path);
+}
+
 export function firecrawlEndpoint(base: string, action: "search" | "scrape"): string {
   const root = resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
   if (root.endsWith(`/v1/${action}`)) return root;
@@ -204,11 +256,11 @@ export function firecrawlEndpoint(base: string, action: "search" | "scrape"): st
 }
 
 export function exaSearchEndpoint(base: string): string {
-  return joinUrl(resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.exa), "/search");
+  return resolvedJoin(base, DEFAULT_INTEGRATION_ENDPOINTS.exa, "/search");
 }
 
 export function tavilySearchEndpoint(base: string): string {
-  return joinUrl(resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily), "/search");
+  return resolvedJoin(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily, "/search");
 }
 
 export function braveSearchEndpoint(base: string): string {
@@ -236,12 +288,16 @@ export function searchProviderEndpoint(
   provider: SearchProvider,
   endpoints: IntegrationEndpoints,
 ): string {
-  if (provider === "exa") return endpoints.exa;
-  if (provider === "tavily") return endpoints.tavily;
-  if (provider === "brave") return endpoints.brave;
-  if (provider === "firecrawl") return endpoints.firecrawl;
-  if (provider === "searxng") return endpoints.searxng;
-  return "";
+  const field = SEARCH_INTEGRATION_FIELD[provider];
+  return field ? endpoints[field] : "";
+}
+
+export function requiredSearchKey(
+  provider: SearchProvider,
+  keys: IntegrationKeys,
+): string {
+  const field = SEARCH_INTEGRATION_FIELD[provider];
+  return field ? keys[field].trim() : "";
 }
 
 export function isSearchProvider(value: unknown): value is SearchProvider {
@@ -266,22 +322,22 @@ export function normalizeScrapeProvider(value: unknown): ScrapeProvider {
   return isScrapeProvider(value) ? value : "direct";
 }
 
+export function normalizeIntegrationRecord(
+  raw: unknown,
+  fallback: IntegrationRecord,
+): IntegrationRecord {
+  const value = raw && typeof raw === "object" ? (raw as Partial<IntegrationRecord>) : {};
+  return integrationRecord((field) =>
+    typeof value[field] === "string" ? value[field]!.trim() : fallback[field],
+  );
+}
+
+export function normalizeIntegrationKeys(raw: unknown): IntegrationKeys {
+  return normalizeIntegrationRecord(raw, EMPTY_INTEGRATION_KEYS);
+}
+
 export function normalizeIntegrationEndpoints(raw: unknown): IntegrationEndpoints {
-  const value = raw && typeof raw === "object" ? (raw as Partial<IntegrationEndpoints>) : {};
-  return {
-    exa: typeof value.exa === "string" ? value.exa.trim() : DEFAULT_INTEGRATION_ENDPOINTS.exa,
-    tavily: typeof value.tavily === "string" ? value.tavily.trim() : DEFAULT_INTEGRATION_ENDPOINTS.tavily,
-    brave: typeof value.brave === "string" ? value.brave.trim() : DEFAULT_INTEGRATION_ENDPOINTS.brave,
-    firecrawl:
-      typeof value.firecrawl === "string"
-        ? value.firecrawl.trim()
-        : DEFAULT_INTEGRATION_ENDPOINTS.firecrawl,
-    jina: typeof value.jina === "string" ? value.jina.trim() : DEFAULT_INTEGRATION_ENDPOINTS.jina,
-    searxng:
-      typeof value.searxng === "string"
-        ? value.searxng.trim()
-        : DEFAULT_INTEGRATION_ENDPOINTS.searxng,
-  };
+  return normalizeIntegrationRecord(raw, DEFAULT_INTEGRATION_ENDPOINTS);
 }
 
 export function searchProviderNeedsKey(

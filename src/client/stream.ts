@@ -4,6 +4,8 @@ import i18n from "./i18n";
 import type { WebSettings } from "./types";
 import {
   countUniqueHostnames,
+  INTEGRATION_FIELDS,
+  isLocalLlmBaseUrl,
   MODE_THRESHOLDS,
   type EntityVerdict,
   type EvidenceType,
@@ -254,6 +256,37 @@ export function uniqueSourceCount(iterations: IterationSnapshot[]): number {
   return countUniqueHostnames(urls);
 }
 
+function llmFields(settings: WebSettings): Record<string, string> {
+  return {
+    llm_api_key: settings.apiKey,
+    llm_base_url: settings.baseUrl,
+  };
+}
+
+function integrationFields(settings: WebSettings): Record<string, string> {
+  return Object.fromEntries(
+    INTEGRATION_FIELDS.flatMap((field) => [
+      [`${field}_api_key`, settings.integrationKeys[field]],
+      [`${field}_base_url`, settings.integrationEndpoints[field]],
+    ]),
+  );
+}
+
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; status: number; payload: T | null }> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const payload = (await response.json().catch(() => null)) as T | null;
+  return { ok: response.ok, status: response.status, payload };
+}
+
 export async function fetchTitle(
   settings: WebSettings,
   objective: string,
@@ -261,77 +294,48 @@ export async function fetchTitle(
   if (!settings.model.trim()) return null;
 
   try {
-    const response = await fetch("/v1/title", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        llm_api_key: settings.apiKey,
-        llm_base_url: settings.baseUrl,
-        llm_model: settings.model,
-        objective,
-        locale: settings.locale,
-      }),
+    const { ok, payload } = await postJson<{ title?: string | null }>("/v1/title", {
+      ...llmFields(settings),
+      llm_model: settings.model,
+      objective,
+      locale: settings.locale,
     });
-
-    if (!response.ok) return null;
-
-    const payload = (await response.json().catch(() => null)) as {
-      title?: string | null;
-    } | null;
-
-    return payload?.title ?? null;
+    return ok ? (payload?.title ?? null) : null;
   } catch {
     return null;
   }
 }
 
 export async function fetchSuggestions(settings: WebSettings, signal?: AbortSignal): Promise<string[]> {
-  if (!settings.apiKey.trim() && !settings.baseUrl.includes("localhost") && !settings.baseUrl.includes("127.0.0.1")) {
+  if (!settings.apiKey.trim() && !isLocalLlmBaseUrl(settings.baseUrl)) {
     return [];
   }
   if (!settings.model.trim()) return [];
 
-  const response = await fetch("/v1/suggestions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
+  const { ok, payload } = await postJson<{ suggestions?: string[] }>(
+    "/v1/suggestions",
+    {
+      ...llmFields(settings),
       llm_model: settings.model,
       locale: settings.locale,
-    }),
+    },
     signal,
-  });
+  );
 
-  if (!response.ok) return [];
-
-  const payload = (await response.json().catch(() => null)) as {
-    suggestions?: string[];
-  } | null;
-
-  return Array.isArray(payload?.suggestions) ? payload.suggestions : [];
+  return ok && Array.isArray(payload?.suggestions) ? payload.suggestions : [];
 }
 
 export async function fetchLlmModels(settings: WebSettings): Promise<string[]> {
-  const response = await fetch("/v1/llm/models", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
-    }),
-  });
-
-  const payload = (await response.json().catch(() => null)) as {
+  const { ok, status, payload } = await postJson<{
     models?: string[];
     error?: string;
-  } | null;
+  }>("/v1/llm/models", llmFields(settings));
 
-  if (!response.ok) {
+  if (!ok) {
     throw new Error(
       typeof payload?.error === "string"
         ? payload.error
-        : `Failed to list models (${response.status})`,
+        : `Failed to list models (${status})`,
     );
   }
 
@@ -362,23 +366,11 @@ export async function streamResearch(
       stream: true,
       target_score: MODE_THRESHOLDS[settings.mode].targetScore,
       research_mode: settings.mode,
-      llm_api_key: settings.apiKey,
-      llm_base_url: settings.baseUrl,
+      ...llmFields(settings),
       llm_model: settings.model,
       search_provider: settings.searchProvider,
       scrape_provider: settings.scrapeProvider,
-      exa_api_key: settings.integrationKeys.exa,
-      tavily_api_key: settings.integrationKeys.tavily,
-      brave_api_key: settings.integrationKeys.brave,
-      firecrawl_api_key: settings.integrationKeys.firecrawl,
-      jina_api_key: settings.integrationKeys.jina,
-      searxng_api_key: settings.integrationKeys.searxng,
-      exa_base_url: settings.integrationEndpoints.exa,
-      tavily_base_url: settings.integrationEndpoints.tavily,
-      brave_base_url: settings.integrationEndpoints.brave,
-      firecrawl_base_url: settings.integrationEndpoints.firecrawl,
-      jina_base_url: settings.integrationEndpoints.jina,
-      searxng_base_url: settings.integrationEndpoints.searxng,
+      ...integrationFields(settings),
       messages: [{ role: "user", content: objective }],
       prior_context: priorContext,
     }),

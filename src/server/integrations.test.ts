@@ -10,10 +10,11 @@ import {
   searxngSearchUrl,
   normalizeScrapeProvider,
   normalizeSearchProvider,
+  requiredSearchKey,
   scrapeProviderNeedsKey,
   searchProviderNeedsKey,
 } from "../shared.js";
-import { mapProviderHits, requiredSearchKey } from "./integrations.js";
+import { mapProviderHits } from "./integrations.js";
 
 describe("integrations", () => {
   it("normalizes unknown providers to free defaults", () => {

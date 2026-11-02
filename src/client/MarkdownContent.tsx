@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import type { Plugin } from "unified";
 
 import FaviconImg from "./FaviconImg";
-import { hostnameFromUrl } from "../shared";
+import { hostnameFromUrl, isHttpUrl } from "../shared";
 import "github-markdown-css/github-markdown-dark.css";
 
 const BRACKET_URLS =
@@ -47,10 +47,7 @@ function MarkdownAnchor({
 
   const label = String(children ?? "");
   const compact =
-    label === href ||
-    label.startsWith("http://") ||
-    label.startsWith("https://") ||
-    label === hostnameFromUrl(href);
+    label === href || isHttpUrl(label) || label === hostnameFromUrl(href);
 
   if (compact) {
     const host = hostnameFromUrl(href);

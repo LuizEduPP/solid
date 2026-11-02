@@ -16,18 +16,22 @@ const theme = createTheme({
   fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
   fontFamilyMonospace: '"IBM Plex Mono", monospace',
   defaultRadius: "md",
+  headings: {
+    fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+    fontWeight: "600",
+  },
   colors: {
     dark: [
-      "#ececf1",
-      "#d4d4d8",
-      "#a1a1aa",
-      "#71717a",
-      "#52525b",
+      "#ececee",
+      "#c8c8ce",
+      "#8b8b93",
+      "#6a6a72",
       "#3f3f46",
-      "#323238",
-      "#25262b",
-      "#1a1b1e",
-      "#111113",
+      "#2a2a30",
+      "#1c1c20",
+      "#161618",
+      "#121214",
+      "#0c0c0e",
     ],
     indigo: [
       "#f2f4fd",
@@ -43,7 +47,7 @@ const theme = createTheme({
     ],
   },
   other: {
-    bodyBg: "#111113",
+    bodyBg: "#0c0c0e",
   },
 });
 

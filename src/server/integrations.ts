@@ -3,7 +3,9 @@ import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   exaSearchEndpoint,
   firecrawlEndpoint,
+  isHttpUrl,
   jinaReadUrl,
+  requiredSearchKey,
   scrapeProviderNeedsKey,
   searchProviderEndpoint,
   searchProviderNeedsKey,
@@ -28,10 +30,6 @@ export interface ProviderSearchResult {
   provider: SearchProvider;
 }
 
-function isValidUrl(url: string): boolean {
-  return url.startsWith("http://") || url.startsWith("https://");
-}
-
 function snippetOf(...parts: Array<string | undefined>): string {
   return parts.find((part) => part?.trim())?.trim().slice(0, MAX_SNIPPET) ?? "";
 }
@@ -42,7 +40,7 @@ export function mapProviderHits(
 ): ProviderHit[] {
   return items.slice(0, maxResults).flatMap((item) => {
     const url = item.url?.trim() ?? "";
-    if (!isValidUrl(url)) return [];
+    if (!isHttpUrl(url)) return [];
     return [
       {
         title: item.title?.trim() ?? "",
@@ -53,41 +51,27 @@ export function mapProviderHits(
   });
 }
 
-async function fetchJson(
+async function fetchTimed(
   url: string,
   init: RequestInit,
-): Promise<unknown> {
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
-
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(`Provider returned ${response.status}`);
-    }
-    return payload;
+    if (!response.ok) throw new Error(`Provider returned ${response.status}`);
+    return response;
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function fetchText(
-  url: string,
-  init: RequestInit,
-): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
+  return (await fetchTimed(url, init)).json().catch(() => null);
+}
 
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    if (!response.ok) {
-      throw new Error(`Provider returned ${response.status}`);
-    }
-    return response.text();
-  } finally {
-    clearTimeout(timer);
-  }
+async function fetchText(url: string, init: RequestInit): Promise<string> {
+  return (await fetchTimed(url, init)).text();
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -96,6 +80,24 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function hitsFromRows(
+  items: unknown[],
+  maxResults: number,
+  snippet: (row: Record<string, unknown>) => string,
+): ProviderHit[] {
+  return mapProviderHits(
+    items.map((item) => {
+      const row = asRecord(item);
+      return {
+        title: String(row.title ?? ""),
+        url: String(row.url ?? ""),
+        snippet: snippet(row),
+      };
+    }),
+    maxResults,
+  );
 }
 
 function endpointsOf(runtime: IntegrationRuntime) {
@@ -126,19 +128,11 @@ async function searchExa(
     }),
   );
 
-  return mapProviderHits(
-    asArray(payload.results).map((item) => {
-      const row = asRecord(item);
-      return {
-        title: String(row.title ?? ""),
-        url: String(row.url ?? ""),
-        snippet: snippetOf(
-          typeof row.text === "string" ? row.text : undefined,
-          typeof row.summary === "string" ? row.summary : undefined,
-        ),
-      };
-    }),
-    maxResults,
+  return hitsFromRows(asArray(payload.results), maxResults, (row) =>
+    snippetOf(
+      typeof row.text === "string" ? row.text : undefined,
+      typeof row.summary === "string" ? row.summary : undefined,
+    ),
   );
 }
 
@@ -162,18 +156,8 @@ async function searchTavily(
     }),
   );
 
-  return mapProviderHits(
-    asArray(payload.results).map((item) => {
-      const row = asRecord(item);
-      return {
-        title: String(row.title ?? ""),
-        url: String(row.url ?? ""),
-        snippet: snippetOf(
-          typeof row.content === "string" ? row.content : undefined,
-        ),
-      };
-    }),
-    maxResults,
+  return hitsFromRows(asArray(payload.results), maxResults, (row) =>
+    snippetOf(typeof row.content === "string" ? row.content : undefined),
   );
 }
 
@@ -197,18 +181,8 @@ async function searchBrave(
   );
 
   const web = asRecord(payload.web);
-  return mapProviderHits(
-    asArray(web.results).map((item) => {
-      const row = asRecord(item);
-      return {
-        title: String(row.title ?? ""),
-        url: String(row.url ?? ""),
-        snippet: snippetOf(
-          typeof row.description === "string" ? row.description : undefined,
-        ),
-      };
-    }),
-    maxResults,
+  return hitsFromRows(asArray(web.results), maxResults, (row) =>
+    snippetOf(typeof row.description === "string" ? row.description : undefined),
   );
 }
 
@@ -227,18 +201,8 @@ async function searchSearxng(
     }),
   );
 
-  return mapProviderHits(
-    asArray(payload.results).map((item) => {
-      const row = asRecord(item);
-      return {
-        title: String(row.title ?? ""),
-        url: String(row.url ?? ""),
-        snippet: snippetOf(
-          typeof row.content === "string" ? row.content : undefined,
-        ),
-      };
-    }),
-    maxResults,
+  return hitsFromRows(asArray(payload.results), maxResults, (row) =>
+    snippetOf(typeof row.content === "string" ? row.content : undefined),
   );
 }
 
@@ -256,32 +220,12 @@ async function searchFirecrawl(
     }),
   );
 
-  return mapProviderHits(
-    asArray(payload.data).map((item) => {
-      const row = asRecord(item);
-      return {
-        title: String(row.title ?? ""),
-        url: String(row.url ?? ""),
-        snippet: snippetOf(
-          typeof row.description === "string" ? row.description : undefined,
-          typeof row.markdown === "string" ? row.markdown : undefined,
-        ),
-      };
-    }),
-    maxResults,
+  return hitsFromRows(asArray(payload.data), maxResults, (row) =>
+    snippetOf(
+      typeof row.description === "string" ? row.description : undefined,
+      typeof row.markdown === "string" ? row.markdown : undefined,
+    ),
   );
-}
-
-export function requiredSearchKey(
-  provider: SearchProvider,
-  keys: IntegrationRuntime["keys"],
-): string {
-  if (provider === "exa") return keys.exa.trim();
-  if (provider === "tavily") return keys.tavily.trim();
-  if (provider === "brave") return keys.brave.trim();
-  if (provider === "firecrawl") return keys.firecrawl.trim();
-  if (provider === "searxng") return keys.searxng.trim();
-  return "";
 }
 
 export async function searchWithProvider(

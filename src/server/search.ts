@@ -2,6 +2,7 @@ import { DDGS, RatelimitError } from "@phukon/duckduckgo-search";
 
 import {
   DEFAULT_INTEGRATIONS,
+  isHttpUrl,
   type IntegrationRuntime,
 } from "../shared.js";
 import { scrapeWithProvider, searchWithProvider } from "./integrations.js";
@@ -36,10 +37,6 @@ function searchRegion(query: string): string {
   return /[áàâãéêíóôõúç]|\b(brasil|brasileir|constru)/i.test(query)
     ? "br-pt"
     : "wt-wt";
-}
-
-function isValidUrl(url: string): boolean {
-  return url.startsWith("http://") || url.startsWith("https://");
 }
 
 function isRateLimitError(error: Error): boolean {
@@ -99,7 +96,7 @@ function mapHits(
 ): SearchHit[] {
   return results.slice(0, maxResults).flatMap((item) => {
     const url = item.href?.trim() ?? "";
-    if (!isValidUrl(url)) return [];
+    if (!isHttpUrl(url)) return [];
     return [
       {
         title: item.title?.trim() ?? "",

@@ -1,18 +1,21 @@
 import { loads } from "ai-json-repair";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 
 import { SolidAgent, extractObjective } from "./agent/loop.js";
 import {
   DEFAULT_INTEGRATIONS,
-  EMPTY_INTEGRATION_KEYS,
+  INTEGRATION_FIELDS,
   MODE_THRESHOLDS,
   normalizeIntegrationEndpoints,
+  normalizeIntegrationKeys,
   SCRAPE_PROVIDERS,
   SEARCH_PROVIDERS,
   normalizeScrapeProvider,
   normalizeSearchProvider,
+  stripTrailingSlash,
+  type IntegrationField,
   type PriorResearchContext,
 } from "../shared.js";
 import { AGENT_DEFAULTS, type AgentConfig } from "./config.js";
@@ -58,6 +61,57 @@ function extractLlmContent(choices?: LlmChoice[]): string {
   return lastLine ?? "";
 }
 
+function llmAuthHeaders(apiKey: string, json = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (json) headers["Content-Type"] = "application/json";
+  if (apiKey.trim()) headers.Authorization = `Bearer ${apiKey.trim()}`;
+  return headers;
+}
+
+async function completeLlmChat(
+  baseUrl: string,
+  apiKey: string,
+  body: unknown,
+): Promise<{ ok: true; choices?: LlmChoice[] } | { ok: false; status: number }> {
+  const response = await fetch(`${stripTrailingSlash(baseUrl)}/chat/completions`, {
+    method: "POST",
+    headers: llmAuthHeaders(apiKey, true),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) return { ok: false, status: response.status };
+  const payload = (await response.json()) as { choices?: LlmChoice[] };
+  return { ok: true, choices: payload.choices };
+}
+
+async function parseBody<T extends z.ZodType>(
+  c: Context,
+  schema: T,
+): Promise<
+  { ok: true; data: z.infer<T> } | { ok: false; response: Response }
+> {
+  const parsed = schema.safeParse(await c.req.json());
+  if (!parsed.success) {
+    return { ok: false, response: c.json({ error: parsed.error.flatten() }, 400) };
+  }
+  return { ok: true, data: parsed.data };
+}
+
+const llmCredentialsSchema = {
+  llm_api_key: z.string().optional().default(""),
+  llm_base_url: z.string().min(1),
+};
+
+const integrationRequestFields = Object.fromEntries(
+  INTEGRATION_FIELDS.flatMap((field) => [
+    [`${field}_api_key`, z.string().optional().default("")],
+    [`${field}_base_url`, z.string().optional().default("")],
+  ]),
+) as {
+  [K in IntegrationField as `${K}_api_key` | `${K}_base_url`]: z.ZodDefault<
+    z.ZodOptional<z.ZodString>
+  >;
+};
+
 const messageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),
   content: z.union([z.string(), z.array(z.record(z.string(), z.unknown())), z.null()]).optional(),
@@ -76,18 +130,7 @@ const requestSchema = z.object({
   llm_model: z.string().min(1).optional(),
   search_provider: z.enum(SEARCH_PROVIDERS).optional(),
   scrape_provider: z.enum(SCRAPE_PROVIDERS).optional(),
-  exa_api_key: z.string().optional().default(""),
-  tavily_api_key: z.string().optional().default(""),
-  brave_api_key: z.string().optional().default(""),
-  firecrawl_api_key: z.string().optional().default(""),
-  jina_api_key: z.string().optional().default(""),
-  searxng_api_key: z.string().optional().default(""),
-  exa_base_url: z.string().optional().default(""),
-  tavily_base_url: z.string().optional().default(""),
-  brave_base_url: z.string().optional().default(""),
-  firecrawl_base_url: z.string().optional().default(""),
-  jina_base_url: z.string().optional().default(""),
-  searxng_base_url: z.string().optional().default(""),
+  ...integrationRequestFields,
   prior_context: z
     .object({
       rootObjective: z.string().min(1),
@@ -149,23 +192,16 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
       scrapeProvider: normalizeScrapeProvider(
         body.scrape_provider ?? DEFAULT_INTEGRATIONS.scrapeProvider,
       ),
-      keys: {
-        ...EMPTY_INTEGRATION_KEYS,
-        exa: body.exa_api_key ?? "",
-        tavily: body.tavily_api_key ?? "",
-        brave: body.brave_api_key ?? "",
-        firecrawl: body.firecrawl_api_key ?? "",
-        jina: body.jina_api_key ?? "",
-        searxng: body.searxng_api_key ?? "",
-      },
-      endpoints: normalizeIntegrationEndpoints({
-        exa: body.exa_base_url,
-        tavily: body.tavily_base_url,
-        brave: body.brave_base_url,
-        firecrawl: body.firecrawl_base_url,
-        jina: body.jina_base_url,
-        searxng: body.searxng_base_url,
-      }),
+      keys: normalizeIntegrationKeys(
+        Object.fromEntries(
+          INTEGRATION_FIELDS.map((field) => [field, body[`${field}_api_key`]]),
+        ),
+      ),
+      endpoints: normalizeIntegrationEndpoints(
+        Object.fromEntries(
+          INTEGRATION_FIELDS.map((field) => [field, body[`${field}_base_url`]]),
+        ),
+      ),
     },
   };
 }
@@ -180,22 +216,15 @@ function completionId(): string {
   return `chatcmpl-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
 }
 
-const llmModelsSchema = z.object({
-  llm_api_key: z.string().optional().default(""),
-  llm_base_url: z.string().min(1),
-});
+const llmModelsSchema = z.object(llmCredentialsSchema);
 
 async function fetchProviderModels(
   apiKey: string,
   baseUrl: string,
 ): Promise<string[]> {
-  const root = baseUrl.replace(/\/+$/, "");
-  const headers: Record<string, string> = {};
-  if (apiKey.trim()) {
-    headers.Authorization = `Bearer ${apiKey.trim()}`;
-  }
-
-  const response = await fetch(`${root}/models`, { headers });
+  const response = await fetch(`${stripTrailingSlash(baseUrl)}/models`, {
+    headers: llmAuthHeaders(apiKey),
+  });
   if (!response.ok) {
     throw new Error(`Provider returned ${response.status}`);
   }
@@ -213,10 +242,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
 
   router.post("/llm/models", async (c) => {
-    const parsed = llmModelsSchema.safeParse(await c.req.json());
-    if (!parsed.success) {
-      return c.json({ error: parsed.error.flatten() }, 400);
-    }
+    const parsed = await parseBody(c, llmModelsSchema);
+    if (!parsed.ok) return parsed.response;
 
     try {
       const models = await fetchProviderModels(
@@ -232,59 +259,45 @@ export function createOpenAiRouter(): Hono<AppEnv> {
   });
 
   router.post("/suggestions", async (c) => {
-    const schema = z.object({
-      llm_api_key: z.string().optional().default(""),
-      llm_base_url: z.string().min(1),
-      llm_model: z.string().min(1),
-      locale: z.string().optional(),
-    });
-    const parsed = schema.safeParse(await c.req.json());
-    if (!parsed.success) {
-      return c.json({ error: parsed.error.flatten() }, 400);
-    }
+    const parsed = await parseBody(
+      c,
+      z.object({
+        ...llmCredentialsSchema,
+        llm_model: z.string().min(1),
+        locale: z.string().optional(),
+      }),
+    );
+    if (!parsed.ok) return parsed.response;
 
     const { llm_api_key, llm_base_url, llm_model, locale } = parsed.data;
 
     try {
-      const root = llm_base_url.replace(/\/+$/, "");
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (llm_api_key.trim()) {
-        headers.Authorization = `Bearer ${llm_api_key.trim()}`;
-      }
-
-      const response = await fetch(`${root}/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: llm_model,
-          temperature: 0.9,
-          max_tokens: 1024,
-          messages: [
-            {
-              role: "system",
-              content:
-                "Generate exactly 5 diverse, interesting research questions that a user might want to investigate. " +
-                "Cover different domains: technology, science, health, society, economics. " +
-                "Each question should be specific enough to research but broad enough to be interesting. " +
-                "Return ONLY a JSON array of strings, no other text. Example: [\"question 1\", \"question 2\"]" +
-                languageInstruction(locale),
-            },
-            {
-              role: "user",
-              content: "Generate 5 research suggestions for today.",
-            },
-          ],
-        }),
+      const chat = await completeLlmChat(llm_base_url, llm_api_key, {
+        model: llm_model,
+        temperature: 0.9,
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Generate exactly 5 diverse, interesting research questions that a user might want to investigate. " +
+              "Cover different domains: technology, science, health, society, economics. " +
+              "Each question should be specific enough to research but broad enough to be interesting. " +
+              "Return ONLY a JSON array of strings, no other text. Example: [\"question 1\", \"question 2\"]" +
+              languageInstruction(locale),
+          },
+          {
+            role: "user",
+            content: "Generate 5 research suggestions for today.",
+          },
+        ],
       });
 
-      if (!response.ok) {
-        return c.json({ error: `LLM returned ${response.status}` }, 502);
+      if (!chat.ok) {
+        return c.json({ error: `LLM returned ${chat.status}` }, 502);
       }
 
-      const payload = (await response.json()) as { choices?: LlmChoice[] };
-      const content = extractLlmContent(payload.choices) || "[]";
+      const content = extractLlmContent(chat.choices) || "[]";
 
       let suggestions: unknown;
       try {
@@ -312,55 +325,41 @@ export function createOpenAiRouter(): Hono<AppEnv> {
   });
 
   router.post("/title", async (c) => {
-    const schema = z.object({
-      llm_api_key: z.string().optional().default(""),
-      llm_base_url: z.string().min(1),
-      llm_model: z.string().min(1),
-      objective: z.string().min(1),
-      locale: z.string().optional(),
-    });
-    const parsed = schema.safeParse(await c.req.json());
-    if (!parsed.success) {
-      return c.json({ error: parsed.error.flatten() }, 400);
-    }
+    const parsed = await parseBody(
+      c,
+      z.object({
+        ...llmCredentialsSchema,
+        llm_model: z.string().min(1),
+        objective: z.string().min(1),
+        locale: z.string().optional(),
+      }),
+    );
+    if (!parsed.ok) return parsed.response;
 
     const { llm_api_key, llm_base_url, llm_model, objective, locale } = parsed.data;
 
     try {
-      const root = llm_base_url.replace(/\/+$/, "");
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (llm_api_key.trim()) {
-        headers.Authorization = `Bearer ${llm_api_key.trim()}`;
-      }
-
-      const response = await fetch(`${root}/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: llm_model,
-          temperature: 0.3,
-          max_tokens: 256,
-          messages: [
-            {
-              role: "system",
-              content:
-                "Generate a short title (3-7 words) for this research query. " +
-                "Return ONLY the title text, no quotes, no punctuation at the end, no explanation." +
-                languageInstruction(locale),
-            },
-            { role: "user", content: objective },
-          ],
-        }),
+      const chat = await completeLlmChat(llm_base_url, llm_api_key, {
+        model: llm_model,
+        temperature: 0.3,
+        max_tokens: 256,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Generate a short title (3-7 words) for this research query. " +
+              "Return ONLY the title text, no quotes, no punctuation at the end, no explanation." +
+              languageInstruction(locale),
+          },
+          { role: "user", content: objective },
+        ],
       });
 
-      if (!response.ok) {
-        return c.json({ error: `LLM returned ${response.status}` }, 502);
+      if (!chat.ok) {
+        return c.json({ error: `LLM returned ${chat.status}` }, 502);
       }
 
-      const payload = (await response.json()) as { choices?: LlmChoice[] };
-      const raw = extractLlmContent(payload.choices);
+      const raw = extractLlmContent(chat.choices);
       const title = raw.replace(/^["']|["']$/g, "").replace(/\.+$/, "").trim();
 
       return c.json({ title: title || null });
@@ -385,10 +384,8 @@ export function createOpenAiRouter(): Hono<AppEnv> {
   );
 
   router.post("/chat/completions", async (c) => {
-    const parsed = requestSchema.safeParse(await c.req.json());
-    if (!parsed.success) {
-      return c.json({ error: parsed.error.flatten() }, 400);
-    }
+    const parsed = await parseBody(c, requestSchema);
+    if (!parsed.ok) return parsed.response;
 
     const body = parsed.data;
     const targetScore = resolveTargetScore(body);

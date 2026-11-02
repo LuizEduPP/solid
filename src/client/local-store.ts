@@ -8,10 +8,11 @@ import {
   DEFAULT_INTEGRATION_ENDPOINTS,
   DEFAULT_INTEGRATIONS,
   EMPTY_INTEGRATION_KEYS,
+  isLocalLlmBaseUrl,
   normalizeIntegrationEndpoints,
+  normalizeIntegrationKeys,
   normalizeScrapeProvider,
   normalizeSearchProvider,
-  type IntegrationKeys,
   type IntegrationRuntime,
   type PriorResearchContext,
 } from "../shared";
@@ -54,18 +55,6 @@ export const DEFAULT_WEB_SETTINGS: WebSettings = {
   integrationEndpoints: { ...DEFAULT_INTEGRATION_ENDPOINTS },
 };
 
-function normalizeIntegrationKeys(raw: unknown): IntegrationKeys {
-  const keys = raw && typeof raw === "object" ? (raw as Partial<IntegrationKeys>) : {};
-  return {
-    exa: typeof keys.exa === "string" ? keys.exa : "",
-    tavily: typeof keys.tavily === "string" ? keys.tavily : "",
-    brave: typeof keys.brave === "string" ? keys.brave : "",
-    firecrawl: typeof keys.firecrawl === "string" ? keys.firecrawl : "",
-    jina: typeof keys.jina === "string" ? keys.jina : "",
-    searxng: typeof keys.searxng === "string" ? keys.searxng : "",
-  };
-}
-
 export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings {
   return {
     apiKey: parsed.apiKey ?? DEFAULT_WEB_SETTINGS.apiKey,
@@ -89,9 +78,7 @@ export function integrationsFromSettings(settings: WebSettings): IntegrationRunt
   };
 }
 
-export function isLocalLlmBaseUrl(baseUrl: string): boolean {
-  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl.trim());
-}
+export { isLocalLlmBaseUrl };
 
 export function loadWebSettings(): WebSettings {
   const parsed = readLocalStorageJson<Partial<WebSettings>>(

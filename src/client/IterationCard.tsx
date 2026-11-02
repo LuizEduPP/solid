@@ -28,12 +28,12 @@ function SectionShell({
 }) {
   return (
     <Stack
-      gap={6}
+      gap={8}
       mt="md"
       pt="sm"
-      style={{ borderTop: "1px solid var(--mantine-color-dark-4)" }}
+      style={{ borderTop: "1px solid var(--solid-border)" }}
     >
-      <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
+      <Text className="dp-section-title" mb={0}>
         {title}
       </Text>
       {children}
@@ -50,7 +50,7 @@ function PageReadBadge({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noreferrer"
-      variant="light"
+      variant="outline"
       color="gray"
       size="sm"
       radius="sm"
@@ -67,7 +67,7 @@ function ScoreDeltaIndicator({ delta }: { delta: string }) {
   if (isNaN(numDelta) || numDelta === 0) {
     return (
       <Group gap={2} wrap="nowrap">
-        <Minus size={12} color="var(--mantine-color-gray-5)" />
+        <Minus size={12} color="var(--solid-text-muted)" />
         <Text size="xs" c="dimmed" style={{ fontVariantNumeric: "tabular-nums" }}>0</Text>
       </Group>
     );
@@ -93,25 +93,21 @@ export default function IterationCard({ iteration }: IterationCardProps) {
   const evType = iteration.evidenceType ?? "none";
 
   return (
-    <Paper p="md" radius="md" withBorder={false} bg="dark.6" className="iteration-card">
-      <Group justify="space-between" mb="sm" wrap="nowrap">
-        <Group gap={8} wrap="nowrap" miw={0}>
-          <Text size="sm" fw={600} style={{ flexShrink: 0 }}>
-            {t("step")} {iteration.number}
+    <Paper p="md" radius="md" withBorder={false} className="iteration-card">
+      <Group justify="space-between" mb="sm" wrap="nowrap" align="flex-start">
+        <Group gap={10} wrap="nowrap" miw={0}>
+          <BoxStep n={iteration.number} />
+          <Text size="sm" c="dimmed" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {iteration.angle || t("step")}
           </Text>
-          {iteration.angle ? (
-            <Text size="sm" c="dimmed" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              · {iteration.angle}
-            </Text>
-          ) : null}
         </Group>
         <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
           <Badge size="sm" variant="light" color={EVIDENCE_COLORS[evType]}>
             {t(EVIDENCE_I18N[evType])}
           </Badge>
-          <Badge variant="light" style={{ fontVariantNumeric: "tabular-nums" }}>
+          <Text size="sm" fw={600} style={{ fontVariantNumeric: "tabular-nums" }}>
             {iteration.score.toFixed(0)}%
-          </Badge>
+          </Text>
           <ScoreDeltaIndicator delta={iteration.scoreDelta} />
         </Group>
       </Group>
@@ -138,7 +134,7 @@ export default function IterationCard({ iteration }: IterationCardProps) {
       ) : null}
 
       {iteration.synthesis ? (
-        <Accordion variant="contained" mt="sm" classNames={{ control: "iter-accordion-control" }}>
+        <Accordion variant="default" mt="sm" classNames={{ control: "iter-accordion-control" }}>
           <Accordion.Item value="synthesis">
             <Accordion.Control>{t("cumulativeSynthesis")}</Accordion.Control>
             <Accordion.Panel>
@@ -159,4 +155,8 @@ export default function IterationCard({ iteration }: IterationCardProps) {
       ) : null}
     </Paper>
   );
+}
+
+function BoxStep({ n }: { n: number }) {
+  return <span className="iter-step">{n}</span>;
 }

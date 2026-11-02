@@ -17,10 +17,18 @@ import {
 import { DEFAULT_WEB_SETTINGS, type WebSettings } from "./local-store";
 import {
   DEFAULT_INTEGRATION_ENDPOINTS,
+  SCRAPE_I18N,
+  SCRAPE_PROVIDERS,
+  SEARCH_I18N,
+  SEARCH_INTEGRATION_FIELD,
+  SEARCH_PROVIDERS,
+  isScrapeProvider,
+  isSearchProvider,
   scrapeProviderNeedsKey,
   searchProviderEndpoint,
   searchProviderNeedsKey,
   type IntegrationEndpoints,
+  type IntegrationField,
   type IntegrationKeys,
   type ScrapeProvider,
   type SearchProvider,
@@ -48,15 +56,6 @@ const SCRAPE_DOCS: Partial<Record<ScrapeProvider, string>> = {
   jina: "https://jina.ai/reader",
 };
 
-const KEY_FIELD: Record<Exclude<SearchProvider, "duckduckgo"> | "jina", keyof IntegrationKeys> = {
-  searxng: "searxng",
-  exa: "exa",
-  tavily: "tavily",
-  brave: "brave",
-  firecrawl: "firecrawl",
-  jina: "jina",
-};
-
 export default function SettingsForm({
   settings,
   running,
@@ -78,20 +77,15 @@ export default function SettingsForm({
       ? models.map((modelId) => ({ value: modelId, label: modelId }))
       : [{ value: "", label: modelsError ?? t("noModelsAvailable") }];
 
-  const searchOptions: Array<{ value: SearchProvider; label: string }> = [
-    { value: "duckduckgo", label: t("providerDuckDuckGo") },
-    { value: "searxng", label: t("providerSearxng") },
-    { value: "exa", label: t("providerExa") },
-    { value: "tavily", label: t("providerTavily") },
-    { value: "brave", label: t("providerBrave") },
-    { value: "firecrawl", label: t("providerFirecrawl") },
-  ];
+  const searchOptions = SEARCH_PROVIDERS.map((value) => ({
+    value,
+    label: t(SEARCH_I18N[value]),
+  }));
 
-  const scrapeOptions: Array<{ value: ScrapeProvider; label: string }> = [
-    { value: "direct", label: t("providerDirect") },
-    { value: "firecrawl", label: t("providerFirecrawl") },
-    { value: "jina", label: t("providerJina") },
-  ];
+  const scrapeOptions = SCRAPE_PROVIDERS.map((value) => ({
+    value,
+    label: t(SCRAPE_I18N[value]),
+  }));
 
   const patch = (next: Partial<WebSettings>) => onChange({ ...current, ...next });
   const patchKey = (field: keyof IntegrationKeys, value: string) =>
@@ -108,10 +102,9 @@ export default function SettingsForm({
   const showFirecrawlInScrape =
     current.scrapeProvider === "firecrawl" && current.searchProvider !== "firecrawl";
   const showJina = current.scrapeProvider === "jina";
+  const searchField = SEARCH_INTEGRATION_FIELD[current.searchProvider];
   const searchKeyField =
-    current.searchProvider !== "duckduckgo" && current.searchProvider !== "firecrawl"
-      ? KEY_FIELD[current.searchProvider]
-      : null;
+    searchField && searchField !== "firecrawl" ? searchField : null;
 
   const searchNeedsKey = searchProviderNeedsKey(
     current.searchProvider,
@@ -125,16 +118,27 @@ export default function SettingsForm({
     "firecrawl",
     current.integrationEndpoints.firecrawl,
   );
-  const selectedSearchKey =
-    current.searchProvider === "duckduckgo"
-      ? ""
-      : current.integrationKeys[KEY_FIELD[current.searchProvider]];
+  const selectedSearchKey = searchField ? current.integrationKeys[searchField] : "";
   const searchKeyMissing = searchNeedsKey && !selectedSearchKey.trim();
   const scrapeKeyMissing =
     scrapeNeedsKey && !current.integrationKeys.firecrawl.trim();
 
+  const connect = (field: IntegrationField, docsUrl?: string, keyOptional?: boolean) => (
+    <ProviderConnectionFields
+      endpoint={current.integrationEndpoints[field]}
+      endpointPlaceholder={DEFAULT_INTEGRATION_ENDPOINTS[field]}
+      keyLabel={t(`${field}ApiKey`)}
+      keyValue={current.integrationKeys[field]}
+      disabled={running}
+      docsUrl={docsUrl}
+      keyOptional={keyOptional}
+      onEndpointChange={(value) => patchEndpoint(field, value)}
+      onKeyChange={(value) => patchKey(field, value)}
+    />
+  );
+
   return (
-    <Accordion multiple defaultValue={["model", "search"]} variant="separated">
+    <Accordion multiple defaultValue={["model", "search"]} className="settings-accordion" variant="default">
       <Accordion.Item value="general">
         <Accordion.Control>{t("settingsGeneral")}</Accordion.Control>
         <Accordion.Panel>
@@ -193,35 +197,19 @@ export default function SettingsForm({
               data={searchOptions}
               disabled={running}
               onChange={(value) =>
-                value && patch({ searchProvider: value as SearchProvider })
+                isSearchProvider(value) && patch({ searchProvider: value })
               }
             />
-            {searchKeyField ? (
-              <ProviderConnectionFields
-                endpoint={current.integrationEndpoints[searchKeyField]}
-                endpointPlaceholder={DEFAULT_INTEGRATION_ENDPOINTS[searchKeyField]}
-                keyLabel={t(`${searchKeyField}ApiKey`)}
-                keyValue={current.integrationKeys[searchKeyField]}
-                disabled={running}
-                docsUrl={SEARCH_DOCS[current.searchProvider]}
-                keyOptional={current.searchProvider === "searxng"}
-                onEndpointChange={(value) => patchEndpoint(searchKeyField, value)}
-                onKeyChange={(value) => patchKey(searchKeyField, value)}
-              />
-            ) : null}
-            {showFirecrawlInSearch ? (
-              <ProviderConnectionFields
-                endpoint={current.integrationEndpoints.firecrawl}
-                endpointPlaceholder={DEFAULT_INTEGRATION_ENDPOINTS.firecrawl}
-                keyLabel={t("firecrawlApiKey")}
-                keyValue={current.integrationKeys.firecrawl}
-                disabled={running}
-                docsUrl={SEARCH_DOCS.firecrawl}
-                keyOptional={firecrawlKeyOptional}
-                onEndpointChange={(value) => patchEndpoint("firecrawl", value)}
-                onKeyChange={(value) => patchKey("firecrawl", value)}
-              />
-            ) : null}
+            {searchKeyField
+              ? connect(
+                  searchKeyField,
+                  SEARCH_DOCS[current.searchProvider],
+                  current.searchProvider === "searxng",
+                )
+              : null}
+            {showFirecrawlInSearch
+              ? connect("firecrawl", SEARCH_DOCS.firecrawl, firecrawlKeyOptional)
+              : null}
             {searchKeyMissing ? (
               <Text size="xs" c="dimmed">
                 {t("providerMissingKey", {
@@ -244,35 +232,13 @@ export default function SettingsForm({
               data={scrapeOptions}
               disabled={running}
               onChange={(value) =>
-                value && patch({ scrapeProvider: value as ScrapeProvider })
+                isScrapeProvider(value) && patch({ scrapeProvider: value })
               }
             />
-            {showFirecrawlInScrape ? (
-              <ProviderConnectionFields
-                endpoint={current.integrationEndpoints.firecrawl}
-                endpointPlaceholder={DEFAULT_INTEGRATION_ENDPOINTS.firecrawl}
-                keyLabel={t("firecrawlApiKey")}
-                keyValue={current.integrationKeys.firecrawl}
-                disabled={running}
-                docsUrl={SCRAPE_DOCS.firecrawl}
-                keyOptional={firecrawlKeyOptional}
-                onEndpointChange={(value) => patchEndpoint("firecrawl", value)}
-                onKeyChange={(value) => patchKey("firecrawl", value)}
-              />
-            ) : null}
-            {showJina ? (
-              <ProviderConnectionFields
-                endpoint={current.integrationEndpoints.jina}
-                endpointPlaceholder={DEFAULT_INTEGRATION_ENDPOINTS.jina}
-                keyLabel={t("jinaApiKey")}
-                keyValue={current.integrationKeys.jina}
-                disabled={running}
-                docsUrl={SCRAPE_DOCS.jina}
-                keyOptional
-                onEndpointChange={(value) => patchEndpoint("jina", value)}
-                onKeyChange={(value) => patchKey("jina", value)}
-              />
-            ) : null}
+            {showFirecrawlInScrape
+              ? connect("firecrawl", SCRAPE_DOCS.firecrawl, firecrawlKeyOptional)
+              : null}
+            {showJina ? connect("jina", SCRAPE_DOCS.jina, true) : null}
             {scrapeUsesReader && current.searchProvider === "firecrawl" && current.scrapeProvider === "firecrawl" ? (
               <Text size="xs" c="dimmed">
                 {t("providerSharedFirecrawl")}
