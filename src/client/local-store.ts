@@ -5,8 +5,10 @@ import { compressStepsActivity, translateActivityLine } from "./activity";
 import i18n, { normalizeLocale, type HistoryGroupKey } from "./i18n";
 import { parseStream, uniqueSourceCount } from "./stream";
 import {
+  DEFAULT_INTEGRATION_ENDPOINTS,
   DEFAULT_INTEGRATIONS,
   EMPTY_INTEGRATION_KEYS,
+  normalizeIntegrationEndpoints,
   normalizeScrapeProvider,
   normalizeSearchProvider,
   type IntegrationKeys,
@@ -49,6 +51,7 @@ export const DEFAULT_WEB_SETTINGS: WebSettings = {
   searchProvider: DEFAULT_INTEGRATIONS.searchProvider,
   scrapeProvider: DEFAULT_INTEGRATIONS.scrapeProvider,
   integrationKeys: { ...EMPTY_INTEGRATION_KEYS },
+  integrationEndpoints: { ...DEFAULT_INTEGRATION_ENDPOINTS },
 };
 
 function normalizeIntegrationKeys(raw: unknown): IntegrationKeys {
@@ -72,6 +75,7 @@ export function normalizeWebSettings(parsed: Partial<WebSettings>): WebSettings 
     searchProvider: normalizeSearchProvider(parsed.searchProvider),
     scrapeProvider: normalizeScrapeProvider(parsed.scrapeProvider),
     integrationKeys: normalizeIntegrationKeys(parsed.integrationKeys),
+    integrationEndpoints: normalizeIntegrationEndpoints(parsed.integrationEndpoints),
   };
 }
 
@@ -80,6 +84,7 @@ export function integrationsFromSettings(settings: WebSettings): IntegrationRunt
     searchProvider: settings.searchProvider,
     scrapeProvider: settings.scrapeProvider,
     keys: settings.integrationKeys,
+    endpoints: settings.integrationEndpoints,
   };
 }
 

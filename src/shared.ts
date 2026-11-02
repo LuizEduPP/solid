@@ -150,10 +150,19 @@ export interface IntegrationKeys {
   jina: string;
 }
 
+export interface IntegrationEndpoints {
+  exa: string;
+  tavily: string;
+  brave: string;
+  firecrawl: string;
+  jina: string;
+}
+
 export interface IntegrationRuntime {
   searchProvider: SearchProvider;
   scrapeProvider: ScrapeProvider;
   keys: IntegrationKeys;
+  endpoints: IntegrationEndpoints;
 }
 
 export const EMPTY_INTEGRATION_KEYS: IntegrationKeys = {
@@ -164,11 +173,64 @@ export const EMPTY_INTEGRATION_KEYS: IntegrationKeys = {
   jina: "",
 };
 
+export const DEFAULT_INTEGRATION_ENDPOINTS: IntegrationEndpoints = {
+  exa: "https://api.exa.ai",
+  tavily: "https://api.tavily.com",
+  brave: "https://api.search.brave.com",
+  firecrawl: "https://api.firecrawl.dev",
+  jina: "https://r.jina.ai",
+};
+
 export const DEFAULT_INTEGRATIONS: IntegrationRuntime = {
   searchProvider: "duckduckgo",
   scrapeProvider: "direct",
   keys: EMPTY_INTEGRATION_KEYS,
+  endpoints: { ...DEFAULT_INTEGRATION_ENDPOINTS },
 };
+
+export function stripTrailingSlash(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+export function resolveProviderUrl(configured: string, fallback: string): string {
+  return stripTrailingSlash(configured) || stripTrailingSlash(fallback);
+}
+
+export function joinUrl(base: string, path: string): string {
+  const root = stripTrailingSlash(base);
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  return `${root}${suffix}`;
+}
+
+export function usesCloudEndpoint(configured: string, cloudDefault: string): boolean {
+  return resolveProviderUrl(configured, cloudDefault) === stripTrailingSlash(cloudDefault);
+}
+
+export function firecrawlEndpoint(base: string, action: "search" | "scrape"): string {
+  const root = resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
+  if (root.endsWith(`/v1/${action}`)) return root;
+  if (root.endsWith("/v1")) return `${root}/${action}`;
+  return `${root}/v1/${action}`;
+}
+
+export function exaSearchEndpoint(base: string): string {
+  return joinUrl(resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.exa), "/search");
+}
+
+export function tavilySearchEndpoint(base: string): string {
+  return joinUrl(resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.tavily), "/search");
+}
+
+export function braveSearchEndpoint(base: string): string {
+  const root = resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.brave);
+  if (root.includes("/res/v1/web/search")) return root.split("?")[0] ?? root;
+  return joinUrl(root, "/res/v1/web/search");
+}
+
+export function jinaReadUrl(base: string, target: string): string {
+  const root = resolveProviderUrl(base, DEFAULT_INTEGRATION_ENDPOINTS.jina);
+  return `${root}/${target}`;
+}
 
 export function isSearchProvider(value: unknown): value is SearchProvider {
   return (
@@ -192,12 +254,37 @@ export function normalizeScrapeProvider(value: unknown): ScrapeProvider {
   return isScrapeProvider(value) ? value : "direct";
 }
 
-export function searchProviderNeedsKey(provider: SearchProvider): boolean {
-  return provider !== "duckduckgo";
+export function normalizeIntegrationEndpoints(raw: unknown): IntegrationEndpoints {
+  const value = raw && typeof raw === "object" ? (raw as Partial<IntegrationEndpoints>) : {};
+  return {
+    exa: typeof value.exa === "string" ? value.exa.trim() : DEFAULT_INTEGRATION_ENDPOINTS.exa,
+    tavily: typeof value.tavily === "string" ? value.tavily.trim() : DEFAULT_INTEGRATION_ENDPOINTS.tavily,
+    brave: typeof value.brave === "string" ? value.brave.trim() : DEFAULT_INTEGRATION_ENDPOINTS.brave,
+    firecrawl:
+      typeof value.firecrawl === "string"
+        ? value.firecrawl.trim()
+        : DEFAULT_INTEGRATION_ENDPOINTS.firecrawl,
+    jina: typeof value.jina === "string" ? value.jina.trim() : DEFAULT_INTEGRATION_ENDPOINTS.jina,
+  };
 }
 
-export function scrapeProviderNeedsKey(provider: ScrapeProvider): boolean {
-  return provider === "firecrawl";
+export function searchProviderNeedsKey(
+  provider: SearchProvider,
+  endpoint = "",
+): boolean {
+  if (provider === "duckduckgo") return false;
+  if (provider === "firecrawl") {
+    return usesCloudEndpoint(endpoint, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
+  }
+  return true;
+}
+
+export function scrapeProviderNeedsKey(
+  provider: ScrapeProvider,
+  endpoint = "",
+): boolean {
+  if (provider !== "firecrawl") return false;
+  return usesCloudEndpoint(endpoint, DEFAULT_INTEGRATION_ENDPOINTS.firecrawl);
 }
 
 /** Prior research state for follow-up turns in the same session. */

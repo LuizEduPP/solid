@@ -1,5 +1,6 @@
 import type { Locale } from "./i18n";
 import type {
+  IntegrationEndpoints,
   IntegrationKeys,
   ResearchMode,
   ScrapeProvider,
@@ -15,6 +16,7 @@ export interface WebSettings {
   searchProvider: SearchProvider;
   scrapeProvider: ScrapeProvider;
   integrationKeys: IntegrationKeys;
+  integrationEndpoints: IntegrationEndpoints;
 }
 
 export interface ResearchSession {

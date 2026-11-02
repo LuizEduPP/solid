@@ -8,6 +8,7 @@ import {
   DEFAULT_INTEGRATIONS,
   EMPTY_INTEGRATION_KEYS,
   MODE_THRESHOLDS,
+  normalizeIntegrationEndpoints,
   SCRAPE_PROVIDERS,
   SEARCH_PROVIDERS,
   normalizeScrapeProvider,
@@ -80,6 +81,11 @@ const requestSchema = z.object({
   brave_api_key: z.string().optional().default(""),
   firecrawl_api_key: z.string().optional().default(""),
   jina_api_key: z.string().optional().default(""),
+  exa_base_url: z.string().optional().default(""),
+  tavily_base_url: z.string().optional().default(""),
+  brave_base_url: z.string().optional().default(""),
+  firecrawl_base_url: z.string().optional().default(""),
+  jina_base_url: z.string().optional().default(""),
   prior_context: z
     .object({
       rootObjective: z.string().min(1),
@@ -149,6 +155,13 @@ function buildAgentConfig(body: z.infer<typeof requestSchema>): AgentConfig {
         firecrawl: body.firecrawl_api_key ?? "",
         jina: body.jina_api_key ?? "",
       },
+      endpoints: normalizeIntegrationEndpoints({
+        exa: body.exa_base_url,
+        tavily: body.tavily_base_url,
+        brave: body.brave_base_url,
+        firecrawl: body.firecrawl_base_url,
+        jina: body.jina_base_url,
+      }),
     },
   };
 }

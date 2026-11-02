@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  DEFAULT_INTEGRATION_ENDPOINTS,
   DEFAULT_INTEGRATIONS,
+  firecrawlEndpoint,
+  jinaReadUrl,
+  normalizeIntegrationEndpoints,
   normalizeScrapeProvider,
   normalizeSearchProvider,
   scrapeProviderNeedsKey,
@@ -18,12 +22,43 @@ describe("integrations", () => {
     assert.equal(normalizeScrapeProvider(null), "direct");
   });
 
-  it("only paid search and Firecrawl scrape require a key", () => {
+  it("only paid cloud search and Firecrawl scrape require a key", () => {
     assert.equal(searchProviderNeedsKey("duckduckgo"), false);
     assert.equal(searchProviderNeedsKey("exa"), true);
     assert.equal(scrapeProviderNeedsKey("direct"), false);
     assert.equal(scrapeProviderNeedsKey("jina"), false);
     assert.equal(scrapeProviderNeedsKey("firecrawl"), true);
+    assert.equal(
+      searchProviderNeedsKey("firecrawl", "http://127.0.0.1:3002"),
+      false,
+    );
+    assert.equal(
+      scrapeProviderNeedsKey("firecrawl", "http://localhost:3002"),
+      false,
+    );
+  });
+
+  it("joins self-hosted provider URLs without doubling /v1", () => {
+    assert.equal(
+      firecrawlEndpoint("", "search"),
+      "https://api.firecrawl.dev/v1/search",
+    );
+    assert.equal(
+      firecrawlEndpoint("http://127.0.0.1:3002/", "scrape"),
+      "http://127.0.0.1:3002/v1/scrape",
+    );
+    assert.equal(
+      firecrawlEndpoint("http://127.0.0.1:3002/v1", "search"),
+      "http://127.0.0.1:3002/v1/search",
+    );
+    assert.equal(
+      jinaReadUrl("http://reader.local", "https://example.com"),
+      "http://reader.local/https://example.com",
+    );
+  });
+
+  it("fills missing endpoints with cloud defaults", () => {
+    assert.deepEqual(normalizeIntegrationEndpoints({}), DEFAULT_INTEGRATION_ENDPOINTS);
   });
 
   it("drops invalid provider URLs", () => {
